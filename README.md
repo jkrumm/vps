@@ -101,7 +101,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | audio-gateway | `.../audio-gateway` | STT/TTS gateway (podcast wiring is mini-only here) | RollHook |
 | image-gen-gateway | `.../image-gen-gateway` | Image generation behind the `/img` skill | RollHook |
 | meteo-edge | `.../meteo-edge` | Tailscale-serve edge for the meteo weather/wave service | RollHook |
-| bun-email-api | `.../bun-email-api` | Bun + Resend — FPP contact-form + analytics emails | RollHook |
+| bun-email-api | `.../bun-email-api` | Bun + Resend — FPP contact-form + analytics + SY Serendipity charter-request emails | RollHook |
 | basalt-ui-marketing | `.../basalt-ui-marketing` | basalt-ui.com marketing/docs site (Astro) | RollHook |
 | rollhook-marketing | `ghcr.io/jkrumm/rollhook-marketing` | rollhook.com marketing site | RollHook |
 | research-gateway (+ lightpanda sidecar) | `.../research-gateway` | `/research` backend — bearer REST + MCP facade; Tailscale-only | RollHook |

@@ -1,6 +1,7 @@
 ---
-# bun-email-api — Bun + Elysia + Resend. Sends FPP contact-form and
-# daily-analytics emails. Public via Cloudflare Tunnel + Traefik at
+# bun-email-api — Bun + Elysia + Resend. Sends FPP contact-form,
+# daily-analytics, and SY Serendipity charter-request emails. Public via
+# Cloudflare Tunnel + Traefik at
 # bun-email-api.${DOMAIN}. Deployed via RollHook on push to
 # jkrumm/bun-email-api:master. Stateless, no DB, no volumes.
 
@@ -20,6 +21,7 @@ services:
       BEA_SECRET_KEY: ${BEA_SECRET_KEY}
       BEA_RESEND_API_KEY: ${BEA_RESEND_API_KEY}
       BEA_RECEIVER_EMAIL: ${BEA_RECEIVER_EMAIL}
+      BEA_SY_SERENDIPITY_RECEIVER_EMAIL: ${BEA_SY_SERENDIPITY_RECEIVER_EMAIL}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3010/health"]
       interval: 10s

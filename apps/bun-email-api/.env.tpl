@@ -16,3 +16,4 @@ DOMAIN=op://vps/config/DOMAIN
 BEA_SECRET_KEY=op://vps/bun-email-api/SECRET_KEY
 BEA_RESEND_API_KEY=op://vps/bun-email-api/RESEND_API_KEY
 BEA_RECEIVER_EMAIL=op://vps/bun-email-api/RECEIVER_EMAIL
+BEA_SY_SERENDIPITY_RECEIVER_EMAIL=op://vps/bun-email-api/SY_SERENDIPITY_RECEIVER_EMAIL
