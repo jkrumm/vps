@@ -180,7 +180,7 @@
             "aggFn": "count",
             "alias": "Reaped",
             "valueExpression": "",
-            "where": "ServiceName = 'research-gateway' AND Body = 'job.reaped'",
+            "where": "ServiceName = 'research-gateway' AND Body IN ('job.reaped', 'job.reaped_on_read')",
             "whereLanguage": "sql"
           }
         ],
@@ -188,10 +188,150 @@
       },
       "h": 3,
       "id": "6a9ed8a0b86a87e50f7c8c64",
-      "name": "10. Jobs reaped (count \u2014 orphaned by a restart, stale heartbeat; empty is healthy)",
+      "name": "10. Jobs reaped (count \u2014 orphaned by a restart, stale heartbeat; at boot or at read; empty is healthy)",
       "w": 6,
       "x": 0,
       "y": 45
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Failed",
+            "valueExpression": "",
+            "where": "ServiceName = 'research-gateway' AND Body = 'job.error'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6aa3c05589cf12065ccdae41",
+      "name": "11. Jobs failed (count \u2014 terminal job.error; an upstream outage or a zero-evidence job, empty is healthy)",
+      "w": 6,
+      "x": 6,
+      "y": 45
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Provider failures",
+            "valueExpression": "",
+            "where": "ServiceName = 'research-gateway' AND Body IN ('worker.failed', 'plan.fallback')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6aa3c05589cf12065ccdae42",
+      "name": "12. LLM provider failures (count \u2014 worker.failed + plan.fallback; a burst means the IU endpoint is down)",
+      "w": 6,
+      "x": 12,
+      "y": 45
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Pressure",
+            "valueExpression": "",
+            "where": "ServiceName = 'research-gateway' AND Body = 'process.memory_pressure'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6aa3c05589cf12065ccdae43",
+      "name": "13. Memory pressure (count \u2014 admission shed at 85% of the cgroup limit; the only warning before an OOM kill)",
+      "w": 6,
+      "x": 18,
+      "y": 45
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Cut",
+            "valueExpression": "",
+            "where": "ServiceName = 'research-gateway' AND Body = 'process.drained' AND toFloat64OrZero(LogAttributes['remaining']) > 0",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6aa3c05589cf12065ccdae44",
+      "name": "14. Drain cut live jobs (count \u2014 process.drained with remaining > 0; the window elapsed mid-job)",
+      "w": 6,
+      "x": 0,
+      "y": 48
     }
   ]
 }

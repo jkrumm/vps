@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "research-gateway",
+  "displayName": "research-gateway - 12. LLM provider failures (count \u2014 worker.failed + plan.fallback; a burst means the IU endpoint is down)",
+  "interval": "15m",
+  "message": null,
+  "name": "research-gateway LLM provider failures >= 3 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "research-gateway"
+  ],
+  "threshold": 3,
+  "thresholdType": "above",
+  "tile": "12. LLM provider failures (count \u2014 worker.failed + plan.fallback; a burst means the IU endpoint is down)"
+}

@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "research-gateway",
+  "displayName": "research-gateway - 11. Jobs failed (count \u2014 terminal job.error; an upstream outage or a zero-evidence job, empty is healthy)",
+  "interval": "15m",
+  "message": null,
+  "name": "research-gateway job.error >= 1 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "research-gateway"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "11. Jobs failed (count \u2014 terminal job.error; an upstream outage or a zero-evidence job, empty is healthy)"
+}

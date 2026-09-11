@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "research-gateway",
+  "displayName": "research-gateway - 13. Memory pressure (count \u2014 admission shed at 85% of the cgroup limit; the only warning before an OOM kill)",
+  "interval": "15m",
+  "message": null,
+  "name": "research-gateway memory pressure >= 1 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "research-gateway"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "13. Memory pressure (count \u2014 admission shed at 85% of the cgroup limit; the only warning before an OOM kill)"
+}

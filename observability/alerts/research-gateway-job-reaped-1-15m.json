@@ -16,5 +16,5 @@
   ],
   "threshold": 1,
   "thresholdType": "above",
-  "tile": "10. Jobs reaped (count \u2014 orphaned by a restart, stale heartbeat; empty is healthy)"
+  "tile": "10. Jobs reaped (count \u2014 orphaned by a restart, stale heartbeat; at boot or at read; empty is healthy)"
 }

@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "research-gateway",
+  "displayName": "research-gateway - 14. Drain cut live jobs (count \u2014 process.drained with remaining > 0; the window elapsed mid-job)",
+  "interval": "1h",
+  "message": null,
+  "name": "research-gateway drain cut live jobs >= 1 (1h)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "research-gateway"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "14. Drain cut live jobs (count \u2014 process.drained with remaining > 0; the window elapsed mid-job)"
+}
