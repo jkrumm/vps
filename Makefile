@@ -56,7 +56,7 @@ endif
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune prune-cron-install \
-        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-restart clickstack-upgrade
+        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -115,7 +115,7 @@ else
 	@if lsof -nP -iTCP:6379 -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "→ Detected existing Redis/Valkey on :6379 — skipping the dev valkey service"; \
 		echo "  Apps still connect to localhost:6379 either way."; \
-		$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d postgres mariadb clickstack; \
+		$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d postgres mariadb; \
 	else \
 		$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d; \
 	fi
@@ -132,7 +132,7 @@ ifeq ($(ENV),prod)
 	$(MAKE) infra-down
 	$(MAKE) networking-down
 else
-	$(OP_RUN_DEV) docker compose -f compose.dev.yml down
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability down
 endif
 
 ## Individual prod stacks — targeted restarts
@@ -541,17 +541,24 @@ hyperdx-export:
 hyperdx-apply:
 	./scripts/hyperdx-sync.sh apply $(ENV) $(FILES)
 
+## Dev — ClickStack is on demand (profile `observability`, ~4 GB): `make up` skips it.
+clickstack-up: require-dev
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability up -d clickstack
+
+clickstack-down: require-dev
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability stop clickstack
+
 ## Dev — restart clickstack only. Fixes a dead local ClickHouse process while
 ## the all-in-one container still reports healthy (the healthcheck only covers the UI).
 clickstack-restart: require-dev
-	$(OP_RUN_DEV) docker compose -f compose.dev.yml restart clickstack
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability restart clickstack
 
 ## Dev — pull the latest clickstack image and recreate the container (data volumes
 ## persist). `make up` never pulls, so the dev HyperDX drifts behind prod (Watchtower)
 ## until this runs — tile features differ between versions.
 clickstack-upgrade: require-dev
-	$(OP_RUN_DEV) docker compose -f compose.dev.yml pull clickstack
-	$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d clickstack
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability pull clickstack
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability up -d clickstack
 
 ## Status — docker ps with name/status/ports
 ps:

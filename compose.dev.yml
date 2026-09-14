@@ -81,6 +81,9 @@ services:
   # Local apps + the Vite proxy point at :4319 so dev needs no ingestion key.
   # ---------------------------------------------------------------------------
   clickstack:
+    # On demand only (~4 GB resident): `make clickstack-up` / `clickstack-down`.
+    # The profile keeps it out of a plain `make up`.
+    profiles: [observability]
     image: clickhouse/clickstack-all-in-one:latest
     container_name: clickstack
     ports:

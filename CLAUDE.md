@@ -45,6 +45,8 @@ make hyperdx-dev-bootstrap     # dev — idempotent local user + accessKey boots
 make hyperdx-webhook-setup     # prod — idempotent Slack webhook ("Slack #alerts") setup
 make hyperdx-export ENV=dev    # export dashboards + alerts → observability/{dashboards,alerts}/*.json
 make hyperdx-apply ENV=dev     # validate + upsert (by name) dashboards, then alerts, from those directories
+make clickstack-up             # dev — start ClickStack on demand (profile `observability`; `make up` skips it, ~4 GB)
+make clickstack-down           # dev — stop it again
 make clickstack-restart        # dev — restart clickstack (fixes a dead local ClickHouse process)
 
 # Status + ops
