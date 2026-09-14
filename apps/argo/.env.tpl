@@ -51,12 +51,13 @@ GITLAB_TOKEN=op://vps/argo/GITLAB_TOKEN
 HARDCOVER_API_KEY=op://vps/argo/HARDCOVER_API_KEY
 
 # --- Hermes Chat AI gateway ---
-# DeepSeek v4 Flash (thread titling) on the IU unified endpoint's OpenAI
+# deepseek-v4.1-flash (thread titling) on the IU unified endpoint's OpenAI
 # transport — public HTTPS, EU/GDPR (Azure Spain), reachable identically from
 # local dev and the prod VPS. Reuses the shared IU creds in the common/anthropic item.
+# Model id + reasoning effort are NOT set here — apps/api/src/env.ts's default
+# (deepseek-v4.1-flash, effort "high") is the single source of truth.
 DEEPSEEK_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 DEEPSEEK_API_KEY=op://common/anthropic/API_KEY
-DEEPSEEK_MODEL=DeepSeek-V4-Flash
 
 # Audio (STT + TTS) — forwarded to the audio-gateway service (the single source of
 # truth for audio), reachable in-cluster on the shared `proxy` network. Non-secret

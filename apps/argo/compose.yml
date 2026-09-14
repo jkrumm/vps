@@ -80,11 +80,13 @@ services:
       # Hardcover — book taste layer. Reading vertical's hardcover-sync cron +
       # /reading/sync pull the shelf. Backend-only GraphQL bearer (bare JWT).
       HARDCOVER_API_KEY: ${HARDCOVER_API_KEY}
-      # Hermes Chat AI gateway — DeepSeek v4 Flash thread titling, called directly
-      # on the IU unified endpoint (public HTTPS, EU/GDPR). Same creds local + prod.
+      # Hermes Chat AI gateway — deepseek-v4.1-flash thread titling, called
+      # directly on the IU unified endpoint (public HTTPS, EU/GDPR). Same creds
+      # local + prod. Model id + reasoning effort are NOT passed here — omitted
+      # so apps/api/src/env.ts's own default is the single source of truth (same
+      # pattern as PORT, left unset in this block).
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-DeepSeek-V4-Flash}
       # Audio gateway — STT + expressive TTS, forwarded over the shared proxy net.
       AUDIO_GATEWAY_URL: ${AUDIO_GATEWAY_URL:-http://audio-gateway:7714}
       # Hermes chat upstream — Mac Mini OpenAI-compatible API over Tailscale (8642).
