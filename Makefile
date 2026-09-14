@@ -384,8 +384,8 @@ meteo-down: require-prod ; $(OP_RUN) docker compose -f apps/meteo/compose.yml --
 
 ## Trigger a fresh RollHook deploy by pushing an empty commit to meteo's master.
 meteo-redeploy: require-dev
-	@if [ ! -d $$HOME/SourceRoot/meteo ]; then echo "  ✗ meteo repo not found at ~/SourceRoot/meteo"; exit 1; fi
-	@cd $$HOME/SourceRoot/meteo && \
+	@if [ ! -d $$HOME/SourceRoot/weatherorb ]; then echo "  ✗ weatherorb repo not found at ~/SourceRoot/weatherorb"; exit 1; fi
+	@cd $$HOME/SourceRoot/weatherorb && \
 	  git commit --allow-empty -m "chore: redeploy (triggered via vps make meteo-redeploy)" && \
 	  git push && \
 	  echo "  ✓ pushed — watch the build at https://github.com/jkrumm/meteo/actions"
