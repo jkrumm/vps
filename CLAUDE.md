@@ -24,7 +24,7 @@ make networking-up / make networking-down
 make infra-up    / make infra-down
 make monitoring-up / make monitoring-down
 make fpp-up      / make fpp-down
-make meteo-up    / make meteo-down   # nginx edge for meteo.DOMAIN; make meteo-env first, basemap under /var/lib/meteo
+make weatherorb-up    / make weatherorb-down   # nginx edge for weatherorb.com; make weatherorb-env first, basemap under /var/lib/weatherorb
 make imgproxy-up / make imgproxy-down
 
 # Manual image upgrades — Postgres/Valkey/MariaDB are excluded from Watchtower
@@ -189,7 +189,7 @@ compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStac
 apps/argo/compose.yml         argo-api + argo-dashboard — personal API/agent backbone, RollHook-managed
 apps/audio-gateway/compose.yml  STT/TTS only (PODCAST_ENABLED=false) — podcast wiring is mini-only
 apps/image-gen-gateway/compose.yml  Backend for the /img skill, RollHook-managed
-apps/meteo/compose.yml        meteo-edge — Tailscale-serve edge for meteo
+apps/weatherorb/compose.yml        weatherorb-edge — Tailscale-serve edge for weatherorb
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
 apps/bun-email-api/compose.yml  bun-email-api (Bun + Resend) — sends FPP contact-form + daily-analytics + SY Serendipity charter-request emails. RollHook-managed.

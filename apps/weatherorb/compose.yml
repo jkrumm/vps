@@ -1,0 +1,80 @@
+# Production compose for the VPS — weatherorb edge. Mirrors apps/research-gateway.
+#
+# Public via the Cloudflare Tunnel (apex + www CNAMEs → the tunnel, orange cloud,
+# each with a tunnel ingress hostname, like basalt-ui.com). The container is nginx: it
+# serves the built map and the basemap archive itself and proxies the forecast API over
+# the tailnet to the tileserver on the Mac mini, caching responses on disk for exactly
+# the TTL the origin sets. The mini does every computation; nothing here renders a tile.
+#
+# `.env` here holds MINI_TAILSCALE_IP and MINI_TAILNET_HOST (plus DOMAIN), written by
+# `make weatherorb-env` from 1Password and the VPS's own tailscale peer list — nothing tracked.
+# The router hosts are literal (weatherorb.com is its own zone), so RollHook re-running
+# compose without op cannot blank them.
+# The mini side of the hop is `tailscale serve` on :8081 (dotfiles-private
+# tailscale-serve.mini.conf) plus a tag:vps → tag:devhost tcp:8081 ACL grant.
+#
+# /var/lib/weatherorb/basemap is the 8 GB planet PMTiles extract plus sprites and glyphs,
+# copied once from the mini with `make basemap-push` in the weatherorb repo. Not a volume:
+# rsync needs a host path, and the file changes about once a year.
+
+services:
+  weatherorb-edge:
+    image: ${WEATHERORB_EDGE_IMAGE:-${IMAGE_TAG:-rollhook.jkrumm.com/weatherorb-edge:latest}}
+    restart: unless-stopped
+    env_file:
+      - .env
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /var/lib/weatherorb/basemap:/srv/basemap:ro
+      - weatherorb-edge-cache:/var/cache/nginx
+    networks:
+      - proxy
+    healthcheck:
+      # 127.0.0.1, not localhost: busybox wget resolves localhost to ::1 first and nginx
+      # answers on IPv4 — the first start sat at "health: starting" with connection refused.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.weatherorb.rule=Host(`weatherorb.com`)"
+      - "traefik.http.routers.weatherorb.entrypoints=websecure"
+      - "traefik.http.routers.weatherorb.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.weatherorb.tls.domains[0].main=weatherorb.com"
+      - "traefik.http.routers.weatherorb.tls.domains[0].sans=www.weatherorb.com"
+      # www → canonical redirect (301 permanent)
+      - "traefik.http.routers.weatherorb-www.rule=Host(`www.weatherorb.com`)"
+      - "traefik.http.routers.weatherorb-www.entrypoints=websecure"
+      - "traefik.http.routers.weatherorb-www.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.weatherorb-www.middlewares=www-to-weatherorb@docker"
+      - "traefik.http.middlewares.www-to-weatherorb.redirectregex.regex=^https://www\\.weatherorb\\.com/(.*)"
+      - "traefik.http.middlewares.www-to-weatherorb.redirectregex.replacement=https://weatherorb.com/$${1}"
+      - "traefik.http.middlewares.www-to-weatherorb.redirectregex.permanent=true"
+      # Own rate limit, not rate-limit@file: the map's timeline warmer legitimately fires
+      # thousands of tile requests in a burst, and the shared 100/s + 200 burst would
+      # answer that with 429s the client renders as gaps.
+      - "traefik.http.middlewares.weatherorb-ratelimit.ratelimit.average=300"
+      - "traefik.http.middlewares.weatherorb-ratelimit.ratelimit.burst=1500"
+      - "traefik.http.middlewares.weatherorb-ratelimit.ratelimit.period=1s"
+      - "traefik.http.routers.weatherorb.middlewares=weatherorb-ratelimit@docker,security-headers@file"
+      - "traefik.http.services.weatherorb.loadbalancer.server.port=8080"
+      - "traefik.http.services.weatherorb.loadbalancer.healthcheck.path=/health"
+      - "com.centurylinklabs.watchtower.enable=false"
+      # rollhook OIDC authorization — only this repo may deploy this container
+      - "rollhook.allowed_repos=jkrumm/weatherorb"
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  weatherorb-edge-cache:

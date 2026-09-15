@@ -35,7 +35,7 @@ MongoDB) at `clickstack`, exposed publicly only via Traefik on `hyperdx.${DOMAIN
 | Tier | Port | Auth | Trust boundary | Used by |
 |-|-|-|-|-|
 | Public | `:4318` (http) / `:4317` (grpc) | `bearertokenauth` | Public ingress via Traefik + ingestion key | Browser SDKs (any frontend), future cross-host exports |
-| Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, argo-api, imgproxy, research-gateway, audio-gateway, image-gen-gateway, meteo-edge, fpp-server, fpp-analytics, rollhook |
+| Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, argo-api, imgproxy, research-gateway, audio-gateway, image-gen-gateway, weatherorb-edge, fpp-server, fpp-analytics, rollhook |
 
 The `:4319` port has no host binding and no Traefik label — it's reachable only
 from other containers on `monitoring-net`. The trust boundary is the docker

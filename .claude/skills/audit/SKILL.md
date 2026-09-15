@@ -52,7 +52,7 @@ ssh vps "docker system df"
 - Infra: `postgres`, `redis`
 - FPP (`apps/fpp/compose.yml`): `mariadb`, `fpp-server`, `fpp-analytics`, `fpp-analytics-updater`
 - Monitoring: `clickstack`, `beszel-agent`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`, `umami`
-- Apps (RollHook-managed, auto-suffixed names like `argo-argo-api-146` — match by label, not name): `argo-api`, `argo-dashboard`, `audio-gateway`, `basalt-ui-marketing`, `bun-email-api`, `image-gen-gateway`, `imgproxy`, `meteo-edge`, `photo-gallery`, `research-gateway`, `research-gateway-lightpanda`, `rollhook-marketing`
+- Apps (RollHook-managed, auto-suffixed names like `argo-argo-api-146` — match by label, not name): `argo-api`, `argo-dashboard`, `audio-gateway`, `basalt-ui-marketing`, `bun-email-api`, `image-gen-gateway`, `imgproxy`, `weatherorb-edge`, `photo-gallery`, `research-gateway`, `research-gateway-lightpanda`, `rollhook-marketing`
 
 ```bash
 ssh vps "docker ps --format '{{.Label \"com.docker.compose.service\"}}' | sort"

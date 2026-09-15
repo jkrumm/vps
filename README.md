@@ -100,7 +100,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | argo-api, argo-dashboard | `rollhook.jkrumm.com/argo-*` | Personal API + dashboard, the agent backbone | RollHook |
 | audio-gateway | `.../audio-gateway` | STT/TTS gateway (podcast wiring is mini-only here) | RollHook |
 | image-gen-gateway | `.../image-gen-gateway` | Image generation behind the `/img` skill | RollHook |
-| meteo-edge | `.../meteo-edge` | Tailscale-serve edge for the meteo weather/wave service | RollHook |
+| weatherorb-edge | `.../weatherorb-edge` | Tailscale-serve edge for the weatherorb weather/wave service | RollHook |
 | bun-email-api | `.../bun-email-api` | Bun + Resend — FPP contact-form + analytics + SY Serendipity charter-request emails | RollHook |
 | basalt-ui-marketing | `.../basalt-ui-marketing` | basalt-ui.com marketing/docs site (Astro) | RollHook |
 | rollhook-marketing | `ghcr.io/jkrumm/rollhook-marketing` | rollhook.com marketing site | RollHook |

@@ -42,7 +42,7 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: help require-prod require-dev meteo-up meteo-down meteo-env meteo-bootstrap-image meteo-redeploy \
+.PHONY: help require-prod require-dev weatherorb-up weatherorb-down weatherorb-env weatherorb-bootstrap-image weatherorb-redeploy \
         up down networking-up networking-down infra-up infra-down infra-upgrade monitoring-up monitoring-down \
         rollhook-update \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
@@ -359,50 +359,48 @@ research-gateway-env: require-prod
 	chmod 644 apps/research-gateway/.env
 	@echo "Wrote apps/research-gateway/.env (chmod 644, gitignored)"
 
-## meteo stack (nginx edge in front of the tileserver on the Mac mini, RollHook-managed) —
-## apps/meteo/compose.yml. Public at meteo.DOMAIN through the cloudflared tunnel.
+## weatherorb stack (nginx edge in front of the tileserver on the Mac mini, RollHook-managed) —
+## apps/weatherorb/compose.yml. Public at weatherorb.com through the cloudflared tunnel.
 ## The mini does all computation; this container serves the built map, the basemap
-## archive under /var/lib/meteo/basemap, and a disk cache of proxied API responses.
+## archive under /var/lib/weatherorb/basemap, and a disk cache of proxied API responses.
 ## `docker ps -a` (not `docker ps`) — same fix as research-gateway-up above:
 ## a stopped-but-present container must still be pinned, not mistaken for
 ## genesis and rolled back to a stale :latest.
-meteo-up: require-prod
-	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=meteo-edge' --format '{{.Names}}' | head -1); \
+weatherorb-up: require-prod
+	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=weatherorb-edge' --format '{{.Names}}' | head -1); \
 	if [ -z "$$NAME" ]; then \
-	  echo "  no meteo-edge container exists — genesis start from :latest (bootstrap-seeded)"; \
-	  $(OP_RUN) docker compose -f apps/meteo/compose.yml --env-file apps/meteo/.env up -d; \
+	  echo "  no weatherorb-edge container exists — genesis start from :latest (bootstrap-seeded)"; \
+	  $(OP_RUN) docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d; \
 	else \
 	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
 	  if [ -z "$$IMG" ]; then \
-	    echo "  ✗ meteo-edge container '$$NAME' exists but its image could not be read — inspect it manually"; \
+	    echo "  ✗ weatherorb-edge container '$$NAME' exists but its image could not be read — inspect it manually"; \
 	    exit 1; \
 	  fi; \
-	  echo "  pinning meteo-edge → $$IMG"; \
-	  $(OP_RUN) env METEO_EDGE_IMAGE=$$IMG docker compose -f apps/meteo/compose.yml --env-file apps/meteo/.env up -d; \
+	  echo "  pinning weatherorb-edge → $$IMG"; \
+	  $(OP_RUN) env WEATHERORB_EDGE_IMAGE=$$IMG docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d; \
 	fi
-meteo-down: require-prod ; $(OP_RUN) docker compose -f apps/meteo/compose.yml --env-file apps/meteo/.env down
+weatherorb-down: require-prod ; $(OP_RUN) docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env down
 
-## Trigger a fresh RollHook deploy by pushing an empty commit to meteo's master.
-meteo-redeploy: require-dev
+## Trigger a fresh RollHook deploy by pushing an empty commit to weatherorb's master.
+weatherorb-redeploy: require-dev
 	@if [ ! -d $$HOME/SourceRoot/weatherorb ]; then echo "  ✗ weatherorb repo not found at ~/SourceRoot/weatherorb"; exit 1; fi
 	@cd $$HOME/SourceRoot/weatherorb && \
-	  git commit --allow-empty -m "chore: redeploy (triggered via vps make meteo-redeploy)" && \
+	  git commit --allow-empty -m "chore: redeploy (triggered via vps make weatherorb-redeploy)" && \
 	  git push && \
-	  echo "  ✓ pushed — watch the build at https://github.com/jkrumm/meteo/actions"
-## One-shot bootstrap — build the edge image from the context `make edge-bootstrap` (meteo
-## repo, on the mini) pushed to /tmp/meteo-bootstrap, push :initial + :latest to the registry.
-meteo-bootstrap-image: require-prod
-	$(OP_RUN) ./apps/meteo/scripts/bootstrap-image.sh
-## Materialize apps/meteo/.env from this host's tailscale peer list — the mini's tailnet
+	  echo "  ✓ pushed — watch the build at https://github.com/jkrumm/weatherorb/actions"
+## One-shot bootstrap — build the edge image from the context `make edge-bootstrap` (weatherorb
+## repo, on the mini) pushed to /tmp/weatherorb-bootstrap, push :initial + :latest to the registry.
+weatherorb-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/weatherorb/scripts/bootstrap-image.sh
+## Materialize apps/weatherorb/.env from this host's tailscale peer list — the mini's tailnet
 ## IP and MagicDNS name are the only two values the edge needs, and neither is a secret.
 ## Re-run after a mini rename or re-join.
-## DOMAIN is written too: RollHook re-runs compose without op, and a label interpolated
-## from an empty DOMAIN registers the router for the bare host "meteo" — a Traefik 404.
-meteo-env: require-prod
+weatherorb-env: require-prod
 	@$(OP_RUN) sh -c 'ip=$$(tailscale ip -4 mini) && \
 	  host=$$(tailscale status --json | jq -r ".Peer[] | select(.HostName==\"mini\") | .DNSName") && host=$${host%.} && \
-	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\n" "$$DOMAIN" "$$ip" "$$host" > apps/meteo/.env && \
-	  chmod 644 apps/meteo/.env && echo "Wrote apps/meteo/.env (mini = $$host)"'
+	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\n" "$$DOMAIN" "$$ip" "$$host" > apps/weatherorb/.env && \
+	  chmod 644 apps/weatherorb/.env && echo "Wrote apps/weatherorb/.env (mini = $$host)"'
 
 ## image-gen-gateway stack (Bun image API, RollHook-managed) — apps/image-gen-gateway/compose.yml
 ## Deploys to image.jkrumm.com (Tailscale-only, grey-cloud A record — NOT the cloudflared
