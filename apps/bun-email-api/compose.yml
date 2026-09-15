@@ -3,7 +3,9 @@
 # daily-analytics, and SY Serendipity charter-request emails. Public via
 # Cloudflare Tunnel + Traefik at
 # bun-email-api.${DOMAIN}. Deployed via RollHook on push to
-# jkrumm/bun-email-api:master. Stateless, no DB, no volumes.
+# jkrumm/bun-email-api:master. SQLite (emails, AI enrichments, spam-filter
+# submissions) lives in /var/lib/bun-email-api, owned by the image's app user
+# (uid 100 / gid 101) — WAL-safe for RollHook's brief two-container overlap.
 
 networks:
   proxy:
@@ -26,6 +28,9 @@ services:
       BEA_LLM_API_KEY: ${BEA_LLM_API_KEY}
       BEA_LLM_MODEL: gpt-5.6-luna
       BEA_ADMIN_PASSWORD: ${BEA_ADMIN_PASSWORD}
+      BEA_DATA_DIR: /data
+    volumes:
+      - /var/lib/bun-email-api:/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3010/health"]
       interval: 10s
