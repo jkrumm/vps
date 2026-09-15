@@ -24,3 +24,6 @@ BEA_LLM_API_KEY=op://common/anthropic/API_KEY
 
 # /admin UI — basic auth password (user "admin"); /admin 404s when unset.
 BEA_ADMIN_PASSWORD=op://vps/bun-email-api/ADMIN_PASSWORD
+
+# /api/* bearer key (emails, stats, submissions); /api 404s when unset.
+BEA_API_KEY=op://vps/bun-email-api/API_KEY
