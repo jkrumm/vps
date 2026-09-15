@@ -17,3 +17,10 @@ BEA_SECRET_KEY=op://vps/bun-email-api/SECRET_KEY
 BEA_RESEND_API_KEY=op://vps/bun-email-api/RESEND_API_KEY
 BEA_RECEIVER_EMAIL=op://vps/bun-email-api/RECEIVER_EMAIL
 BEA_SY_SERENDIPITY_RECEIVER_EMAIL=op://vps/bun-email-api/SY_SERENDIPITY_RECEIVER_EMAIL
+
+# Spam filter — shared IU endpoint creds (same item research-gateway and argo use).
+BEA_LLM_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
+BEA_LLM_API_KEY=op://common/anthropic/API_KEY
+
+# /admin UI — basic auth password (user "admin"); /admin 404s when unset.
+BEA_ADMIN_PASSWORD=op://vps/bun-email-api/ADMIN_PASSWORD
