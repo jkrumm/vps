@@ -143,7 +143,7 @@
               "output": "duration"
             },
             "valueExpression": "Duration",
-            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss'",
+            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss' AND SpanAttributes['url.path'] NOT IN ('/v1/traces', '/v1/logs')",
             "whereLanguage": "sql"
           }
         ],
