@@ -1,6 +1,6 @@
 # Provisioning a Fresh Server
 
-One-time server bring-up. The terse agent checklist is `CLAUDE.md` →
+One-time server bring-up. The terse agent checklist is `AGENTS.md` →
 Deployment Order; this is the narrated walkthrough.
 
 ### 1. Create server
@@ -25,7 +25,7 @@ sudo tailscale up --ssh --advertise-tags=tag:vps   # complete auth in browser
 tailscale ip -4                                     # note the assigned Tailscale IP (100.x.x.x)
 ```
 
-Do **not** bind sshd to the Tailscale IP — see `CLAUDE.md` → Quick Reference for why. Verify instead:
+Do **not** bind sshd to the Tailscale IP — see `AGENTS.md` → Quick Reference for why. Verify instead:
 ```bash
 sudo ufw status verbose        # Default: deny (incoming); only "Anywhere on tailscale0 ALLOW IN"
 # ⚠ Open a second SSH session via the Tailscale IP to verify before closing this one

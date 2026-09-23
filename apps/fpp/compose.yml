@@ -4,7 +4,7 @@
 # This compose lives in apps/fpp/ on purpose: MariaDB is exposed on a public port
 # so Vercel can reach it. That breaks the repo-wide "no inbound ports" invariant,
 # so the deviation is quarantined here rather than poisoning compose.infra.yml.
-# See ../../CLAUDE.md → Security Invariants for the documented exception.
+# See ../../AGENTS.md → Security Invariants for the documented exception.
 #
 # fpp-server and fpp-analytics are deployed via RollHook from the
 # jkrumm/free-planning-poker repo (push to master). fpp-analytics-updater runs

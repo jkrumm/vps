@@ -182,7 +182,7 @@ services:
       # probes land on Traefik directly and every check performs a real B2 fetch
       # plus a real libvips render. Same wildcard cert, same rewrite middleware.
       # CGNAT makes the address unreachable from the public internet, so the DNS
-      # record itself is the access control (see CLAUDE.md → Networks).
+      # record itself is the access control (see AGENTS.md → Networks).
       - "traefik.http.routers.imgproxy-origin.rule=Host(`img-origin.${DOMAIN}`)"
       - "traefik.http.routers.imgproxy-origin.priority=50"
       - "traefik.http.routers.imgproxy-origin.entrypoints=websecure"

@@ -277,7 +277,7 @@ For each CRITICAL/WARN finding: auto-fix reversible remediations (container rest
 | Apt security updates available | `ssh vps "sudo apt upgrade -y --only-upgrade"` (VPS has NOPASSWD sudo) |
 | Postgres backup >48h old | `ssh vps "cd ~/vps && ENV=prod make backup"` |
 | MariaDB backup >48h old | `ssh vps "cd ~/vps && ENV=prod make fpp-backup"` |
-| Postgres upgrade available | `make backup && make infra-upgrade` (major bump: see "Upgrade Procedures" in CLAUDE.md) |
+| Postgres upgrade available | `make backup && make infra-upgrade` (major bump: see "Upgrade Procedures" in AGENTS.md) |
 | Valkey upgrade available | `make backup && make infra-upgrade` — same target as Postgres (data in volume) |
 | MariaDB upgrade available (patch/minor) | `ssh vps "cd ~/vps && make fpp-backup && make fpp-mariadb-upgrade"` — never `make fpp-up`, which would also recreate the RollHook-managed fpp-server/fpp-analytics off `:latest` |
 | fail2ban mariadb jail not active | `ssh vps "sudo systemctl restart fail2ban && sudo fail2ban-client status mariadb"` |

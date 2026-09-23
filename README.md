@@ -18,11 +18,11 @@ make firewall         # show UFW status
 ```
 
 Full ENV-aware command reference (dev seeding, per-app up/down, upgrades, cron
-seeding, HyperDX targets): `CLAUDE.md` → Quick Reference. Bare `make` prints an
+seeding, HyperDX targets): `AGENTS.md` → Quick Reference. Bare `make` prints an
 ENV-aware help.
 
 **SSH is Tailscale-only, enforced by UFW — not by sshd's bind address**
-(sshd listens on all interfaces by design; see `CLAUDE.md` → Quick Reference
+(sshd listens on all interfaces by design; see `AGENTS.md` → Quick Reference
 for why). Proof: `make firewall`.
 
 **Internal hostnames (container-to-container):**
@@ -36,7 +36,7 @@ for why). Proof: `make firewall`.
 | ClickStack UI (HyperDX) | `clickstack` | `8080` |
 
 External Docker networks apps join (`proxy`, `postgres-net`, `mariadb-net`,
-`valkey-net`, `monitoring-net`): `CLAUDE.md` → Networks.
+`valkey-net`, `monitoring-net`): `AGENTS.md` → Networks.
 
 ---
 
@@ -69,7 +69,7 @@ Homelab connectivity: Tailscale
   VPS → Beszel hub, Dozzle hub (Tailscale IPs, no public ports)
   SSH → Tailscale only, UFW-enforced (see Quick Reference above)
 
-Docker API — four socket-proxy instances, never docker.sock: CLAUDE.md → Networks.
+Docker API — four socket-proxy instances, never docker.sock: AGENTS.md → Networks.
 ```
 
 ---
@@ -113,7 +113,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 
 - **Cloudflare Tunnel, zero inbound ports.** cloudflared is outbound-only to the edge. DNS-01 ACME still issues the wildcard cert so cloudflared can verify Traefik's TLS handshake internally.
 - **Four socket proxies, no docker.sock mounts.** Traefik and Dozzle/Beszel each get a dedicated read-only proxy; RollHook and Watchtower each get a dedicated `POST=1` proxy on an isolated network — write access never shared.
-- **SSH via Tailscale only, enforced by UFW**, not sshd's bind address — see `CLAUDE.md` → Quick Reference for the boot-order reason sshd is never rebound.
+- **SSH via Tailscale only, enforced by UFW**, not sshd's bind address — see `AGENTS.md` → Quick Reference for the boot-order reason sshd is never rebound.
 - **Watchtower over WUD.** Auto-updates everything except Postgres/Valkey/MariaDB (major version bumps need a deliberate backup first). Slack, warn level only.
 - **`container_name: redis` for Valkey** — every app references `redis:6379` unmodified.
 - **1Password for secrets**, zero in the repo (`.env.tpl` is `op://` refs only). Deploy: `op run --env-file=.env.tpl -- docker compose up -d` (or `make up`). Why two runners/templates exist: `docs/secrets-injection.md`.
@@ -163,11 +163,11 @@ All Cloudflare env vars use the unified `CLOUDFLARE_*` prefix (matches the `/clo
 | `POSTGRES_PASSWORD` | `<generated>` | Generate: `openssl rand -hex 32` |
 
 Apps create their own users and databases on top of this superuser — schema
-model + adding a new app's schema: `CLAUDE.md` → Postgres Schema Model.
+model + adding a new app's schema: `AGENTS.md` → Postgres Schema Model.
 
 **MariaDB (FPP)**
 
-Single-tenant DB for Free Planning Poker, quarantined in `apps/fpp/` because it's exposed publicly on TCP 33306 (full rationale: `CLAUDE.md` → FPP MariaDB). Vercel connects with `?ssl={"rejectUnauthorized":true}` against `db.free-planning-poker.com`.
+Single-tenant DB for Free Planning Poker, quarantined in `apps/fpp/` because it's exposed publicly on TCP 33306 (full rationale: `AGENTS.md` → FPP MariaDB). Vercel connects with `?ssl={"rejectUnauthorized":true}` against `db.free-planning-poker.com`.
 
 | Variable | Value | How to get |
 |-|-|-|
@@ -280,7 +280,7 @@ services:
       options: { max-size: "10m", max-file: "3" }
     environment:
       # Shared cluster: append ?schema=<app>. Keep the migration journal in the
-      # app's own schema too (see "Postgres Schema Model" in CLAUDE.md).
+      # app's own schema too (see "Postgres Schema Model" in AGENTS.md).
       DATABASE_URL: postgresql://<user>:<pass>@postgres:5432/<db>?schema=<app>
       REDIS_URL: redis://redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
@@ -289,7 +289,7 @@ services:
 Deploy: `op run --env-file=.env.tpl -- docker compose up -d`
 
 Hard constraints for RollHook-managed apps (no `ports:`, no `container_name:`,
-graceful SIGTERM, …): `CLAUDE.md` → RollHook.
+graceful SIGTERM, …): `AGENTS.md` → RollHook.
 
 ---
 
@@ -309,7 +309,7 @@ Restoring PROD from S3 has **no make target by design** — gated, human-only DR
 tools only (`scripts/restore-pg.sh`, `apps/fpp/scripts/restore-mariadb.sh`),
 full procedure in `docs/disaster-recovery.md`. Dev seeding/DR-drill targets
 (`restore-local`, `sync-from-prod`, `pg-sync-schema`, `fpp-restore-local`,
-`fpp-sync-from-prod`, `db-counts`): `CLAUDE.md` → Quick Reference. App repos
+`fpp-sync-from-prod`, `db-counts`): `AGENTS.md` → Quick Reference. App repos
 delegate to these rather than re-implementing — e.g. `free-planning-poker`
 calls `make -C ../vps fpp-sync-from-prod`.
 
@@ -326,7 +326,7 @@ trust the sync/restore scripts' own summaries — only `db-counts` runs a real
 
 All three are excluded from Watchtower auto-updates, and a restart alone does not
 help — Docker reuses the image already on disk. They only move when `make
-infra-upgrade` / `make fpp-mariadb-upgrade` runs (`CLAUDE.md` → Quick
+infra-upgrade` / `make fpp-mariadb-upgrade` runs (`AGENTS.md` → Quick
 Reference), so check them periodically (`/audit` phase 8).
 
 Both targets name their services explicitly rather than recreating the whole
@@ -368,4 +368,4 @@ All dashboards are Tailscale-only — no public routes.
 Traefik dashboard is publicly DNS-resolvable but reachable only via a DNS-only
 A record to the Tailscale IP (CGNAT — unreachable from the public internet).
 There is no IP-allowlist middleware; Docker NAT would defeat one. Details:
-`CLAUDE.md` → Networks.
+`AGENTS.md` → Networks.
