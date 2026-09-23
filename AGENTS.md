@@ -192,6 +192,7 @@ apps/image-gen-gateway/compose.yml  Backend for the /img skill, RollHook-managed
 apps/weatherorb/compose.yml        weatherorb-edge — Tailscale-serve edge for weatherorb
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
+apps/jkrumm-com/compose.yml   jkrumm.com portfolio site (Astro, repo-root Dockerfile) — managed by RollHook, edge cache pattern in docs/edge-cache.md
 apps/bun-email-api/compose.yml  bun-email-api (Bun + Resend) — sends FPP contact-form + daily-analytics + SY Serendipity charter-request emails. RollHook-managed.
 apps/imgproxy/compose.yml     imgproxy — image CDN (resize/convert) over a private B2 bucket, served at img.DOMAIN
 apps/research-gateway/compose.yml  + lightpanda sidecar — /research backend, Tailscale-only, RollHook-managed

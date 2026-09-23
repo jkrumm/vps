@@ -1,0 +1,57 @@
+---
+# jkrumm-com — static Astro portfolio site served via nginx.
+# Managed by RollHook for zero-downtime deployments via rolling container swap.
+#
+# RollHook constraints (do not change):
+#   - No container_name  — prevents scaling to 2 instances during rollout
+#   - No ports           — Traefik routes via Docker DNS; ports block scaling
+#   - healthcheck required — rollout waits for healthy before removing old container
+#   - IMAGE_TAG env var  — passed by RollHook as the full image URI to deploy
+
+networks:
+  proxy:
+    external: true
+
+services:
+  jkrumm-com:
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/jkrumm-com:latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      # Main domain — jkrumm.com
+      - "traefik.http.routers.jkrumm-com.rule=Host(`jkrumm.com`)"
+      - "traefik.http.routers.jkrumm-com.entrypoints=websecure"
+      - "traefik.http.routers.jkrumm-com.tls.certresolver=letsencrypt"
+      # Request cert covering both apex and www in a single certificate
+      - "traefik.http.routers.jkrumm-com.tls.domains[0].main=jkrumm.com"
+      - "traefik.http.routers.jkrumm-com.tls.domains[0].sans=www.jkrumm.com"
+      - "traefik.http.services.jkrumm-com.loadbalancer.server.port=80"
+      - "traefik.http.routers.jkrumm-com.middlewares=rate-limit@file,security-headers@file"
+      # Active health check — Traefik stops routing to draining instance immediately
+      - "traefik.http.services.jkrumm-com.loadbalancer.healthcheck.path=/"
+      - "traefik.http.services.jkrumm-com.loadbalancer.healthcheck.interval=5s"
+      # Managed by RollHook — watchtower must not interfere with rolling deployments
+      - "com.centurylinklabs.watchtower.enable=false"
+      # OIDC deploy authorization — only this GitHub repo can trigger deploys
+      - "rollhook.allowed_repos=jkrumm/jkrumm.com"
+      # www → canonical redirect (301 permanent)
+      - "traefik.http.routers.jkrumm-com-www.rule=Host(`www.jkrumm.com`)"
+      - "traefik.http.routers.jkrumm-com-www.entrypoints=websecure"
+      - "traefik.http.routers.jkrumm-com-www.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.jkrumm-com-www.middlewares=www-to-jkrumm-com@docker"
+      - "traefik.http.middlewares.www-to-jkrumm-com.redirectregex.regex=^https://www\\.jkrumm\\.com/(.*)"
+      - "traefik.http.middlewares.www-to-jkrumm-com.redirectregex.replacement=https://jkrumm.com/$${1}"
+      - "traefik.http.middlewares.www-to-jkrumm-com.redirectregex.permanent=true"
+    networks:
+      - proxy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

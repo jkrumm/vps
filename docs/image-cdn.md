@@ -153,6 +153,8 @@ Use `f:jpg` for OpenGraph/RSS/email images; use auto-negotiation for in-page
 
 Do not add a Cloudflare cache rule unless verification actually shows repeat
 `MISS`es — the default static-asset caching covers this given the headers above.
+(Whole-page HTML sites, which Cloudflare does *not* cache by default, use a
+per-hostname Cache Rule instead — `docs/edge-cache.md`.)
 
 ---
 

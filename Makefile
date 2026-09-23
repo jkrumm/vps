@@ -54,6 +54,7 @@ endif
         photo-gallery-up photo-gallery-down \
         imgproxy-up imgproxy-down \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
+        jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade
@@ -502,6 +503,17 @@ basalt-ui-marketing-down: require-prod ; $(OP_RUN) docker compose -f apps/basalt
 ## deploys against. Re-runnable.
 basalt-ui-marketing-bootstrap-image: require-prod
 	$(OP_RUN) ./apps/basalt-ui-marketing/scripts/bootstrap-image.sh
+
+## jkrumm-com stack (static Astro portfolio site, RollHook-managed) — apps/jkrumm-com/compose.yml
+## Stateless, no DB, no .env — the image bakes the built site; RollHook injects IMAGE_TAG.
+## RollHook deploys on pushes to jkrumm/jkrumm.com:master.
+jkrumm-com-up:   require-prod ; $(OP_RUN) docker compose -f apps/jkrumm-com/compose.yml up -d
+jkrumm-com-down: require-prod ; $(OP_RUN) docker compose -f apps/jkrumm-com/compose.yml down
+## One-shot bootstrap — clone jkrumm.com, build the repo-root Dockerfile, and push
+## :initial to rollhook.jkrumm.com so RollHook has a running container to
+## authorize OIDC deploys against. Re-runnable.
+jkrumm-com-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/jkrumm-com/scripts/bootstrap-image.sh
 
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:
