@@ -94,14 +94,14 @@
             "aggFn": "count",
             "alias": "5xx",
             "valueExpression": "",
-            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss' AND StatusCode = 'Error'",
+            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss' AND SpanAttributes['url.path'] NOT IN ('/health', '/health/render') AND StatusCode = 'Error'",
             "whereLanguage": "sql"
           },
           {
             "aggFn": "count",
             "alias": "Total",
             "valueExpression": "",
-            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss'",
+            "where": "ServiceName = 'traefik' AND SpanKind = 'Server' AND SpanAttributes['server.address'] != 'otel.jkrumm.com' AND SpanAttributes['url.scheme'] != 'wss' AND SpanAttributes['url.path'] NOT IN ('/health', '/health/render')",
             "whereLanguage": "sql"
           }
         ],
