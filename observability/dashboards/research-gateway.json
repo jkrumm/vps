@@ -332,6 +332,35 @@
       "w": 6,
       "x": 0,
       "y": 48
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "partial rate high",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "source": "Logs",
+        "sqlTemplate": "SELECT if(total >= 5 AND toFloat64(partial) / nullIf(total, 0) > 0.3, partial, 0) AS partial_alert\nFROM (\n  SELECT countIf(LogAttributes['status']='partial') AS partial, count() AS total\n  FROM otel_logs\n  WHERE ServiceName = 'research-gateway' AND Body = 'research.done'\n    AND TimestampTime > now() - INTERVAL 24 HOUR\n)"
+      },
+      "h": 3,
+      "id": "6ab617656f7944223dc714e9",
+      "name": "15. Partial rate too high (count \u2014 partial jobs when the 24h partial share > 30% AND >= 5 research.done rows; 0 otherwise, healthy)",
+      "w": 6,
+      "x": 6,
+      "y": 48
     }
   ]
 }

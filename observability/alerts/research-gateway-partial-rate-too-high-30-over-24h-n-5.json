@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "research-gateway",
+  "displayName": "research-gateway - 15. Partial rate too high (count \u2014 partial jobs when the 24h partial share > 30% AND >= 5 research.done rows; 0 otherwise, healthy)",
+  "interval": "1h",
+  "message": null,
+  "name": "research-gateway partial rate too high (>30% over 24h, n>=5)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "research-gateway"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "15. Partial rate too high (count \u2014 partial jobs when the 24h partial share > 30% AND >= 5 research.done rows; 0 otherwise, healthy)"
+}
