@@ -109,6 +109,41 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA argo GRANT ALL ON SEQUENCES TO argo;
 SQL
 
 # ---------------------------------------------------------------------------
+# shutterflow — schema: shutterflow, user: shutterflow
+# Guarded: the local dev stack does not provision it (shutterflow runs its own dev Postgres,
+# so .env.dev.tpl carries no SHUTTERFLOW_DB_PASSWORD) — skip instead of failing under set -u.
+# ---------------------------------------------------------------------------
+if [ -n "${SHUTTERFLOW_DB_PASSWORD:-}" ]; then
+echo "--> shutterflow"
+
+psql_main <<SQL
+CREATE SCHEMA IF NOT EXISTS shutterflow;
+
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'shutterflow') THEN
+    CREATE ROLE shutterflow WITH LOGIN PASSWORD '${SHUTTERFLOW_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE shutterflow WITH PASSWORD '${SHUTTERFLOW_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+
+GRANT CONNECT ON DATABASE "${POSTGRES_DB}" TO shutterflow;
+-- Required for drizzle migrate: its migration runs CREATE SCHEMA IF NOT EXISTS, and PG checks
+-- CREATE ON DATABASE before the IF NOT EXISTS short-circuit.
+GRANT CREATE ON DATABASE "${POSTGRES_DB}" TO shutterflow;
+GRANT USAGE, CREATE ON SCHEMA shutterflow TO shutterflow;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA shutterflow TO shutterflow;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA shutterflow TO shutterflow;
+ALTER DEFAULT PRIVILEGES IN SCHEMA shutterflow GRANT ALL ON TABLES TO shutterflow;
+ALTER DEFAULT PRIVILEGES IN SCHEMA shutterflow GRANT ALL ON SEQUENCES TO shutterflow;
+SQL
+else
+echo "--> shutterflow (skipped: SHUTTERFLOW_DB_PASSWORD not set — prod-only schema)"
+fi
+
+# ---------------------------------------------------------------------------
 # Future apps: add blocks here following the same pattern.
 #
 # Migration journals: each drizzle-kit app must keep its journal in its OWN

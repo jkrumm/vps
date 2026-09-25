@@ -56,6 +56,7 @@ endif
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
+        shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade
 
@@ -359,6 +360,41 @@ research-gateway-env: require-prod
 	op --account tkrumm inject -i apps/research-gateway/.env.tpl -o apps/research-gateway/.env -f
 	chmod 644 apps/research-gateway/.env
 	@echo "Wrote apps/research-gateway/.env (chmod 644, gitignored)"
+
+## shutterflow stack (share server + signed imgproxy CDN, RollHook-managed) — apps/shutterflow/compose.yml
+## shutterflow.app + cdn.shutterflow.app via the Cloudflare tunnel. RollHook deploys on push to
+## jkrumm/shutterflow:master. shutterflow-up pins the running share image (never rolls back to a
+## stale :latest); genesis start uses the bootstrap-seeded :latest.
+shutterflow-up: require-prod
+	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=shutterflow-share' --format '{{.Names}}' | head -1); \
+	if [ -z "$$NAME" ]; then \
+	  echo "  no shutterflow-share container exists — genesis start from :latest (bootstrap-seeded)"; \
+	  $(OP_RUN) docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env up -d; \
+	else \
+	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
+	  if [ -z "$$IMG" ]; then \
+	    echo "  ✗ shutterflow-share container '$$NAME' exists but its image could not be read — inspect it manually"; \
+	    exit 1; \
+	  fi; \
+	  echo "  pinning shutterflow-share → $$IMG"; \
+	  $(OP_RUN) env SHUTTERFLOW_SHARE_IMAGE=$$IMG docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env up -d; \
+	fi
+shutterflow-down: require-prod ; $(OP_RUN) docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env down
+
+## Materialize apps/shutterflow/.env from .env.tpl (via `op inject`) plus the `proxy` network
+## CIDR as SHUTTERFLOW_TRUSTED_PROXIES. Re-run after rotating any secret.
+shutterflow-env: require-prod
+	op --account tkrumm inject -i apps/shutterflow/.env.tpl -o apps/shutterflow/.env -f
+	@CIDR=$$(docker network inspect proxy --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'); \
+	[ -n "$$CIDR" ] || { echo "  ✗ could not read the proxy network subnet"; exit 1; }; \
+	echo "SHUTTERFLOW_TRUSTED_PROXIES=$$CIDR" >> apps/shutterflow/.env
+	chmod 644 apps/shutterflow/.env
+	@echo "Wrote apps/shutterflow/.env (chmod 644, gitignored)"
+
+## One-shot bootstrap — build + push :initial from a shipped source tree (the repo is private;
+## see apps/shutterflow/scripts/bootstrap-image.sh for the one-line `git archive | ssh` step).
+shutterflow-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/shutterflow/scripts/bootstrap-image.sh
 
 ## weatherorb stack (nginx edge in front of the tileserver on the Mac mini, RollHook-managed) —
 ## apps/weatherorb/compose.yml. Public at weatherorb.com through the cloudflared tunnel.

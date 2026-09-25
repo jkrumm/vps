@@ -98,6 +98,8 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | photo-gallery | nginx:alpine | Static Astro photo gallery — content rsynced from laptop via photo-flow CLI | auto |
 | imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Image CDN — on-the-fly resize/convert over a private B2 bucket. See [docs/image-cdn.md](docs/image-cdn.md) | auto (v4.x) |
 | argo-api, argo-dashboard | `rollhook.jkrumm.com/argo-*` | Personal API + dashboard, the agent backbone | RollHook |
+| shutterflow-share | `rollhook.jkrumm.com/shutterflow-share` | Shutterflow share server (accounts, albums, share links) at `shutterflow.app` | RollHook |
+| shutterflow-imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Shutterflow's **signed** derivative CDN at `cdn.shutterflow.app` over `shutterflow/prod/derivatives/` | auto (v4.x) |
 | audio-gateway | `.../audio-gateway` | STT/TTS gateway (podcast wiring is mini-only here) | RollHook |
 | image-gen-gateway | `.../image-gen-gateway` | Image generation behind the `/img` skill | RollHook |
 | weatherorb-edge | `.../weatherorb-edge` | Tailscale-serve edge for the weatherorb weather/wave service | RollHook |
@@ -200,6 +202,25 @@ walkthrough + provisioning + verification: [docs/image-cdn.md](docs/image-cdn.md
 | `IMGPROXY_B2_BUCKET` | `<bucket>` | Reused from `op://common/backblaze-s3/BUCKET` |
 | `IMGPROXY_B2_ENDPOINT` | `https://...` | Reused from `op://common/backblaze-s3/ENDPOINT` |
 | `IMGPROXY_B2_REGION` | `<region>` | Reused from `op://common/backblaze-s3/REGION` |
+
+**shutterflow (share server + CDN)**
+
+All in `op://vps/shutterflow/*` via `apps/shutterflow/.env.tpl` (`make shutterflow-env`); only
+`SHUTTERFLOW_DB_PASSWORD` is also in the root `.env.tpl` (for `make postgres-setup`). Both B2
+keys are name-prefix-restricted to `shutterflow/prod/derivatives/` — they cannot reach `img/`,
+`backups/` or the desktop's `shutterflow/prod/masters/`. No masters key ever lives here.
+
+| Variable | Value | How to get |
+|-|-|-|
+| `SHUTTERFLOW_DB_PASSWORD` | `<secret>` | `openssl rand -hex 32` |
+| `SHUTTERFLOW_BETTER_AUTH_SECRET` | `<secret>` | `openssl rand -base64 48` |
+| `SHUTTERFLOW_IMGPROXY_KEY` / `_SALT` | `<hex>` | `openssl rand -hex 32` each — shared by the share server (signs) and imgproxy (verifies) |
+| `SHUTTERFLOW_RESEND_API_KEY` | `<secret>` | Resend `sending_access` key restricted to the `shutterflow.app` domain |
+| `SHUTTERFLOW_GOOGLE_CLIENT_ID` / `_SECRET` | `<secret>` | Google Cloud OAuth client (redirect `https://shutterflow.app/api/auth/callback/google`) |
+| `SHUTTERFLOW_STORAGE_B2_KEY_ID` / `_APP_KEY` | `<key-id>` / `<secret>` | `b2 key create --bucket <bucket> --name-prefix shutterflow/prod/derivatives/ shutterflow-prod-derivatives-server listBuckets,listFiles,readFiles,writeFiles,deleteFiles` |
+| `SHUTTERFLOW_CDN_B2_KEY_ID` / `_APP_KEY` | `<key-id>` / `<secret>` | `b2 key create --bucket <bucket> --name-prefix shutterflow/prod/derivatives/ shutterflow-prod-derivatives-cdn listBuckets,listFiles,readFiles` |
+| `SHUTTERFLOW_B2_BUCKET` / `_ENDPOINT` / `_REGION` | | Reused from `op://common/backblaze-s3/*` |
+| `SHUTTERFLOW_TRUSTED_PROXIES` | `<cidr>` | Not a secret — `make shutterflow-env` reads the `proxy` network subnet from docker |
 
 **Backups (S3-compatible object storage)**
 

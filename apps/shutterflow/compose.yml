@@ -1,0 +1,182 @@
+# shutterflow — the share server (accounts, albums, share links, public galleries) at
+# shutterflow.app plus its dedicated, SIGNED imgproxy CDN at cdn.shutterflow.app.
+# Source: jkrumm/shutterflow (private) — docs/engineering/deploy.md, decisions 0018/0019/0021.
+#
+# Both hostnames reach Traefik only through the Cloudflare tunnel: Traefik publishes no public
+# port (websecure is bound to the Tailscale IP), so a direct hit on the VPS public IP never
+# reaches these routers. That is what makes `cf-connecting-ip` trustworthy for the share
+# server's per-IP rate limits (TRUSTED_PROXY_HEADERS below).
+#
+# No `rate-limit@file` on either router, deliberately: behind cloudflared every request
+# arrives from the tunnel's one source IP, so Traefik's per-IP limiter would be a single global
+# bucket. The share server limits per client IP itself (better-auth, keyed on cf-connecting-ip).
+#
+# Bootstrap order on a fresh server:
+#   1. make postgres-setup                    (creates the shutterflow role + schema)
+#   2. make shutterflow-env                   (materializes apps/shutterflow/.env)
+#   3. make shutterflow-bootstrap-image       (seeds rollhook.jkrumm.com/shutterflow-share)
+#   4. make shutterflow-up                    (genesis start; migrations run on boot)
+#   5. push to jkrumm/shutterflow:master     → RollHook deploys from then on
+
+networks:
+  proxy:
+    external: true
+  postgres-net:
+    external: true
+  monitoring-net:
+    external: true
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # shutterflow-share — Bun + Elysia + better-auth + Drizzle; serves the gallery SPA too.
+  # ---------------------------------------------------------------------------
+  shutterflow-share:
+    image: ${SHUTTERFLOW_SHARE_IMAGE:-${IMAGE_TAG:-rollhook.jkrumm.com/shutterflow-share:latest}}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    environment:
+      NODE_ENV: production
+      # The image's own default port.
+      PORT: "4100"
+      BETTER_AUTH_URL: https://shutterflow.app
+      BETTER_AUTH_SECRET: ${SHUTTERFLOW_BETTER_AUTH_SECRET}
+      # Shared VPS Postgres — own schema `shutterflow`, schema-scoped role. No `?schema=` here:
+      # the postgres.js driver forwards unknown URL params as server startup parameters and
+      # Postgres refuses `schema`. Every table is schema-qualified (pgSchema) and the migration
+      # journal lives in `shutterflow` too (migrationsSchema), so no search_path is needed.
+      DATABASE_URL: postgresql://shutterflow:${SHUTTERFLOW_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Mail: Resend, sending-only key restricted to the shutterflow.app domain.
+      RESEND_API_KEY: ${SHUTTERFLOW_RESEND_API_KEY}
+      MAIL_FROM: Shutterflow <noreply@shutterflow.app>
+      # SSO — Google only (GitHub skipped).
+      GOOGLE_CLIENT_ID: ${SHUTTERFLOW_GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${SHUTTERFLOW_GOOGLE_CLIENT_SECRET}
+      # Client IP for rate limiting: Cloudflare's header, believed only when the direct peer is
+      # inside TRUSTED_PROXIES (the `proxy` network — i.e. Traefik). The CIDR is read from
+      # `docker network inspect proxy` by `make shutterflow-env`, not written here.
+      TRUSTED_PROXY_HEADERS: cf-connecting-ip
+      TRUSTED_PROXIES: ${SHUTTERFLOW_TRUSTED_PROXIES}
+      # Derivatives store — the server's own B2 key: read/write/delete on
+      # shutterflow/prod/derivatives/ ONLY. It can never reach masters/, img/ or backups/.
+      STORAGE_BUCKET: ${SHUTTERFLOW_B2_BUCKET}
+      STORAGE_ENDPOINT: ${SHUTTERFLOW_B2_ENDPOINT}
+      STORAGE_REGION: ${SHUTTERFLOW_B2_REGION}
+      STORAGE_ACCESS_KEY_ID: ${SHUTTERFLOW_STORAGE_B2_KEY_ID}
+      STORAGE_SECRET_ACCESS_KEY: ${SHUTTERFLOW_STORAGE_B2_APP_KEY}
+      STORAGE_DERIVATIVES_PREFIX: shutterflow/prod/derivatives/
+      # Signed CDN URLs — same key/salt as the imgproxy service below.
+      IMGPROXY_BASE_URL: https://cdn.shutterflow.app
+      IMGPROXY_KEY: ${SHUTTERFLOW_IMGPROXY_KEY}
+      IMGPROXY_SALT: ${SHUTTERFLOW_IMGPROXY_SALT}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: shutterflow-share
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4100/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.shutterflow.rule=Host(`shutterflow.app`)"
+      - "traefik.http.routers.shutterflow.entrypoints=websecure"
+      - "traefik.http.routers.shutterflow.tls.certresolver=letsencrypt"
+      # Second zone: its own wildcard cert via DNS-01 (the static tls.domains covers DOMAIN only).
+      - "traefik.http.routers.shutterflow.tls.domains[0].main=shutterflow.app"
+      - "traefik.http.routers.shutterflow.tls.domains[0].sans[0]=*.shutterflow.app"
+      - "traefik.http.routers.shutterflow.middlewares=security-headers@file"
+      - "traefik.http.services.shutterflow.loadbalancer.server.port=4100"
+      - "traefik.http.services.shutterflow.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.shutterflow.loadbalancer.healthcheck.interval=5s"
+      # Managed by RollHook — Watchtower must not interfere.
+      - "com.centurylinklabs.watchtower.enable=false"
+      # OIDC deploy authorization — only this GitHub repo can trigger deploys.
+      - "rollhook.allowed_repos=jkrumm/shutterflow"
+    networks:
+      - proxy
+      - postgres-net
+      - monitoring-net
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ---------------------------------------------------------------------------
+  # shutterflow-imgproxy — the apps/imgproxy pattern pointed at shutterflow/prod/derivatives/,
+  # with one deliberate difference: URLs are SIGNED (decision 0019). Share links are
+  # multi-tenant tokens; unsigned URLs would make object keys enumerable in principle and the
+  # instance a free resizer. The share server signs every URL with an embedded expiry (1h).
+  # ---------------------------------------------------------------------------
+  shutterflow-imgproxy:
+    # Major-pinned: watchtower tracks v4.x patch releases, never a v4→v5 jump.
+    image: ghcr.io/imgproxy/imgproxy:v4
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    environment:
+      IMGPROXY_BIND: ":8080"
+      IMGPROXY_WORKERS: "4"
+      IMGPROXY_KEY: ${SHUTTERFLOW_IMGPROXY_KEY}
+      IMGPROXY_SALT: ${SHUTTERFLOW_IMGPROXY_SALT}
+
+      # --- S3 source (B2) — the read-only CDN key, prefix-locked to shutterflow/prod/derivatives/
+      IMGPROXY_USE_S3: "true"
+      IMGPROXY_S3_REGION: ${SHUTTERFLOW_B2_REGION}
+      IMGPROXY_S3_ENDPOINT: ${SHUTTERFLOW_B2_ENDPOINT}
+      IMGPROXY_S3_ENDPOINT_USE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${SHUTTERFLOW_CDN_B2_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${SHUTTERFLOW_CDN_B2_APP_KEY}
+      # The share server signs `sfd/<user>/<photo>/<variant>.jpg` sources (apps/share
+      # image-urls adapter); this maps them onto the bucket path. Applied before the
+      # ALLOWED_SOURCES check, which therefore whitelists the post-replacement form.
+      IMGPROXY_URL_REPLACEMENTS: "sfd/=s3://${SHUTTERFLOW_B2_BUCKET}/shutterflow/prod/derivatives/"
+      # Second layer only — the B2 key's own name prefix is the authoritative boundary.
+      IMGPROXY_ALLOWED_SOURCES: "s3://${SHUTTERFLOW_B2_BUCKET}/shutterflow/prod/derivatives/"
+      IMGPROXY_S3_ALLOWED_BUCKETS: ${SHUTTERFLOW_B2_BUCKET}
+      IMGPROXY_ALLOW_PRIVATE_SOURCE_ADDRESSES: "false"
+
+      # --- Caching: signed URLs expire after 1h (0019), so renditions are cached no longer —
+      # a revoked share's images die with the signature, not a year later.
+      IMGPROXY_TTL: "3600"
+      IMGPROXY_CACHE_CONTROL_PASSTHROUGH: "false"
+      IMGPROXY_AUTO_WEBP: "true"
+      IMGPROXY_AUTO_AVIF: "true"
+
+      # --- Observability — v4 still needs the ENABLE flags next to the OTEL_* vars.
+      IMGPROXY_OPEN_TELEMETRY_ENABLE: "true"
+      IMGPROXY_OPEN_TELEMETRY_ENABLE_METRICS: "true"
+      IMGPROXY_OPEN_TELEMETRY_ENABLE_LOGS: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_SERVICE_NAME: shutterflow-imgproxy
+
+      # --- Source limits: `full` derivatives are original size (≤ ~40 MP Fuji frames).
+      IMGPROXY_MAX_SRC_RESOLUTION: "100"
+      IMGPROXY_MAX_SRC_FILE_SIZE: "52428800"
+    healthcheck:
+      # Liveness only (see apps/imgproxy/compose.yml) — B2 reachability shows in the OTLP errors.
+      test: ["CMD", "imgproxy", "health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.shutterflow-cdn.rule=Host(`cdn.shutterflow.app`)"
+      - "traefik.http.routers.shutterflow-cdn.entrypoints=websecure"
+      - "traefik.http.routers.shutterflow-cdn.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.shutterflow-cdn.tls.domains[0].main=shutterflow.app"
+      - "traefik.http.routers.shutterflow-cdn.tls.domains[0].sans[0]=*.shutterflow.app"
+      - "traefik.http.routers.shutterflow-cdn.middlewares=security-headers@file"
+      - "traefik.http.services.shutterflow-cdn.loadbalancer.server.port=8080"
+      - "traefik.http.services.shutterflow-cdn.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.shutterflow-cdn.loadbalancer.healthcheck.interval=30s"
+    networks:
+      - proxy
+      - monitoring-net
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

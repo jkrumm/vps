@@ -195,6 +195,7 @@ apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) 
 apps/jkrumm-com/compose.yml   jkrumm.com portfolio site (Astro, repo-root Dockerfile) — managed by RollHook, edge cache pattern in docs/edge-cache.md
 apps/bun-email-api/compose.yml  bun-email-api (Bun + Resend) — sends FPP contact-form + daily-analytics + SY Serendipity charter-request emails. RollHook-managed.
 apps/imgproxy/compose.yml     imgproxy — image CDN (resize/convert) over a private B2 bucket, served at img.DOMAIN
+apps/shutterflow/compose.yml  shutterflow-share (shutterflow.app) + signed shutterflow-imgproxy (cdn.shutterflow.app) — RollHook-managed; source repo is private, bootstrap via apps/shutterflow/scripts/bootstrap-image.sh
 apps/research-gateway/compose.yml  + lightpanda sidecar — /research backend, Tailscale-only, RollHook-managed
 apps/photo-gallery/compose.yml  photo-gallery — static Astro gallery served by nginx from /home/jkrumm/photo-gallery-dist (rsynced from laptop via photo-flow CLI)
 apps/fpp/compose.yml          FPP — MariaDB (port 33306 exposed for Vercel) + fpp-server + fpp-analytics + updater sidecar, all RollHook-managed
@@ -338,6 +339,7 @@ Current schemas:
 | umami | Umami analytics | umami |
 | basalt_ui_playground | basalt-ui-playground | basalt_ui_playground |
 | argo | argo (api) | argo |
+| shutterflow | shutterflow-share | shutterflow |
 
 ---
 

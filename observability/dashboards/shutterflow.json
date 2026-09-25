@@ -1,0 +1,48 @@
+{
+  "containers": [],
+  "filters": [],
+  "name": "shutterflow",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "shutterflow"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Failed sends",
+            "valueExpression": "",
+            "where": "ServiceName = 'shutterflow-share' AND Body = 'email-otp: mail send failed'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "fd4c8ed21e40b13e247a2452",
+      "name": "1. OTP mail send failures (count \u2014 email-otp: mail send failed; empty is healthy)",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    }
+  ]
+}
