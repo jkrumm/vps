@@ -8,7 +8,7 @@
   "interval": "15m",
   "message": null,
   "name": "shutterflow email-otp mail send failed >= 1 (15m)",
-  "note": "Verification/reset codes are not reaching users. Mail failures are logged, never surfaced to clients (no account enumeration) \u2014 this alert is the only signal. Check Resend (domain status, key) and the error.type attribute.",
+  "note": null,
   "numConsecutiveWindows": null,
   "source": "tile",
   "tags": [

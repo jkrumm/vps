@@ -38,7 +38,7 @@
         "source": "Logs"
       },
       "h": 3,
-      "id": "fd4c8ed21e40b13e247a2452",
+      "id": "6ab622786f7944223dc715a2",
       "name": "1. OTP mail send failures (count \u2014 email-otp: mail send failed; empty is healthy)",
       "w": 6,
       "x": 0,
