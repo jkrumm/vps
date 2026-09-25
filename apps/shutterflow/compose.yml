@@ -88,6 +88,18 @@ services:
       - "traefik.http.routers.shutterflow.tls.domains[0].main=shutterflow.app"
       - "traefik.http.routers.shutterflow.tls.domains[0].sans[0]=*.shutterflow.app"
       - "traefik.http.routers.shutterflow.middlewares=security-headers@file"
+      # Share links carry their bearer token in the path (/s/<token>, 0019). Traefik would record
+      # it in its span (url.path/url.full) and access log, so those paths get their own router
+      # with both turned off; the share server's own spans redact it (apps/share telemetry).
+      - "traefik.http.routers.shutterflow-links.rule=Host(`shutterflow.app`) && (PathPrefix(`/s/`) || PathPrefix(`/api/v1/public/shares/`))"
+      - "traefik.http.routers.shutterflow-links.priority=100"
+      - "traefik.http.routers.shutterflow-links.entrypoints=websecure"
+      - "traefik.http.routers.shutterflow-links.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.shutterflow-links.middlewares=security-headers@file"
+      - "traefik.http.routers.shutterflow-links.service=shutterflow"
+      - "traefik.http.routers.shutterflow-links.observability.tracing=false"
+      - "traefik.http.routers.shutterflow-links.observability.accesslogs=false"
+      - "traefik.http.routers.shutterflow.service=shutterflow"
       - "traefik.http.services.shutterflow.loadbalancer.server.port=4100"
       - "traefik.http.services.shutterflow.loadbalancer.healthcheck.path=/health"
       - "traefik.http.services.shutterflow.loadbalancer.healthcheck.interval=5s"
