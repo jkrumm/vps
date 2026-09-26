@@ -53,6 +53,7 @@ endif
         image-gen-gateway-up image-gen-gateway-down image-gen-gateway-env image-gen-gateway-redeploy image-gen-gateway-bootstrap-image \
         photo-gallery-up photo-gallery-down \
         imgproxy-up imgproxy-down \
+        edge-cache-status edge-cache-apply \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
@@ -528,6 +529,19 @@ photo-gallery-down: require-prod ; $(OP_RUN) docker compose -f apps/photo-galler
 ## Requires op://vps/imgproxy/* (read-only, bucket-scoped B2 key) to exist first.
 imgproxy-up:   require-prod ; $(OP_RUN) docker compose -f apps/imgproxy/compose.yml up -d
 imgproxy-down: require-prod ; $(OP_RUN) docker compose -f apps/imgproxy/compose.yml down
+
+## Read-only Cloudflare edge-cache checklist for HOST (zone, DNS, tunnel ingress,
+## Cache Rule, live probe) — docs/edge-cache.md. Exits 1 if any check fails.
+edge-cache-status: require-prod
+	@[ -n "$(HOST)" ] || { echo "usage: make edge-cache-status HOST=example.com"; exit 1; }
+	$(OP_RUN) python3 scripts/edge-cache.py status $(HOST)
+
+## Idempotently provision the edge-cache pattern for HOST (proxied CNAMEs, tunnel
+## ingress, Cache Rule), preserving every other DNS/ingress/rule entry, then runs
+## status. DRY_RUN=1 previews without writing.
+edge-cache-apply: require-prod
+	@[ -n "$(HOST)" ] || { echo "usage: make edge-cache-apply HOST=example.com [DRY_RUN=1]"; exit 1; }
+	$(OP_RUN) python3 scripts/edge-cache.py apply $(HOST)
 
 ## basalt-ui-marketing stack (static Astro docs site, RollHook-managed) — apps/basalt-ui-marketing/compose.yml
 ## Stateless, no DB, no .env — the image bakes the built site; RollHook injects IMAGE_TAG.

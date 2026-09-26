@@ -39,7 +39,90 @@ edge (zstd/br) on the way out — the origin is served once per Cache Rule TTL
 window (effectively ~never hit once warm) and doesn't need a compression
 story of its own.
 
-Reference implementation: `jkrumm.com`'s `deploy/nginx.conf` (see that repo).
+### Canonical nginx config
+
+Copied verbatim from `jkrumm.com`'s `deploy/nginx.conf` — the reference
+implementation every adopter starts from:
+
+```nginx
+# Origin for jkrumm.com behind Cloudflare. The cache headers here are the whole
+# edge-cache policy — the Cloudflare Cache Rule only makes HTML eligible and
+# defers to them. Pattern: vps/docs/edge-cache.md.
+#
+# Browser vs edge are separate clocks:
+#   Cache-Control                  → browsers (and Cloudflare, absent the below)
+#   Cloudflare-CDN-Cache-Control   → Cloudflare only, highest precedence, stripped
+#                                    before the response reaches the browser
+# Every deploy purges the hostname, so a year at the edge is never stale.
+
+map $sent_http_content_type $browser_cache {
+    # Unhashed documents, feeds and code/data (e.g. a search index) revalidate
+    # on every use — the edge answers the 304, so it stays cheap.
+    ~^text/html                         "public, max-age=0, must-revalidate";
+    ~^(application|text)/xml            "public, max-age=0, must-revalidate";
+    ~^application/(rss|atom)\+xml       "public, max-age=0, must-revalidate";
+    ~^application/(manifest\+)?json     "public, max-age=0, must-revalidate";
+    ~^(application|text)/javascript     "public, max-age=0, must-revalidate";
+    ~^text/(css|plain)                  "public, max-age=0, must-revalidate";
+    # Unhashed media (favicon, og image): an hour of staleness is fine.
+    default                             "public, max-age=3600";
+}
+
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    server_tokens off;
+    # Redirects stay relative — the container never knows it sits behind TLS.
+    absolute_redirect off;
+
+    # trailingSlash: 'never' — /blog/ is a duplicate of /blog, never a page.
+    rewrite ^/(.+)/$ /$1 permanent;
+
+    # Content-hashed build output: a changed file is a new URL.
+    location /_astro/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # Directory-format build (blog/foo/index.html) served without a trailing
+    # slash. Never `$uri/` here: it makes nginx 301 back to the slashed URL.
+    location / {
+        try_files $uri $uri/index.html =404;
+        add_header Cache-Control $browser_cache;
+        add_header Cloudflare-CDN-Cache-Control "max-age=31536000";
+    }
+}
+```
+
+**The `map` block is the content-type policy** — it decides the *browser*
+`Cache-Control` per response, keyed on `$sent_http_content_type` (nginx's own
+MIME guess from the file extension, so no extra config needed per file type):
+
+- **Unhashed HTML, XML/RSS/Atom, JSON, JS, CSS** → `max-age=0, must-revalidate`.
+  These are served under stable paths (`/`, `/blog`, `/sitemap.xml`,
+  `/rss.xml`) whose content can change on the next deploy — the browser must
+  always re-ask. The `Cloudflare-CDN-Cache-Control` header on the `location /`
+  block still lets the *edge* hold these for a year, purged on deploy.
+- **Unhashed media** (favicon, `og.png`, anything else with no build hash in
+  its filename) → `max-age=3600`. An hour of staleness is an acceptable
+  tradeoff for assets that rarely change and aren't purge-critical.
+- **`/_astro/*`** (Astro's content-hashed build output) → `max-age=31536000,
+  immutable`, no split header needed: a changed file is a *new* URL, so a
+  year is correct for both browser and edge simultaneously.
+
+**Two per-site knobs, adjust when adopting this for another site:**
+
+- `rewrite ^/(.+)/$ /$1 permanent;` — only for an Astro build with
+  `trailingSlash: 'never'`. Drop it (or invert it) for a site configured the
+  other way; getting this wrong 301-loops or fights the framework's own
+  canonical-URL logic.
+- `error_page 404 /404.html;` — add this when the site ships a custom
+  `404.html` in its build output. **Never add an SPA-style
+  `try_files $uri $uri/index.html /index.html;` fallback** — that serves the
+  homepage for every unmatched path with a `200`, and since the edge caches
+  HTML for a year, one bad link would get the homepage cached under every
+  junk URL that ever 404s until the next purge.
 
 ---
 
@@ -111,18 +194,69 @@ curl -sI https://<host>/ | grep -i cf-cache-status   # HIT (repeat)
 
 After a deploy (purge fired), the same request should go back to `MISS`.
 
+`make edge-cache-status HOST=<host>` runs this (and every other check below)
+in one shot.
+
+---
+
+## The `edge-cache.py` tool
+
+`scripts/edge-cache.py` (stdlib-only Python, no dependency) replaces the old
+copy-paste API snippets in the `/cloudflare` skill for this one pattern.
+Both make targets are prod-only and go through `$(OP_RUN)`, so secrets come
+from `.env.tpl` (`CLOUDFLARE_MANAGE_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+`CLOUDFLARE_TUNNEL_ID`) — never printed, and no zone/tunnel/account ID is
+ever printed either.
+
+```bash
+make edge-cache-status HOST=example.com              # read-only checklist, exits 1 on any ✗
+make edge-cache-apply  HOST=example.com               # idempotent: DNS, ingress, Cache Rule, then status
+make edge-cache-apply  HOST=example.com DRY_RUN=1      # preview the same, writes nothing
+```
+
+`status` walks five checks, each printed as ✓/✗ with a one-line fix hint:
+zone lookup, proxied CNAME (HOST + a warn-only check for `www.HOST`), tunnel
+ingress coverage (explicit entry or a covering wildcard — `*.x` never
+matches `x` itself — for both HOST and `www.HOST`), the `edge-cache HOST`
+Cache Rule, and a live probe of `https://HOST/` (200, split cache headers,
+second-request `HIT`, plus the first `/_astro/*.css|js` asset found in the
+HTML checked for `immutable` + `HIT`).
+
+`apply` is additive and idempotent: it only ever creates a CNAME that's
+missing (an existing record pointing elsewhere is a hard stop, never
+overwritten), only inserts ingress entries not already covered, and upserts
+the Cache Rule by `description` while preserving every other rule/entry/record.
+
 ---
 
 ## Adoption checklist for another site
 
-1. Set the header contract above in the image's nginx (or equivalent origin).
-   Apex host? It needs a tunnel ingress entry besides the DNS CNAME (`/cloudflare` → *Insert one VPS ingress entry*).
-2. Create the Cache Rule for the hostname via `/cloudflare` (expression, TTLs
-   as above).
+1. Copy the canonical nginx config above into the image's origin, adjusting
+   the two per-site knobs (trailing-slash rewrite, `404.html`).
+2. `make edge-cache-apply HOST=<host>` — provisions the proxied CNAME(s),
+   tunnel ingress entries, and the Cache Rule in one idempotent run. Run with
+   `DRY_RUN=1` first if you want to see the plan before it writes anything.
 3. Add `jkrumm/rollhook-action@v1` with `cloudflare_purge_hosts` +
    `cloudflare_api_token: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}` to the deploy
    workflow, after the RollHook deploy step succeeds.
 4. Scheduled rebuilds: add `schedule:` to that same workflow, never a second one.
 5. `gh secret set CLOUDFLARE_PURGE_TOKEN` on the site's repo from
-   `op://common/cloudflare/CACHE_PURGE_TOKEN`.
-6. Verify: MISS → HIT → deploy → MISS again.
+   `op://common/cloudflare/CACHE_PURGE_TOKEN`:
+   ```bash
+   ssh vps "op read 'op://common/cloudflare/CACHE_PURGE_TOKEN'" \
+     | gh secret set CLOUDFLARE_PURGE_TOKEN --repo jkrumm/<repo>
+   ```
+6. Deploy.
+7. `make edge-cache-status HOST=<host>` — should be all ✓.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|-|-|
+| Bodiless `404` with `cf-cache-status: DYNAMIC` | Missing tunnel ingress entry for an apex/other-zone host — a wildcard never matches its own apex |
+| `DYNAMIC` on an HTML request that should be cacheable | No Cache Rule for the host (or it's disabled/mismatched) |
+| `cf-cache-status` never reaches `HIT` | Origin is sending `no-store`/`private`, or a `Set-Cookie` header — both make Cloudflare bypass cache regardless of the Cache Rule |
+| Stale content right after a deploy | The purge step failed — check the `rollhook-action` step's summary in the GitHub Actions run |
+| `10000` authentication error right after a token permission edit | Cloudflare's permission propagation lag — wait a few minutes and retry |

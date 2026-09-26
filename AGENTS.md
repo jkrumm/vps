@@ -26,6 +26,8 @@ make monitoring-up / make monitoring-down
 make fpp-up      / make fpp-down
 make weatherorb-up    / make weatherorb-down   # nginx edge for weatherorb.com; make weatherorb-env first, basemap under /var/lib/weatherorb
 make imgproxy-up / make imgproxy-down
+make edge-cache-status HOST=example.com   # ✓/✗ checklist for the edge-cache pattern (docs/edge-cache.md)
+make edge-cache-apply HOST=example.com    # idempotent provision — DNS, tunnel ingress, Cache Rule; DRY_RUN=1 to preview
 
 # Manual image upgrades — Postgres/Valkey/MariaDB are excluded from Watchtower
 make infra-upgrade       # postgres + valkey (run make backup first)
@@ -242,7 +244,7 @@ Makefile                      Operational shortcuts
 
 ## Service Notes
 
-**cloudflared** — all public ingress via Cloudflare Tunnel, outbound-only, no ports exposed. Remote-managed ingress (edit via the `/cloudflare` skill): `*.DOMAIN` → `https://traefik:443`, TLS verify disabled (internal cert), **plus one explicit entry per apex / other-zone host** (`DOMAIN`, `basalt-ui.com`, …) — a wildcard never matches its own apex, and a missing entry shows as a bodiless `404`. `--no-autoupdate` lets Watchtower manage the image.
+**cloudflared** — all public ingress via Cloudflare Tunnel, outbound-only, no ports exposed. Remote-managed ingress (edit via the `/cloudflare` skill, or `scripts/edge-cache.py` for the edge-cache pattern below): `*.DOMAIN` → `https://traefik:443`, TLS verify disabled (internal cert), **plus one explicit entry per apex / other-zone host** (`DOMAIN`, `basalt-ui.com`, …) — a wildcard never matches its own apex, and a missing entry shows as a bodiless `404`. `--no-autoupdate` lets Watchtower manage the image. Static sites behind Cloudflare's edge cache (proxied CNAME + ingress entry + Cache Rule, verified live): `make edge-cache-status` / `edge-cache-apply` — full pattern in `docs/edge-cache.md`.
 
 **Traefik** — reads Docker labels via `socket-proxy` (TCP, not docker.sock), no ports exposed. Wildcard cert via DNS-01 (still required so cloudflared can verify the TLS handshake).
 
