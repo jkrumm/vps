@@ -530,18 +530,19 @@ photo-gallery-down: require-prod ; $(OP_RUN) docker compose -f apps/photo-galler
 imgproxy-up:   require-prod ; $(OP_RUN) docker compose -f apps/imgproxy/compose.yml up -d
 imgproxy-down: require-prod ; $(OP_RUN) docker compose -f apps/imgproxy/compose.yml down
 
+## --no-masking: the script never prints tokens or IDs, and masking would hide the hostname (it equals DOMAIN).
 ## Read-only Cloudflare edge-cache checklist for HOST (zone, DNS, tunnel ingress,
 ## Cache Rule, live probe) — docs/edge-cache.md. Exits 1 if any check fails.
 edge-cache-status: require-prod
 	@[ -n "$(HOST)" ] || { echo "usage: make edge-cache-status HOST=example.com"; exit 1; }
-	$(OP_RUN) python3 scripts/edge-cache.py status $(HOST)
+	$(SECRET_RUNNER) --no-masking --env-file=.env.tpl -- python3 scripts/edge-cache.py status $(HOST)
 
 ## Idempotently provision the edge-cache pattern for HOST (proxied CNAMEs, tunnel
 ## ingress, Cache Rule), preserving every other DNS/ingress/rule entry, then runs
 ## status. DRY_RUN=1 previews without writing.
 edge-cache-apply: require-prod
 	@[ -n "$(HOST)" ] || { echo "usage: make edge-cache-apply HOST=example.com [DRY_RUN=1]"; exit 1; }
-	$(OP_RUN) python3 scripts/edge-cache.py apply $(HOST)
+	$(SECRET_RUNNER) --no-masking --env-file=.env.tpl -- python3 scripts/edge-cache.py apply $(HOST)
 
 ## basalt-ui-marketing stack (static Astro docs site, RollHook-managed) — apps/basalt-ui-marketing/compose.yml
 ## Stateless, no DB, no .env — the image bakes the built site; RollHook injects IMAGE_TAG.
