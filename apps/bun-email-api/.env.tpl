@@ -31,3 +31,11 @@ BEA_ADMIN_PASSWORD=op://vps/bun-email-api/ADMIN_PASSWORD
 
 # /api/* bearer key (emails, stats, submissions); /api 404s when unset.
 BEA_API_KEY=op://vps/bun-email-api/API_KEY
+
+# IMAP ingest of hello@ from Proton Mail Bridge on the homelab (read-only),
+# over the tailnet (ACL: tag:vps -> tag:homelab tcp:1143). Bridge's cert is
+# self-signed for 127.0.0.1; the path is WireGuard-encrypted and ACL-scoped,
+# so verification is skipped rather than pinned. Unset host -> ingest off.
+BEA_IMAP_HOST=op://common/config/HOMELAB_TAILSCALE_IP
+BEA_IMAP_USER=op://vps/bun-email-api/IMAP_USER
+BEA_IMAP_PASSWORD=op://vps/bun-email-api/IMAP_PASSWORD
