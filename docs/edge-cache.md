@@ -233,21 +233,22 @@ the Cache Rule by `description` while preserving every other rule/entry/record.
 
 1. Copy the canonical nginx config above into the image's origin, adjusting
    the two per-site knobs (trailing-slash rewrite, `404.html`).
-2. `make edge-cache-apply HOST=<host>` — provisions the proxied CNAME(s),
-   tunnel ingress entries, and the Cache Rule in one idempotent run. Run with
-   `DRY_RUN=1` first if you want to see the plan before it writes anything.
-3. Add `jkrumm/rollhook-action@v1` with `cloudflare_purge_hosts` +
-   `cloudflare_api_token: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}` to the deploy
-   workflow, after the RollHook deploy step succeeds.
-4. Scheduled rebuilds: add `schedule:` to that same workflow, never a second one.
-5. `gh secret set CLOUDFLARE_PURGE_TOKEN` on the site's repo from
-   `op://common/cloudflare/CACHE_PURGE_TOKEN`:
+2. Add `cloudflare_purge_hosts: <host>` +
+   `cloudflare_api_token: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}` to the
+   `jkrumm/rollhook-action@v1` step. Scheduled rebuilds: `schedule:` on that
+   same workflow, never a second one.
+3. Set the repo secret (never printed, never in the mini's cache):
    ```bash
    ssh vps "op read 'op://common/cloudflare/CACHE_PURGE_TOKEN'" \
      | gh secret set CLOUDFLARE_PURGE_TOKEN --repo jkrumm/<repo>
    ```
-6. Deploy.
-7. `make edge-cache-status HOST=<host>` — should be all ✓.
+4. Deploy, and confirm the origin headers are live
+   (`curl -sI https://<host>/ | grep -i cache-control`).
+5. `make edge-cache-apply HOST=<host>` (`DRY_RUN=1` to preview) — CNAMEs,
+   ingress, Cache Rule, then the status checklist. **After** step 4: a Cache
+   Rule over an origin that sends no `Cache-Control` falls back to
+   Cloudflare's default TTL and caches HTML nothing will purge.
+6. `make edge-cache-status HOST=<host>` any time — all ✓ means done.
 
 ---
 
