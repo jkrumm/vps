@@ -22,9 +22,9 @@ BEA_SY_SERENDIPITY_RECEIVER_EMAIL=op://vps/bun-email-api/SY_SERENDIPITY_RECEIVER
 BEA_LLM_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 BEA_LLM_API_KEY=op://common/anthropic/API_KEY
 
-# Jev decision model via beatapi.io — shadow-mode spam/category decisions
-# beside the LLM. Model defaults to jev-1.13-free in the app; unset -> disabled.
-BEA_JEV_API_KEY=op://common/beatapi/API_KEY
+# Jev decision model (typesafe-ai/jev) via Vercel AI Gateway — shadow-mode
+# spam/category decisions beside the LLM. Unset -> disabled.
+BEA_JEV_API_KEY=op://common/vercel/COMMON_VERCEL_AI
 
 # /admin UI — basic auth password (user "admin"); /admin 404s when unset.
 BEA_ADMIN_PASSWORD=op://vps/bun-email-api/ADMIN_PASSWORD
