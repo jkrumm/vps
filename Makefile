@@ -49,7 +49,6 @@ endif
         fpp-backup fpp-mariadb-upgrade fpp-shell fpp-restore-local fpp-sync-from-prod \
         bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
-        research-gateway-up research-gateway-down research-gateway-env research-gateway-bootstrap-image \
         image-gen-gateway-up image-gen-gateway-down image-gen-gateway-env image-gen-gateway-redeploy image-gen-gateway-bootstrap-image \
         photo-gallery-up photo-gallery-down \
         imgproxy-up imgproxy-down \
@@ -303,65 +302,6 @@ argo-env: require-prod
 	chmod 644 apps/argo/.env
 	@echo "Wrote apps/argo/.env (chmod 644, gitignored)"
 
-## research-gateway stack (Bun research API, RollHook-managed) — apps/research-gateway/compose.yml
-## Deploys to research.jkrumm.com. RollHook deploys on push to jkrumm/research-gateway:master.
-##
-## research-gateway-up: recreate container WITHOUT pulling a new image. Reads the SHA
-## of the currently-running container and pins RESEARCH_GATEWAY_IMAGE to it. Use this
-## when you change apps/research-gateway/compose.yml (labels, mounts, env) and need the
-## changes applied without bumping the running code. To deploy new code, use
-## `make research-gateway-redeploy` (triggers RollHook via empty-commit push).
-##
-## Why this dance: RollHook tags pushed images by git SHA only — it does NOT
-## update the :latest tag. So a naive `docker compose up -d` would resolve
-## `${IMAGE_TAG:-...:latest}` and roll the running container back to a stale
-## :latest. Pinning to the running image avoids that regression.
-##
-## `docker ps -a` (not `docker ps`), because a stopped-but-present container
-## used to look identical to "never created" here — both gave an empty IMG —
-## and this target then took the genesis branch and rolled a merely-exited
-## container back to :latest, the exact regression the pinning dance exists
-## to prevent. Genesis now means what it says: no container by that name in
-## any state, not "not currently running".
-research-gateway-up: require-prod
-	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=research-gateway' --format '{{.Names}}' | head -1); \
-	if [ -z "$$NAME" ]; then \
-	  echo "  no research-gateway container exists — genesis start from :latest (bootstrap-seeded)"; \
-	  $(OP_RUN) docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env up -d; \
-	else \
-	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
-	  if [ -z "$$IMG" ]; then \
-	    echo "  ✗ research-gateway container '$$NAME' exists but its image could not be read — inspect it manually"; \
-	    exit 1; \
-	  fi; \
-	  echo "  pinning research-gateway → $$IMG"; \
-	  $(OP_RUN) env RESEARCH_GATEWAY_IMAGE=$$IMG docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env up -d; \
-	fi
-research-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/research-gateway/compose.yml --env-file apps/research-gateway/.env down
-
-## Trigger a fresh RollHook deploy by pushing an empty commit to research-gateway's master.
-## RollHook detects the push, rebuilds the image at the new SHA, and rolling-
-## restarts the container. Use this instead of `make research-gateway-up` when you want
-## new code (or when you just want compose.yml changes safely applied via a fresh build).
-research-gateway-redeploy: require-dev
-	@if [ ! -d $$HOME/SourceRoot/research-gateway ]; then echo "  ✗ research-gateway repo not found at ~/SourceRoot/research-gateway"; exit 1; fi
-	@cd $$HOME/SourceRoot/research-gateway && \
-	  git commit --allow-empty -m "chore: redeploy (triggered via vps make research-gateway-redeploy)" && \
-	  git push && \
-	  echo "  ✓ pushed — watch the build at https://github.com/jkrumm/research-gateway/actions"
-## One-shot bootstrap — clone research-gateway repo, build image, push :initial to
-## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
-## deploys against. Re-runnable.
-research-gateway-bootstrap-image: require-prod
-	$(OP_RUN) ./apps/research-gateway/scripts/bootstrap-image.sh
-## Materialize apps/research-gateway/.env from .env.tpl. Required so RollHook's
-## `docker compose up --scale` can resolve ${VAR} interpolations. Re-run after
-## rotating any research-gateway secret. Resulting .env is chmod 644 and gitignored.
-research-gateway-env: require-prod
-	op --account tkrumm inject -i apps/research-gateway/.env.tpl -o apps/research-gateway/.env -f
-	chmod 644 apps/research-gateway/.env
-	@echo "Wrote apps/research-gateway/.env (chmod 644, gitignored)"
-
 ## shutterflow stack (share server + signed imgproxy CDN, RollHook-managed) — apps/shutterflow/compose.yml
 ## shutterflow.app + cdn.shutterflow.app via the Cloudflare tunnel. RollHook deploys on push to
 ## jkrumm/shutterflow:master. shutterflow-up pins the running share image (never rolls back to a
@@ -401,7 +341,7 @@ shutterflow-bootstrap-image: require-prod
 ## apps/weatherorb/compose.yml. Public at weatherorb.com through the cloudflared tunnel.
 ## The mini does all computation; this container serves the built map, the basemap
 ## archive under /var/lib/weatherorb/basemap, and a disk cache of proxied API responses.
-## `docker ps -a` (not `docker ps`) — same fix as research-gateway-up above:
+## `docker ps -a` (not `docker ps`) — same fix as argo-up above:
 ## a stopped-but-present container must still be pinned, not mistaken for
 ## genesis and rolled back to a stale :latest.
 weatherorb-up: require-prod
@@ -444,9 +384,9 @@ weatherorb-env: require-prod
 ## Deploys to image.jkrumm.com (Tailscale-only, grey-cloud A record — NOT the cloudflared
 ## tunnel). RollHook deploys on push to jkrumm/image-gen:master touching gateway/** or shared/**.
 ##
-## Same image-pinning dance as research-gateway-up above, for the same reason: RollHook
+## Same image-pinning dance as argo-up above, for the same reason: RollHook
 ## tags by git SHA and never moves :latest, so a naive `up -d` would roll the container
-## back to a stale :latest. `docker ps -a` (not `docker ps`), same fix as research-gateway-up:
+## back to a stale :latest. `docker ps -a` (not `docker ps`), same fix as argo-up:
 ## a stopped-but-present container must be pinned, not mistaken for genesis.
 image-gen-gateway-up: require-prod
 	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=image-gen-gateway' --format '{{.Names}}' | head -1); \

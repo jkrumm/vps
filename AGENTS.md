@@ -198,7 +198,6 @@ apps/jkrumm-com/compose.yml   jkrumm.com portfolio site (Astro, repo-root Docker
 apps/bun-email-api/compose.yml  bun-email-api (Bun + Resend) — sends FPP contact-form + daily-analytics + SY Serendipity charter-request emails. RollHook-managed.
 apps/imgproxy/compose.yml     imgproxy — image CDN (resize/convert) over a private B2 bucket, served at img.DOMAIN
 apps/shutterflow/compose.yml  shutterflow-share (shutterflow.app) + signed shutterflow-imgproxy (cdn.shutterflow.app) — RollHook-managed; source repo is private, bootstrap via apps/shutterflow/scripts/bootstrap-image.sh
-apps/research-gateway/compose.yml  + lightpanda sidecar — /research backend, Tailscale-only, RollHook-managed
 apps/photo-gallery/compose.yml  photo-gallery — static Astro gallery served by nginx from /home/jkrumm/photo-gallery-dist (rsynced from laptop via photo-flow CLI)
 apps/fpp/compose.yml          FPP — MariaDB (port 33306 exposed for Vercel) + fpp-server + fpp-analytics + updater sidecar, all RollHook-managed
 apps/fpp/scripts/setup-mariadb.sh    Idempotent fpp user/grants — run via make fpp-mariadb-setup
@@ -265,8 +264,6 @@ HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only). Auth via first-visit account cr
 > **Load-bearing invariant:** the B2 key must be created with `--name-prefix img/` — that server-side restriction, not `IMGPROXY_S3_ALLOWED_BUCKETS`, is what keeps this public unauthenticated service away from the database dumps in the same bucket. Never point it at `op://common/backblaze-s3/*` (bucket-wide, has `writeFiles`).
 
 Full design, URL/prefix conventions, the Cloudflare `Vary`/`Accept` caveat, and B2 provisioning: `docs/image-cdn.md`.
-
-**research-gateway** — the backend behind the global `/research` skill at `research.DOMAIN` (Tailscale-only via a grey-cloud A record, same pattern as argo). Bearer REST + an MCP facade with one submit→poll job contract; a `lightpanda` headless-browser sidecar does the page fetches. Job records persist in the `research-gateway-data` volume and a job orphaned by a restart is reaped to `error` once its heartbeat goes stale — the `job.reaped` log line is alerted on (`observability/alerts/`). RollHook-managed; `make research-gateway-up` pins the running image (never rolls back to a stale `:latest`).
 
 **photo-gallery** — static Astro photo gallery at `photos.DOMAIN`. nginx:alpine serves a host-mounted directory (`/home/jkrumm/photo-gallery-dist:/usr/share/nginx/html:ro`). No image registry, no RollHook — content is built on the developer laptop and rsynced via SSH/Tailscale by the `photo-flow` CLI (`photoflow sync-gallery`). Watchtower auto-updates the nginx base image. The host directory must exist (and contain at least `index.html`) before `make photo-gallery-up`, otherwise the healthcheck fails.
 

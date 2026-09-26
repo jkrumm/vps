@@ -107,7 +107,6 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | basalt-ui-marketing | `.../basalt-ui-marketing` | basalt-ui.com marketing/docs site (Astro) | RollHook |
 | jkrumm-com | `.../jkrumm-com` | jkrumm.com portfolio site (Astro) | RollHook |
 | rollhook-marketing | `ghcr.io/jkrumm/rollhook-marketing` | rollhook.com marketing site | RollHook |
-| research-gateway (+ lightpanda sidecar) | `.../research-gateway` | `/research` backend — bearer REST + MCP facade; Tailscale-only | RollHook |
 | fpp-server, fpp-analytics, fpp-analytics-updater | `.../fpp-*` | Free Planning Poker backend + analytics — see FPP MariaDB exception | RollHook |
 
 ---
