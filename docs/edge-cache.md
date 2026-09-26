@@ -116,6 +116,7 @@ After a deploy (purge fired), the same request should go back to `MISS`.
 ## Adoption checklist for another site
 
 1. Set the header contract above in the image's nginx (or equivalent origin).
+   Apex host? It needs a tunnel ingress entry besides the DNS CNAME (`/cloudflare` → *Insert one VPS ingress entry*).
 2. Create the Cache Rule for the hostname via `/cloudflare` (expression, TTLs
    as above).
 3. Add `jkrumm/rollhook-action@v1` with `cloudflare_purge_hosts` +

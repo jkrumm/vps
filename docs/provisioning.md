@@ -94,6 +94,7 @@ Content (built Astro `dist/`) is rsynced from the developer laptop by the `photo
 Use the `/cloudflare` Claude Code skill to set the wildcard ingress rule and add DNS records. The skill handles all API calls via `ssh vps "op run --env-file=.env.tpl --"` — the token never leaves 1Password.
 
 - Set wildcard ingress: `*.DOMAIN → https://traefik:443` (once after provisioning)
+- Apex and other-zone hosts each need their own ingress entry (`DOMAIN`, `basalt-ui.com`, …) — the wildcard doesn't match them
 - Add DNS record per app subdomain (CNAME → tunnel)
 
 Traefik will issue a wildcard cert via DNS-01 on first request (may take 1–2 min — check `docker logs traefik | grep -i acme`).
