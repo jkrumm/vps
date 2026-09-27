@@ -231,7 +231,7 @@ email-gateway-bootstrap-image: require-prod
 ## Materialize apps/email-gateway/.env from .env.tpl (via `op inject`). Required so
 ## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
 ## can resolve ${VAR} interpolations in apps/email-gateway/compose.yml. Re-run
-## after rotating BEA secrets. Resulting .env is chmod 644 and gitignored.
+## after rotating email-gateway secrets. Resulting .env is chmod 644 and gitignored.
 email-gateway-env: require-prod
 	op --account tkrumm inject -i apps/email-gateway/.env.tpl -o apps/email-gateway/.env -f
 	chmod 644 apps/email-gateway/.env

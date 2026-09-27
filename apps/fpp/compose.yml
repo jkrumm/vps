@@ -154,8 +154,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: fpp-analytics
       OTEL_DEPLOYMENT_ENVIRONMENT: production
-      BEA_BASE_URL: ${FPP_BEA_BASE_URL}
-      BEA_SECRET_KEY: ${FPP_BEA_SECRET_KEY}
+      EMAIL_GATEWAY_URL: https://email-gateway.${DOMAIN}
+      EMAIL_GATEWAY_SECRET_KEY: ${FPP_EMAIL_GATEWAY_SECRET_KEY}
     volumes:
       # Read-only — only the updater writes parquet snapshots.
       - fpp-analytics-data:/app/data:ro

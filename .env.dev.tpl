@@ -77,7 +77,7 @@ BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
 #   `sync-from-prod` already covers the case you actually want.
 #
 # CLOUDFLARE_* .......... no dev container fronts anything; prod tunnel token
-# FPP_*, BEA_* .......... prod app secrets, prod-only compose files
+# FPP_*, EMAIL_GATEWAY_* prod app secrets, prod-only compose files
 # ROLLHOOK_SECRET ....... prod registry + admin token
 # IMGPROXY_*, SLACK_*, UPTIME_KUMA_*, BESZEL_*, HYPERDX_API_KEY, DOMAIN,
 # ACME_EMAIL, VPS_TAILSCALE_IP ... prod-only

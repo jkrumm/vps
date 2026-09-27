@@ -184,8 +184,7 @@ Single-tenant DB for Free Planning Poker, quarantined in `apps/fpp/` because it'
 |-|-|-|
 | `FPP_SERVER_SECRET`, `FPP_ANALYTICS_SECRET_TOKEN` | `<generated>` | `openssl rand -hex 32` — bearer tokens between Vercel and fpp-server/fpp-analytics |
 | `FPP_SERVER_SENTRY_DSN`, `FPP_ANALYTICS_SENTRY_DSN` | `https://...@sentry.io/...` | Per-service Sentry DSN |
-| `FPP_BEA_BASE_URL` | `https://...` | Bun email API base URL (used by fpp-analytics for survey emails) |
-| `FPP_BEA_SECRET_KEY` | `<secret>` | Auth key for the bun email API |
+| `FPP_EMAIL_GATEWAY_SECRET_KEY` | `<secret>` | email-gateway bearer key for fpp-analytics (`op://vps/email-gateway/SECRET_KEY`); the URL is `https://email-gateway.${DOMAIN}` in compose |
 | `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL` | `https://...` | Heartbeat URL for the 10-min sync sidecar (separate Kuma monitor) |
 
 **imgproxy (image CDN)**
