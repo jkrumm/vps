@@ -1,10 +1,10 @@
 ---
-# bun-email-api — Bun + Elysia + Resend. Sends FPP contact-form,
+# email-gateway — Bun + Elysia + Resend. Sends FPP contact-form,
 # daily-analytics, and SY Serendipity charter-request emails. Public via
 # Cloudflare Tunnel + Traefik at
-# bun-email-api.${DOMAIN}. Deployed via RollHook on push to
-# jkrumm/bun-email-api:master. SQLite (emails, AI enrichments, spam-filter
-# submissions) lives in /var/lib/bun-email-api, owned by the image's app user
+# email-gateway.${DOMAIN}. Deployed via RollHook on push to
+# jkrumm/email-gateway:master. SQLite (emails, AI enrichments, spam-filter
+# submissions) lives in /var/lib/email-gateway, owned by the image's app user
 # (uid 100 / gid 101) — WAL-safe for RollHook's brief two-container overlap.
 
 networks:
@@ -12,8 +12,8 @@ networks:
     external: true
 
 services:
-  bun-email-api:
-    image: ${IMAGE_TAG:-rollhook.jkrumm.com/bun-email-api:latest}
+  email-gateway:
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/email-gateway:latest}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -36,7 +36,7 @@ services:
       BEA_API_KEY: ${BEA_API_KEY}
       BEA_DATA_DIR: /data
     volumes:
-      - /var/lib/bun-email-api:/data
+      - /var/lib/email-gateway:/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3010/health"]
       interval: 10s
@@ -45,19 +45,21 @@ services:
       retries: 5
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.bun-email-api.rule=Host(`bun-email-api.${DOMAIN}`)"
-      - "traefik.http.routers.bun-email-api.entrypoints=websecure"
-      - "traefik.http.routers.bun-email-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.bun-email-api.loadbalancer.server.port=3010"
-      - "traefik.http.routers.bun-email-api.middlewares=rate-limit@file,security-headers@file"
+      # bun-email-api.${DOMAIN} is the pre-rename host, kept until every caller
+      # (FPP, sy-serendipity, Uptime Kuma) points at email-gateway.${DOMAIN}.
+      - "traefik.http.routers.email-gateway.rule=Host(`email-gateway.${DOMAIN}`) || Host(`bun-email-api.${DOMAIN}`)"
+      - "traefik.http.routers.email-gateway.entrypoints=websecure"
+      - "traefik.http.routers.email-gateway.tls.certresolver=letsencrypt"
+      - "traefik.http.services.email-gateway.loadbalancer.server.port=3010"
+      - "traefik.http.routers.email-gateway.middlewares=rate-limit@file,security-headers@file"
       # Active health check — Traefik stops routing to draining instance the
       # moment the container's HEALTHCHECK flips unhealthy.
-      - "traefik.http.services.bun-email-api.loadbalancer.healthcheck.path=/health"
-      - "traefik.http.services.bun-email-api.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.services.email-gateway.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.email-gateway.loadbalancer.healthcheck.interval=10s"
       # Managed by RollHook — Watchtower must not interfere.
       - "com.centurylinklabs.watchtower.enable=false"
       # OIDC deploy authorization — only this GitHub repo can trigger deploys.
-      - "rollhook.allowed_repos=jkrumm/bun-email-api"
+      - "rollhook.allowed_repos=jkrumm/email-gateway"
     networks:
       - proxy
     logging:

@@ -47,7 +47,7 @@ endif
         rollhook-update \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
         fpp-backup fpp-mariadb-upgrade fpp-shell fpp-restore-local fpp-sync-from-prod \
-        bun-email-api-up bun-email-api-down bun-email-api-env bun-email-api-bootstrap-image \
+        email-gateway-up email-gateway-down email-gateway-env email-gateway-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
         image-gen-gateway-up image-gen-gateway-down image-gen-gateway-env image-gen-gateway-redeploy image-gen-gateway-bootstrap-image \
         photo-gallery-up photo-gallery-down \
@@ -109,7 +109,7 @@ ifeq ($(ENV),prod)
 	$(MAKE) infra-up
 	$(MAKE) monitoring-up
 	$(MAKE) fpp-up
-	$(MAKE) bun-email-api-up
+	$(MAKE) email-gateway-up
 	$(MAKE) photo-gallery-up
 	$(MAKE) imgproxy-up
 	$(MAKE) audio-gateway-up
@@ -128,7 +128,7 @@ ifeq ($(ENV),prod)
 	$(MAKE) audio-gateway-down
 	$(MAKE) imgproxy-down
 	$(MAKE) photo-gallery-down
-	$(MAKE) bun-email-api-down
+	$(MAKE) email-gateway-down
 	$(MAKE) fpp-down
 	$(MAKE) monitoring-down
 	$(MAKE) infra-down
@@ -219,23 +219,23 @@ fpp-sync-from-prod: require-dev
 fpp-shell:
 	$(OP_RUN_ENV) sh -c 'docker exec -it -e MYSQL_PWD="$$MARIADB_ROOT_PASSWORD" mariadb mariadb -u root "$$MARIADB_DB"'
 
-## bun-email-api stack (Bun + Resend, RollHook-managed) — apps/bun-email-api/compose.yml
-## Stateless, no DB. RollHook deploys on push to jkrumm/bun-email-api:master.
-bun-email-api-up:   require-prod ; $(OP_RUN) docker compose -f apps/bun-email-api/compose.yml up -d
-bun-email-api-down: require-prod ; $(OP_RUN) docker compose -f apps/bun-email-api/compose.yml down
-## One-shot bootstrap — clone bun-email-api repo, build, and push :initial to
+## email-gateway stack (Bun + Resend, RollHook-managed) — apps/email-gateway/compose.yml
+## SQLite in /var/lib/email-gateway. RollHook deploys on push to jkrumm/email-gateway:master.
+email-gateway-up:   require-prod ; $(OP_RUN) docker compose -f apps/email-gateway/compose.yml up -d
+email-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/email-gateway/compose.yml down
+## One-shot bootstrap — clone email-gateway repo, build, and push :initial to
 ## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
 ## deploys against. Re-runnable.
-bun-email-api-bootstrap-image: require-prod
-	$(OP_RUN) ./apps/bun-email-api/scripts/bootstrap-image.sh
-## Materialize apps/bun-email-api/.env from .env.tpl (via `op inject`). Required so
+email-gateway-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/email-gateway/scripts/bootstrap-image.sh
+## Materialize apps/email-gateway/.env from .env.tpl (via `op inject`). Required so
 ## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
-## can resolve ${VAR} interpolations in apps/bun-email-api/compose.yml. Re-run
+## can resolve ${VAR} interpolations in apps/email-gateway/compose.yml. Re-run
 ## after rotating BEA secrets. Resulting .env is chmod 644 and gitignored.
-bun-email-api-env: require-prod
-	op --account tkrumm inject -i apps/bun-email-api/.env.tpl -o apps/bun-email-api/.env -f
-	chmod 644 apps/bun-email-api/.env
-	@echo "Wrote apps/bun-email-api/.env (chmod 644, gitignored)"
+email-gateway-env: require-prod
+	op --account tkrumm inject -i apps/email-gateway/.env.tpl -o apps/email-gateway/.env -f
+	chmod 644 apps/email-gateway/.env
+	@echo "Wrote apps/email-gateway/.env (chmod 644, gitignored)"
 
 ## argo stack (api + dashboard, RollHook-managed) — apps/argo/compose.yml
 ## Tailscale-only via DNS-only A record argo.jkrumm.com → ${VPS_TAILSCALE_IP}.

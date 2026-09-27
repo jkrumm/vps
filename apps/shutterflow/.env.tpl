@@ -7,7 +7,7 @@
 #   make shutterflow-env
 #
 # The resulting apps/shutterflow/.env is gitignored, chmod 644 (the RollHook container runs as a
-# non-root uid — same trade-off as apps/bun-email-api/.env.tpl), and lives on the VPS only.
+# non-root uid — same trade-off as apps/email-gateway/.env.tpl), and lives on the VPS only.
 
 POSTGRES_DB=op://vps/config/POSTGRES_DB
 

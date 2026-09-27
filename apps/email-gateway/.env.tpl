@@ -1,22 +1,22 @@
-# bun-email-api scoped env template — materialized via `op inject` to
-# apps/bun-email-api/.env so RollHook's `docker compose up --scale` (which
+# email-gateway scoped env template — materialized via `op inject` to
+# apps/email-gateway/.env so RollHook's `docker compose up --scale` (which
 # doesn't go through `op run`) can resolve ${VAR} interpolations in
-# apps/bun-email-api/compose.yml.
+# apps/email-gateway/compose.yml.
 #
 # Refresh after rotating any secret:
-#   make bun-email-api-env
+#   make email-gateway-env
 #
-# The resulting apps/bun-email-api/.env is gitignored, chmod 644, and lives
+# The resulting apps/email-gateway/.env is gitignored, chmod 644, and lives
 # on VPS only. 644 (not 600) because the RollHook container runs as a
 # non-root user whose uid doesn't match jkrumm's uid; VPS has no other
 # shell users so the local-readability risk is bounded.
 
 DOMAIN=op://vps/config/DOMAIN
 
-BEA_SECRET_KEY=op://vps/bun-email-api/SECRET_KEY
-BEA_RESEND_API_KEY=op://vps/bun-email-api/RESEND_API_KEY
-BEA_RECEIVER_EMAIL=op://vps/bun-email-api/RECEIVER_EMAIL
-BEA_SY_SERENDIPITY_RECEIVER_EMAIL=op://vps/bun-email-api/SY_SERENDIPITY_RECEIVER_EMAIL
+BEA_SECRET_KEY=op://vps/email-gateway/SECRET_KEY
+BEA_RESEND_API_KEY=op://vps/email-gateway/RESEND_API_KEY
+BEA_RECEIVER_EMAIL=op://vps/email-gateway/RECEIVER_EMAIL
+BEA_SY_SERENDIPITY_RECEIVER_EMAIL=op://vps/email-gateway/SY_SERENDIPITY_RECEIVER_EMAIL
 
 # Spam filter — shared IU endpoint creds (same item research-gateway and argo use).
 BEA_LLM_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
@@ -27,15 +27,15 @@ BEA_LLM_API_KEY=op://common/anthropic/API_KEY
 BEA_JEV_API_KEY=op://common/vercel/COMMON_VERCEL_AI
 
 # /admin UI — basic auth password (user "admin"); /admin 404s when unset.
-BEA_ADMIN_PASSWORD=op://vps/bun-email-api/ADMIN_PASSWORD
+BEA_ADMIN_PASSWORD=op://vps/email-gateway/ADMIN_PASSWORD
 
 # /api/* bearer key (emails, stats, submissions); /api 404s when unset.
-BEA_API_KEY=op://vps/bun-email-api/API_KEY
+BEA_API_KEY=op://vps/email-gateway/API_KEY
 
 # IMAP ingest of hello@ from Proton Mail Bridge on the homelab (read-only),
 # over the tailnet (ACL: tag:vps -> tag:homelab tcp:1143). Bridge's cert is
 # self-signed for 127.0.0.1; the path is WireGuard-encrypted and ACL-scoped,
 # so verification is skipped rather than pinned. Unset host -> ingest off.
 BEA_IMAP_HOST=op://common/config/HOMELAB_TAILSCALE_IP
-BEA_IMAP_USER=op://vps/bun-email-api/IMAP_USER
-BEA_IMAP_PASSWORD=op://vps/bun-email-api/IMAP_PASSWORD
+BEA_IMAP_USER=op://vps/email-gateway/IMAP_USER
+BEA_IMAP_PASSWORD=op://vps/email-gateway/IMAP_PASSWORD
