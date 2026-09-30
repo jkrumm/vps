@@ -103,6 +103,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | audio-gateway | `.../audio-gateway` | STT/TTS gateway (podcast wiring is mini-only here) | RollHook |
 | image-gen-gateway | `.../image-gen-gateway` | Image generation behind the `/img` skill | RollHook |
 | weatherorb-edge | `.../weatherorb-edge` | Tailscale-serve edge for the weatherorb weather/wave service | RollHook |
+| weatherorb-account | `.../weatherorb-account` | Bun + Better Auth account service (own database `weatherorb_accounts`), reached only by the edge — no Traefik router | RollHook |
 | email-gateway | `.../email-gateway` | Bun + Resend — FPP contact-form + analytics + SY Serendipity charter-request emails | RollHook |
 | basalt-ui-marketing | `.../basalt-ui-marketing` | basalt-ui.com marketing/docs site (Astro) | RollHook |
 | jkrumm-com | `.../jkrumm-com` | jkrumm.com portfolio site (Astro) | RollHook |
@@ -220,6 +221,15 @@ keys are name-prefix-restricted to `shutterflow/prod/derivatives/` — they cann
 | `SHUTTERFLOW_B2_BUCKET` / `_ENDPOINT` / `_REGION` | | Reused from `op://common/backblaze-s3/*` |
 | `SHUTTERFLOW_TRUSTED_PROXIES` | `<cidr>` | Not a secret — `make shutterflow-env` reads the `proxy` network subnet from docker |
 
+**weatherorb (account service)**
+
+`op://vps/weatherorb-account/*` via `apps/weatherorb/.env.tpl` (`make weatherorb-env`); `WEATHERORB_ACCOUNT_DB_PASSWORD` is also in the root `.env.tpl` (for `make postgres-setup`) and in `cron/weatherorb-accounts-dump.env.tpl` (hourly dump).
+
+| Variable | Value | How to get |
+|-|-|-|
+| `WEATHERORB_ACCOUNT_DB_PASSWORD` | `<secret>` | `openssl rand -hex 32` |
+| `WEATHERORB_ACCOUNT_BETTER_AUTH_SECRET` | `<secret>` | `openssl rand -base64 48` |
+
 **Backups (S3-compatible object storage)**
 
 | Variable | Value | How to get |
@@ -322,6 +332,7 @@ Two daily backups, both stream to the same `jkrumm` B2 bucket under `backups/vps
 | `/etc/cron.d/pg-backup` | 03:00 | `scripts/backup-pg.sh` | `backups/vps/postgres/` | `UPTIME_KUMA_PUSH_URL` |
 | `/etc/cron.d/fpp-mariadb-backup` | 03:30 | `apps/fpp/scripts/backup-mariadb.sh` | `backups/vps/mariadb/` | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` |
 | `/etc/cron.d/pg-health` | every minute | `scripts/health-pg.sh` | n/a (liveness) | `UPTIME_KUMA_POSTGRES_PUSH_URL` |
+| `/etc/cron.d/weatherorb-accounts-dump` | hourly :15 | `scripts/dump-weatherorb-accounts.sh` | `/var/backups/weatherorb-accounts/` (48 kept; homelab pulls as `wo-backup`) | — |
 | `/etc/cron.d/docker-prune` | Sunday 04:30 | inline `docker image prune -af && docker builder prune -f --filter until=168h` (never volumes) | n/a (hygiene) | — |
 
 Manual triggers: `make backup` (Postgres), `make fpp-backup` (MariaDB).

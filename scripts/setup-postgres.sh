@@ -144,6 +144,37 @@ echo "--> shutterflow (skipped: SHUTTERFLOW_DB_PASSWORD not set — prod-only sc
 fi
 
 # ---------------------------------------------------------------------------
+# weatherorb account service — OWN DATABASE weatherorb_accounts, owner/user: weatherorb_account
+# (weatherorb ADR 0013: account data is separable, so it gets its own database that can be
+# dumped hourly and pulled off-host without touching the shared one). Not a schema in
+# ${POSTGRES_DB}. Guarded like shutterflow — the dev stack does not provision it.
+# ---------------------------------------------------------------------------
+if [ -n "${WEATHERORB_ACCOUNT_DB_PASSWORD:-}" ]; then
+echo "--> weatherorb_accounts"
+
+psql_main <<SQL
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'weatherorb_account') THEN
+    CREATE ROLE weatherorb_account WITH LOGIN PASSWORD '${WEATHERORB_ACCOUNT_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE weatherorb_account WITH LOGIN PASSWORD '${WEATHERORB_ACCOUNT_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+
+-- CREATE DATABASE cannot run inside a DO block, so the statement is generated and executed by gexec.
+SELECT 'CREATE DATABASE weatherorb_accounts OWNER weatherorb_account'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'weatherorb_accounts')
+\gexec
+
+REVOKE CONNECT ON DATABASE weatherorb_accounts FROM PUBLIC;
+SQL
+else
+echo "--> weatherorb_accounts (skipped: WEATHERORB_ACCOUNT_DB_PASSWORD not set — prod-only database)"
+fi
+
+# ---------------------------------------------------------------------------
 # Future apps: add blocks here following the same pattern.
 #
 # Migration journals: each drizzle-kit app must keep its journal in its OWN

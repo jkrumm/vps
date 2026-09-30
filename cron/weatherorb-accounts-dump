@@ -1,0 +1,16 @@
+# weatherorb accounts database — hourly pg_dump at :15
+#
+# Runs as root: the dump is written to /var/backups/weatherorb-accounts and handed to the
+# `wo-backup` user (root:wo-backup 0640), which the homelab pulls from over Tailscale SSH.
+# See scripts/dump-weatherorb-accounts.sh and scripts/setup-weatherorb-backup-user.sh.
+#
+# Deliberately does NOT use `op run`: hourly calls would hit 1Password's rate limit like
+# pg-health did, and root has no OP_SERVICE_ACCOUNT_TOKEN. Env comes from
+# /etc/vps/weatherorb-accounts-dump.env, seeded from 1Password by `make cron-env-seed`
+# (template cron/weatherorb-accounts-dump.env.tpl). Re-seed after rotating the DB password.
+#
+# Install: installed automatically by scripts/setup.sh (section 12).
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+15 * * * * root /bin/bash -c 'set -a; . /etc/vps/weatherorb-accounts-dump.env; set +a; /home/jkrumm/vps/scripts/dump-weatherorb-accounts.sh' >> /var/log/weatherorb-accounts-dump.log 2>&1

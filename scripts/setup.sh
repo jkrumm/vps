@@ -338,10 +338,10 @@ chmod 750 /etc/vps
 
 # =============================================================================
 # 12. Install cron jobs (Postgres backup, Postgres liveness, MariaDB backup,
-# MariaDB cert sync, weekly Docker image/build-cache prune)
+# MariaDB cert sync, weekly Docker image/build-cache prune, hourly weatherorb accounts dump)
 # =============================================================================
 log "Installing cron jobs..."
-for cronfile in pg-backup pg-health fpp-mariadb-backup fpp-cert-sync docker-prune; do
+for cronfile in pg-backup pg-health fpp-mariadb-backup fpp-cert-sync docker-prune weatherorb-accounts-dump; do
   cp "${REPO_DIR}/cron/${cronfile}" "/etc/cron.d/${cronfile}"
   chmod 644 "/etc/cron.d/${cronfile}"
   chown root:root "/etc/cron.d/${cronfile}"

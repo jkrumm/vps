@@ -1,4 +1,4 @@
-# Production compose for the VPS — weatherorb edge. Mirrors apps/research-gateway.
+# Production compose for the VPS — weatherorb edge + account service. Mirrors apps/research-gateway.
 #
 # Public via the Cloudflare Tunnel (apex + www CNAMEs → the tunnel, orange cloud,
 # each with a tunnel ingress hostname, like basalt-ui.com). The container is nginx: it
@@ -13,6 +13,30 @@
 # The mini side of the hop is `tailscale serve` on :8081 (dotfiles-private
 # tailscale-serve.mini.conf) plus a tag:vps → tag:devhost tcp:8081 ACL grant.
 #
+# weatherorb-account is the Bun + Elysia + Better Auth account service (weatherorb ADR 0013),
+# built from the weatherorb repo (deploy/account/Dockerfile) and rolled by RollHook as image
+# `weatherorb-account`. Only the edge talks to it: nginx proxies /api/auth/ and /api/account/
+# to weatherorb-account:4200 over `weatherorb-internal`. No Traefik router, nothing public.
+# Its database is `weatherorb_accounts` (own database, role weatherorb_account) on the shared
+# Postgres; an hourly pg_dump lands in /var/backups/weatherorb-accounts (cron/weatherorb-accounts-dump)
+# and the homelab pulls it over Tailscale SSH as the `wo-backup` user.
+#
+# Bootstrap order on a fresh server:
+#   1. make postgres-setup                      (weatherorb_account role + weatherorb_accounts database)
+#   2. make weatherorb-env                      (materializes apps/weatherorb/.env)
+#   3. make weatherorb-backup-user              (wo-backup user + /var/backups/weatherorb-accounts, sudo)
+#   4. make weatherorb-bootstrap-image          (seeds rollhook.jkrumm.com/weatherorb-edge)
+#      make weatherorb-account-bootstrap-image  (seeds rollhook.jkrumm.com/weatherorb-account)
+#   5. make weatherorb-up                       (genesis start; migrations run on boot)
+#   6. push to jkrumm/weatherorb:master        → RollHook deploys from then on
+#
+# The two services roll independently. RollHook selects the container by image name
+# (precedent: apps/fpp/compose.yml fpp-analytics-updater, apps/argo/compose.yml per-service
+# ${<NAME>_IMAGE:-${IMAGE_TAG:-…}}), so a roll of one service cannot redeploy the other. Both
+# images must therefore be bootstrap-seeded, and `make weatherorb-up` pins BOTH running images
+# (WEATHERORB_EDGE_IMAGE, WEATHERORB_ACCOUNT_IMAGE) so neither is rolled back to a stale :latest
+# when the other's roll re-runs compose.
+#
 # /var/lib/weatherorb/basemap is the 8 GB planet PMTiles extract plus sprites and glyphs,
 # copied once from the mini with `make basemap-push` in the weatherorb repo. Not a volume:
 # rsync needs a host path, and the file changes about once a year.
@@ -21,8 +45,12 @@ services:
   weatherorb-edge:
     image: ${WEATHERORB_EDGE_IMAGE:-${IMAGE_TAG:-rollhook.jkrumm.com/weatherorb-edge:latest}}
     restart: unless-stopped
-    env_file:
-      - .env
+    # Named keys, not `env_file: .env`: that file now also carries the account service's
+    # secrets, which must never reach the public nginx container's environment.
+    environment:
+      DOMAIN: ${DOMAIN}
+      MINI_TAILSCALE_IP: ${MINI_TAILSCALE_IP}
+      MINI_TAILNET_HOST: ${MINI_TAILNET_HOST}
     mem_limit: 256m
     security_opt:
       - no-new-privileges:true
@@ -31,6 +59,7 @@ services:
       - weatherorb-edge-cache:/var/cache/nginx
     networks:
       - proxy
+      - weatherorb-internal
     healthcheck:
       # 127.0.0.1, not localhost: busybox wget resolves localhost to ::1 first and nginx
       # answers on IPv4 — the first start sat at "health: starting" with connection refused.
@@ -72,9 +101,53 @@ services:
       # rollhook OIDC authorization — only this repo may deploy this container
       - "rollhook.allowed_repos=jkrumm/weatherorb"
 
+  # ---------------------------------------------------------------------------
+  # weatherorb-account — Bun + Elysia + Better Auth. Reached only by the edge.
+  # ---------------------------------------------------------------------------
+  weatherorb-account:
+    image: ${WEATHERORB_ACCOUNT_IMAGE:-${IMAGE_TAG:-rollhook.jkrumm.com/weatherorb-account:latest}}
+    restart: unless-stopped
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PORT: "4200"
+      # Literal, not ${DOMAIN}: weatherorb.com is its own zone (same reason the edge's router host is literal).
+      BETTER_AUTH_URL: https://weatherorb.com
+      BETTER_AUTH_SECRET: ${WEATHERORB_ACCOUNT_BETTER_AUTH_SECRET}
+      DATABASE_URL: postgresql://weatherorb_account:${WEATHERORB_ACCOUNT_DB_PASSWORD}@postgres:5432/weatherorb_accounts
+      # Magic link stays off until a weatherorb.com domain exists in Resend; set both together.
+      # RESEND_API_KEY: ${WEATHERORB_ACCOUNT_RESEND_API_KEY}
+      # MAIL_FROM: WeatherOrb <login@weatherorb.com>
+    networks:
+      - postgres-net
+      - weatherorb-internal
+    healthcheck:
+      # 127.0.0.1, not localhost — same busybox wget IPv6 trap as the edge.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4200/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=false"
+      - "com.centurylinklabs.watchtower.enable=false"
+      # rollhook OIDC authorization — only this repo may deploy this container
+      - "rollhook.allowed_repos=jkrumm/weatherorb"
+
 networks:
   proxy:
     external: true
+  postgres-net:
+    external: true
+  # Compose-internal edge ↔ account link. A plain bridge (not `internal: true`) so the account
+  # service keeps outbound egress for Resend once magic link is on.
+  weatherorb-internal:
 
 volumes:
   weatherorb-edge-cache:

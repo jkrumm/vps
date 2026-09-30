@@ -24,7 +24,8 @@ make networking-up / make networking-down
 make infra-up    / make infra-down
 make monitoring-up / make monitoring-down
 make fpp-up      / make fpp-down
-make weatherorb-up    / make weatherorb-down   # nginx edge for weatherorb.com; make weatherorb-env first, basemap under /var/lib/weatherorb
+make weatherorb-up    / make weatherorb-down   # nginx edge + account service for weatherorb.com; make weatherorb-env first, basemap under /var/lib/weatherorb
+make weatherorb-account-bootstrap-image / make weatherorb-backup-user   # prod one-time: seed the account image; wo-backup user + /var/backups/weatherorb-accounts
 make imgproxy-up / make imgproxy-down
 make edge-cache-status HOST=example.com   # ✓/✗ checklist for the edge-cache pattern (docs/edge-cache.md)
 make edge-cache-apply HOST=example.com    # idempotent provision — DNS, tunnel ingress, Cache Rule; DRY_RUN=1 to preview
@@ -191,7 +192,7 @@ compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStac
 apps/argo/compose.yml         argo-api + argo-dashboard — personal API/agent backbone, RollHook-managed
 apps/audio-gateway/compose.yml  STT/TTS only (PODCAST_ENABLED=false) — podcast wiring is mini-only
 apps/image-gen-gateway/compose.yml  Backend for the /img skill, RollHook-managed
-apps/weatherorb/compose.yml        weatherorb-edge — Tailscale-serve edge for weatherorb
+apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, no Traefik router) — RollHook-managed, `make weatherorb-up` pins both images
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
 apps/jkrumm-com/compose.yml   jkrumm.com portfolio site (Astro, repo-root Dockerfile) — managed by RollHook, edge cache pattern in docs/edge-cache.md
@@ -216,6 +217,8 @@ scripts/setup-postgres.sh     Idempotent schema/user/grant setup — run via mak
 scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liveness)
 scripts/db-counts.sh          Exact per-table COUNT(*) (Postgres + MariaDB) — read-only, diff-friendly verification (make db-counts)
+scripts/dump-weatherorb-accounts.sh  Hourly pg_dump of weatherorb_accounts → /var/backups/weatherorb-accounts (48 kept, homelab pulls as wo-backup)
+scripts/setup-weatherorb-backup-user.sh  Idempotent wo-backup user + backup dir — run via make weatherorb-backup-user
 scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
 scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
 scripts/sync-pg-from-vps.sh   Dev — ssh vps + docker exec pg_dump (whole DB) → local (fresh, no S3)
@@ -234,6 +237,7 @@ cron/pg-health                Postgres liveness heartbeat, every minute — sour
 cron/pg-health.env.tpl        op template for the seeded pg-health cron env (materialized via make cron-env-seed)
 cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
+cron/weatherorb-accounts-dump  weatherorb_accounts dump, hourly at :15 (root) — sources /etc/vps/weatherorb-accounts-dump.env (seeded from cron/weatherorb-accounts-dump.env.tpl)
 cron/docker-prune             Weekly image + build-cache prune, Sunday 04:30 (make prune-cron-install) — never volumes
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts

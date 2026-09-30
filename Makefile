@@ -42,7 +42,7 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: help require-prod require-dev weatherorb-up weatherorb-down weatherorb-env weatherorb-bootstrap-image weatherorb-redeploy \
+.PHONY: help require-prod require-dev weatherorb-up weatherorb-down weatherorb-env weatherorb-bootstrap-image weatherorb-account-bootstrap-image weatherorb-backup-user weatherorb-redeploy \
         up down networking-up networking-down infra-up infra-down infra-upgrade monitoring-up monitoring-down \
         rollhook-update \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
@@ -337,27 +337,34 @@ shutterflow-env: require-prod
 shutterflow-bootstrap-image: require-prod
 	$(OP_RUN) ./apps/shutterflow/scripts/bootstrap-image.sh
 
-## weatherorb stack (nginx edge in front of the tileserver on the Mac mini, RollHook-managed) —
-## apps/weatherorb/compose.yml. Public at weatherorb.com through the cloudflared tunnel.
-## The mini does all computation; this container serves the built map, the basemap
-## archive under /var/lib/weatherorb/basemap, and a disk cache of proxied API responses.
+## weatherorb stack (nginx edge in front of the tileserver on the Mac mini + the account service,
+## both RollHook-managed) — apps/weatherorb/compose.yml. Public at weatherorb.com through the
+## cloudflared tunnel. The mini does all computation; the edge serves the built map, the basemap
+## archive under /var/lib/weatherorb/basemap, and a disk cache of proxied API responses, and
+## proxies /api/auth + /api/account to weatherorb-account (Bun + Better Auth, own database).
+## RollHook picks the container by image name, so the two services roll independently: this
+## target pins BOTH running images so neither is rolled back to a stale :latest by the other.
 ## `docker ps -a` (not `docker ps`) — same fix as argo-up above:
 ## a stopped-but-present container must still be pinned, not mistaken for
 ## genesis and rolled back to a stale :latest.
 weatherorb-up: require-prod
-	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=weatherorb-edge' --format '{{.Names}}' | head -1); \
-	if [ -z "$$NAME" ]; then \
-	  echo "  no weatherorb-edge container exists — genesis start from :latest (bootstrap-seeded)"; \
-	  $(OP_RUN) docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d; \
-	else \
+	@PINS=""; \
+	for PAIR in weatherorb-edge:WEATHERORB_EDGE_IMAGE weatherorb-account:WEATHERORB_ACCOUNT_IMAGE; do \
+	  SVC=$${PAIR%%:*}; VAR=$${PAIR##*:}; \
+	  NAME=$$(docker ps -a --filter "label=com.docker.compose.service=$$SVC" --format '{{.Names}}' | head -1); \
+	  if [ -z "$$NAME" ]; then \
+	    echo "  no $$SVC container exists — genesis start from :latest (bootstrap-seeded)"; \
+	    continue; \
+	  fi; \
 	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
 	  if [ -z "$$IMG" ]; then \
-	    echo "  ✗ weatherorb-edge container '$$NAME' exists but its image could not be read — inspect it manually"; \
+	    echo "  ✗ $$SVC container '$$NAME' exists but its image could not be read — inspect it manually"; \
 	    exit 1; \
 	  fi; \
-	  echo "  pinning weatherorb-edge → $$IMG"; \
-	  $(OP_RUN) env WEATHERORB_EDGE_IMAGE=$$IMG docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d; \
-	fi
+	  echo "  pinning $$SVC → $$IMG"; \
+	  PINS="$$PINS $$VAR=$$IMG"; \
+	done; \
+	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d
 weatherorb-down: require-prod ; $(OP_RUN) docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env down
 
 ## Trigger a fresh RollHook deploy by pushing an empty commit to weatherorb's master.
@@ -371,13 +378,24 @@ weatherorb-redeploy: require-dev
 ## repo, on the mini) pushed to /tmp/weatherorb-bootstrap, push :initial + :latest to the registry.
 weatherorb-bootstrap-image: require-prod
 	$(OP_RUN) ./apps/weatherorb/scripts/bootstrap-image.sh
-## Materialize apps/weatherorb/.env from this host's tailscale peer list — the mini's tailnet
-## IP and MagicDNS name are the only two values the edge needs, and neither is a secret.
-## Re-run after a mini rename or re-join.
+## One-shot bootstrap — same for the account service, from the context pushed to
+## /tmp/weatherorb-account-bootstrap (deploy/account/Dockerfile). Both images must be seeded
+## before weatherorb-up.
+weatherorb-account-bootstrap-image: require-prod
+	$(OP_RUN) ./apps/weatherorb/scripts/bootstrap-account-image.sh
+## One-time (idempotent) — the wo-backup system user and /var/backups/weatherorb-accounts the
+## homelab pulls the hourly accounts dump from over Tailscale SSH (cron/weatherorb-accounts-dump).
+weatherorb-backup-user: require-prod
+	sudo ./scripts/setup-weatherorb-backup-user.sh
+## Materialize apps/weatherorb/.env: the account service's secrets from .env.tpl (via `op inject`,
+## so RollHook's `docker compose up` resolves them without op) plus this host's tailscale peer
+## list — the mini's tailnet IP and MagicDNS name are the only two values the edge needs, and
+## neither is a secret. Re-run after rotating a secret, a mini rename or a re-join.
 weatherorb-env: require-prod
+	op --account tkrumm inject -i apps/weatherorb/.env.tpl -o apps/weatherorb/.env -f
 	@$(OP_RUN) sh -c 'ip=$$(tailscale ip -4 mini) && \
 	  host=$$(tailscale status --json | jq -r ".Peer[] | select(.HostName==\"mini\") | .DNSName") && host=$${host%.} && \
-	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\n" "$$DOMAIN" "$$ip" "$$host" > apps/weatherorb/.env && \
+	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\n" "$$DOMAIN" "$$ip" "$$host" >> apps/weatherorb/.env && \
 	  chmod 644 apps/weatherorb/.env && echo "Wrote apps/weatherorb/.env (mini = $$host)"'
 
 ## image-gen-gateway stack (Bun image API, RollHook-managed) — apps/image-gen-gateway/compose.yml
