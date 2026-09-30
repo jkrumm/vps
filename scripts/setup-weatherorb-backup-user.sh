@@ -35,4 +35,12 @@ done
 usermod --shell /bin/sh "${USER_NAME}"
 
 install -d -o root -g "${USER_NAME}" -m 0750 "${BACKUP_DIR}"
+
+# wo-backup is a login-capable local user, so the deploying user's home must not be
+# world-traversable: every apps/*/.env under it holds op-injected secrets (mode 644 for
+# RollHook). Without this, a wo-backup session reads them all.
+DEPLOY_USER="${SUDO_USER:-jkrumm}"
+DEPLOY_HOME="$(getent passwd "${DEPLOY_USER}" | cut -d: -f6)"
+chmod o-rwx "${DEPLOY_HOME}"
+echo "  ✓ ${DEPLOY_HOME} not world-traversable"
 echo "  ✓ ${BACKUP_DIR} root:${USER_NAME} 0750"

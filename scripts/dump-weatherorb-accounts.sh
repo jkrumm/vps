@@ -26,7 +26,7 @@ log() { echo "[$(date -u +%FT%TZ)] $*"; }
 
 [[ -d "${BACKUP_DIR}" ]] || { log "✗ ${BACKUP_DIR} missing — run 'make weatherorb-backup-user' first"; exit 1; }
 
-FINAL="${BACKUP_DIR}/${DB}-$(date -u +%Y%m%dT%H%MZ).dump"
+FINAL="${BACKUP_DIR}/${DB}-$(date -u +%Y%m%dT%H%M%SZ).dump"
 TMP="$(mktemp "${BACKUP_DIR}/.${DB}.XXXXXX.tmp")"
 trap 'rm -f "${TMP}"' EXIT
 

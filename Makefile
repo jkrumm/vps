@@ -392,11 +392,14 @@ weatherorb-backup-user: require-prod
 ## list — the mini's tailnet IP and MagicDNS name are the only two values the edge needs, and
 ## neither is a secret. Re-run after rotating a secret, a mini rename or a re-join.
 weatherorb-env: require-prod
-	op --account tkrumm inject -i apps/weatherorb/.env.tpl -o apps/weatherorb/.env -f
+	@# Both halves go to one temp file that replaces .env atomically, so a failed second half
+	@# can never leave an .env with the secrets but no DOMAIN/MINI_* keys.
+	op --account tkrumm inject -i apps/weatherorb/.env.tpl -o apps/weatherorb/.env.tmp -f
 	@$(OP_RUN) sh -c 'ip=$$(tailscale ip -4 mini) && \
 	  host=$$(tailscale status --json | jq -r ".Peer[] | select(.HostName==\"mini\") | .DNSName") && host=$${host%.} && \
-	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\n" "$$DOMAIN" "$$ip" "$$host" >> apps/weatherorb/.env && \
-	  chmod 644 apps/weatherorb/.env && echo "Wrote apps/weatherorb/.env (mini = $$host)"'
+	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\n" "$$DOMAIN" "$$ip" "$$host" >> apps/weatherorb/.env.tmp && \
+	  chmod 644 apps/weatherorb/.env.tmp && mv -f apps/weatherorb/.env.tmp apps/weatherorb/.env && \
+	  echo "Wrote apps/weatherorb/.env (mini = $$host)"' || { rm -f apps/weatherorb/.env.tmp; exit 1; }
 
 ## image-gen-gateway stack (Bun image API, RollHook-managed) — apps/image-gen-gateway/compose.yml
 ## Deploys to image.jkrumm.com (Tailscale-only, grey-cloud A record — NOT the cloudflared

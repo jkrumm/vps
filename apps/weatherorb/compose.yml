@@ -114,8 +114,8 @@ services:
       PORT: "4200"
       # Literal, not ${DOMAIN}: weatherorb.com is its own zone (same reason the edge's router host is literal).
       BETTER_AUTH_URL: https://weatherorb.com
-      BETTER_AUTH_SECRET: ${WEATHERORB_ACCOUNT_BETTER_AUTH_SECRET}
-      DATABASE_URL: postgresql://weatherorb_account:${WEATHERORB_ACCOUNT_DB_PASSWORD}@postgres:5432/weatherorb_accounts
+      BETTER_AUTH_SECRET: ${WEATHERORB_ACCOUNT_BETTER_AUTH_SECRET:?run make weatherorb-env}
+      DATABASE_URL: postgresql://weatherorb_account:${WEATHERORB_ACCOUNT_DB_PASSWORD:?run make weatherorb-env}@postgres:5432/weatherorb_accounts
       # Magic link stays off until a weatherorb.com domain exists in Resend; set both together.
       # RESEND_API_KEY: ${WEATHERORB_ACCOUNT_RESEND_API_KEY}
       # MAIL_FROM: WeatherOrb <login@weatherorb.com>
