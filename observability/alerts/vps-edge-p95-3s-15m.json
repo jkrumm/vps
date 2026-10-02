@@ -9,7 +9,7 @@
   "message": null,
   "name": "VPS edge p95 > 3s (15m)",
   "note": null,
-  "numConsecutiveWindows": null,
+  "numConsecutiveWindows": 2,
   "source": "tile",
   "tags": [
     "agent"
