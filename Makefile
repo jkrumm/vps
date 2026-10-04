@@ -59,7 +59,7 @@ endif
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
-        check deploy verify logs
+        check deploy verify logs _deploy-affected
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -672,11 +672,24 @@ prune-cron-install: require-prod
 
 # Repo contract — the four targets every repo with a runtime ships.
 # Spec: dotfiles docs/agents-md.md §Repo contract. check is local and
-# side-effect-free; deploy / verify / logs act on one app at a time via APP=<name>.
+# side-effect-free; deploy / verify / logs act on one app at a time via APP=<name>,
+# and deploy / verify also run with no APP (diff-derived / last-deployed).
 # Faces: AGENTS.md → Validate / Deploy / Verify & Monitor / Gotchas.
 
 # Known apps — the app directories under apps/. Both error paths list these.
 KNOWN_APPS := argo audio-gateway basalt-ui-marketing email-gateway fpp image-gen-gateway imgproxy jkrumm-com photo-gallery rollhook-marketing shutterflow weatherorb
+
+# Files changed since the last recorded deploy → the targets `make deploy` (no
+# APP) applies. `apps/<name>/**` maps to that app; the shared stacks map to their
+# own target so a traefik/observability change restarts one stack, not every app.
+# Recursive (=) on purpose: `git diff` runs only when deploy actually needs it.
+DEPLOY_AFFECTED = $(shell old=$$(cat .deploy-sha 2>/dev/null) || exit 0; [ -n "$$old" ] || exit 0; \
+	git diff --name-only "$$old" HEAD 2>/dev/null | \
+	awk -F/ '/^apps\// { print $$2; next }; \
+		/^compose\.networking\.yml$$/ || /^traefik\// { print "networking"; next }; \
+		/^compose\.infra\.yml$$/ { print "infra"; next }; \
+		/^compose\.monitoring\.yml$$/ || /^observability\// { print "monitoring"; next }' | \
+	awk '!seen[$$0]++')
 
 # app → primary compose service(s). RollHook-managed apps have no
 # container_name (the name is dynamic), so verify/logs resolve the running
@@ -727,18 +740,68 @@ check:
 # The dev-only -redeploy targets (argo/weatherorb/image-gen-gateway) push an
 # empty commit to trigger RollHook from a local clone — a dev convenience, not a
 # routine prod deploy, so deploy deliberately does not use them.
-## Apply a merged vps-repo change to one app on the VPS: make deploy APP=<name>.
+#
+# With no APP (the repo-contract loop) deploy applies that same per-app dispatch
+# to whatever `git diff --name-only $(cat .deploy-sha) HEAD` reports (see
+# DEPLOY_AFFECTED above), then records HEAD + the deployed list in .deploy-sha /
+# .deploy-apps (both gitignored). A missing .deploy-sha seeds the baseline and
+# deploys nothing; a diff touching no app or stack prints "nothing to deploy"
+# and exits 0.
+## Apply a merged vps-repo change on the VPS: make deploy [APP=<name>].
 deploy:
-	@[ -n "$(APP)" ] || { echo "usage: make deploy APP=<app>"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
+ifneq ($(ENV),prod)
+	@# Off the VPS (warden on the mini runs plain `make deploy`): pull there and run it there —
+	@# every <app>-up is require-prod, and .deploy-sha/.deploy-apps live on the VPS checkout.
+	@ssh vps "cd ~/vps && git pull --ff-only -q && ENV=prod make --no-print-directory deploy$(if $(APP), APP=$(APP))"
+else
+ifeq ($(APP),)
+	@if [ ! -f .deploy-sha ]; then echo "  no .deploy-sha — recording HEAD as the deploy baseline, deploying nothing"; \
+	elif [ -z "$(DEPLOY_AFFECTED)" ]; then echo "nothing to deploy (no app or stack file changed)"; \
+	else echo "→ affected: $(DEPLOY_AFFECTED)"; fi
+	@$(MAKE) --no-print-directory _deploy-affected APPS="$(DEPLOY_AFFECTED)"
+	@git rev-parse HEAD > .deploy-sha; printf '%s\n' "$(DEPLOY_AFFECTED)" > .deploy-apps
+else
 	@[ "$(filter $(APP),$(KNOWN_APPS))" = "$(APP)" ] || { echo "ERROR: unknown app '$(APP)'"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
 	@case "$(APP)" in \
 		rollhook-marketing) echo "deployed by CI on push" ;; \
 		*) $(MAKE) --no-print-directory $(APP)-up ;; \
 	esac
+endif
+endif
 
-## Probe one app's production health; exit non-zero if not live and healthy: make verify APP=<name>.
+# Internal: run one `deploy` per affected token. Infra stacks are not in
+# KNOWN_APPS, so they call their <stack>-up directly; apps go back through
+# `deploy APP=` to reuse its validation and dispatch.
+_deploy-affected:
+	@for a in $(APPS); do \
+	  case "$$a" in \
+	    networking|infra|monitoring) $(MAKE) --no-print-directory $$a-up || exit 1 ;; \
+	    *) $(MAKE) --no-print-directory deploy APP=$$a || exit 1 ;; \
+	  esac; \
+	done
+
+## Probe production health: make verify [APP=<name>]. With no APP, verifies every
+## app recorded in .deploy-apps by the last `make deploy`; infra stacks (which
+## have no app health check) are skipped. Exits non-zero if any app is unhealthy.
 verify:
-	@[ -n "$(APP)" ] || { echo "usage: make verify APP=<app>"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
+ifneq ($(ENV),prod)
+	@# Off the VPS (warden on the mini runs plain `make verify`): pull there and run it there —
+	@# every <app>-up is require-prod, and .deploy-sha/.deploy-apps live on the VPS checkout.
+	@ssh vps "cd ~/vps && git pull --ff-only -q && ENV=prod make --no-print-directory verify$(if $(APP), APP=$(APP))"
+else
+ifeq ($(APP),)
+	@apps="$$(cat .deploy-apps 2>/dev/null)"; \
+	if [ -z "$$apps" ]; then echo "no recorded deploys to verify — run 'make deploy' first"; exit 0; fi; \
+	echo "→ verifying last deployed: $$apps"; \
+	failed=0; \
+	for a in $$apps; do \
+	  case "$$a" in \
+	    networking|infra|monitoring) echo "  · skip $$a (infra target — no app health check)"; continue ;; \
+	  esac; \
+	  $(MAKE) --no-print-directory verify APP=$$a || failed=1; \
+	done; \
+	exit $$failed
+else
 	@[ "$(filter $(APP),$(KNOWN_APPS))" = "$(APP)" ] || { echo "ERROR: unknown app '$(APP)'"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
 	@case "$(APP)" in \
 		weatherorb)          url="https://weatherorb.com/" ;; \
@@ -761,6 +824,8 @@ verify:
 			echo "✓ $$s: healthy"; \
 		done; \
 	fi
+endif
+endif
 
 ## Bounded 200-line tail of one app's production container, then exits (no -f): make logs APP=<name>.
 logs:

@@ -459,6 +459,8 @@ no `.sh` extension and are not syntax-checked by this target.
 
 ## Deploy
 
+Off the VPS (e.g. warden on the mini), `make deploy` / `make verify` forward to the VPS: `ssh vps` → `git pull --ff-only` → `ENV=prod make <target>` there, where the `.deploy-sha` / `.deploy-apps` state lives.
+
 This repo ships **compose/config and ops scripts**, not app code. Two layers:
 
 - **App code** ships when its own repo is pushed to `master` — RollHook rolls the
@@ -481,6 +483,16 @@ exits 0. The dev-only `-redeploy` targets (argo, weatherorb, image-gen-gateway)
 push an empty commit to trigger RollHook from a local clone; they are a dev
 convenience, not routine prod deploys, so `deploy` does not use them.
 
+With no `APP`, `make deploy` drives the same flow off the diff: it reads the last
+deployed SHA from the gitignored `.deploy-sha` (seeding it with `HEAD` and
+deploying nothing on the first run), maps every file changed since to its app
+(`apps/<name>/**` → that app) or shared stack (`traefik/`,
+`compose.networking.yml` → `networking`; `compose.infra.yml` → `infra`;
+`observability/`, `compose.monitoring.yml` → `monitoring`), runs each affected
+target, and records the new `HEAD` plus the app list in `.deploy-sha` /
+`.deploy-apps` (both gitignored). A diff touching no app or stack prints
+`nothing to deploy` and exits 0.
+
 Rollback: `git revert` the offending change, push, pull on the server, and re-run
 `make deploy APP=<name>`. A bad app **image** rolls back through RollHook to the
 prior image. Databases are only restored through the gated DR scripts
@@ -492,7 +504,9 @@ prior image. Databases are only restored through the gated DR scripts
 healthy. Public endpoints are `curl -fsS`'d directly; apps reached only over
 Tailscale (or behind auth) are checked by their container healthcheck over SSH —
 no secrets or DNS lookup needed. `make logs APP=<name>` prints a bounded 200-line
-tail and exits (no `-f`).
+tail and exits (no `-f`). With no `APP`, `make verify` re-verifies every app
+recorded in `.deploy-apps` by the last `make deploy` and exits non-zero if any is
+unhealthy; infra entries (which have no app health check) are skipped.
 
 | App | Health URL | Kuma monitor | OTel `service.name` |
 |-|-|-|-|
