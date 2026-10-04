@@ -429,3 +429,115 @@ verification: `README.md` → Upgrading. The one gotcha not to lose: both
 upgrade targets are scoped to their own services — a bare `compose up -d` on
 `apps/fpp/compose.yml` would also recreate the RollHook-managed `fpp-server`
 / `fpp-analytics` off `:latest` and revert the last deploy.
+
+---
+
+## Validate
+
+`make check` is the single local gate — no server, no secrets, no Docker daemon
+mutation, so it is safe to run anywhere (the MacBook, the mini, CI):
+
+```bash
+make check
+```
+
+It runs:
+
+1. `docker compose -f <file> config --no-interpolate --quiet` over every
+   `compose.*.yml` and `apps/*/compose.yml`. `--no-interpolate` is deliberate:
+   `.env.tpl` holds `op://` references that cannot resolve locally, but the file
+   structure is still fully validated.
+2. If the Docker CLI is absent, a `uv run --no-project --with pyyaml` parse of
+   the same compose files instead.
+3. `bash -n` over `scripts/*.sh` and `apps/*/scripts/*.sh`.
+
+A non-zero exit means the change is not ready.
+
+Not covered here: building any image (the app repos own that), each app's own test
+suite, `op://` resolution, and live server state. The `cron/*` job scripts carry
+no `.sh` extension and are not syntax-checked by this target.
+
+## Deploy
+
+This repo ships **compose/config and ops scripts**, not app code. Two layers:
+
+- **App code** ships when its own repo is pushed to `master` — RollHook rolls the
+  new image (CI), or Watchtower for the few non-RollHook images (see `## RollHook`).
+  Nothing in this repo deploys app code.
+- **Config changes** (anything under `apps/<name>/compose.yml`, `traefik/`, …) ship
+  by pushing this repo and pulling on the server:
+
+```bash
+git push && ssh vps "cd ~/vps && git pull"
+make deploy APP=<name>      # run on the VPS, ENV=prod — applies the merged change
+```
+
+`make deploy APP=<name>` dispatches to that app's existing `<name>-up` target,
+which recreates it from `apps/<name>/compose.yml` while **pinning the currently
+running image** — so a config change can never roll a RollHook app back to a stale
+`:latest` (see `## RollHook`). `rollhook-marketing` has no `-up` target and is
+CI-only: `make deploy APP=rollhook-marketing` prints `deployed by CI on push` and
+exits 0. The dev-only `-redeploy` targets (argo, weatherorb, image-gen-gateway)
+push an empty commit to trigger RollHook from a local clone; they are a dev
+convenience, not routine prod deploys, so `deploy` does not use them.
+
+Rollback: `git revert` the offending change, push, pull on the server, and re-run
+`make deploy APP=<name>`. A bad app **image** rolls back through RollHook to the
+prior image. Databases are only restored through the gated DR scripts
+(`docs/disaster-recovery.md`) — never by a Makefile target.
+
+## Verify & Monitor
+
+`make verify APP=<name>` probes one app and exits non-zero if it is not live and
+healthy. Public endpoints are `curl -fsS`'d directly; apps reached only over
+Tailscale (or behind auth) are checked by their container healthcheck over SSH —
+no secrets or DNS lookup needed. `make logs APP=<name>` prints a bounded 200-line
+tail and exits (no `-f`).
+
+| App | Health URL | Kuma monitor | OTel `service.name` |
+|-|-|-|-|
+| argo | `https://argo.<your-domain>/api/health` | `Argo / API - HTTP` | `argo-api` |
+| audio-gateway | `https://audio-gateway.<your-domain>/health` | `Audio Gateway - HTTP` | none |
+| basalt-ui-marketing | `https://basalt-ui.com/` | — | none |
+| email-gateway | `https://email-gateway.<your-domain>/health` | `EmailGateway - HTTP` | none |
+| fpp | `https://server.free-planning-poker.com/health` · `https://analytics.free-planning-poker.com/health` | `FPP - Server - HTTP` · `FPP - Analytics - HTTP` | `fpp-server` · `fpp-analytics` |
+| image-gen-gateway | `https://image-gateway.<your-domain>/health` | `Image Gen Gateway - HTTP` | none |
+| imgproxy | `https://img.<your-domain>/rs:fit:100/misc/monitor-probe.jpg` | `ImageCDN - HTTP` · `ImageCDN Origin - HTTP` | `imgproxy` |
+| jkrumm-com | `https://jkrumm.com/` | — | none |
+| photo-gallery | `https://photos.<your-domain>/` | `Photos - HTTP` | none |
+| rollhook-marketing | `https://rollhook.com/` | — | none |
+| shutterflow | `https://shutterflow.app/health` | — | `shutterflow-share` |
+| weatherorb | `https://weatherorb.com/` | `WeatherOrb - HTTP` | none |
+
+The shared stacks have their own Kuma monitors: `traefik.<your-domain>` →
+`Traefik - HTTP`, `rollhook.<your-domain>/ready` → `RollHook - Ready - HTTP`,
+`hyperdx.<your-domain>` → `HyperDX - HTTP`, `umami.<your-domain>/api/heartbeat`
+→ `Umami - HTTP`, plus the Postgres liveness/backup and FPP DB/readmodel push
+monitors. `<your-domain>` stands for the apex in `DOMAIN`; the monitors
+themselves live in the homelab repo. For a public service the edge probe can stay
+green through an origin outage (Cloudflare edge cache) — `imgproxy` is the
+clearest case: the `ImageCDN Origin` monitor is the one that proves a real B2
+fetch.
+
+## Gotchas
+
+- **No `ports:` except FPP MariaDB `33306` and the Tailscale-bound monitoring
+  ports** — see `## Security Invariants`. Docker publishes bypass UFW entirely;
+  FPP MariaDB relies on TLS, a schema-scoped user and `fail2ban` instead.
+- **`ipAllowList` does not work behind Docker-published ports** (Docker NAT
+  rewrites the source IP). Tailscale-only access is DNS-based: a grey-cloud A
+  record pointing at the Tailscale IP.
+- **`traefik.yml` does not support `${ENV_VAR}`** — ACME email goes in via the
+  container env var, wildcard domains via `tls.domains` labels (Compose *does*
+  substitute `${DOMAIN}` in labels).
+- **Never run a bare `docker compose -f apps/<app>/compose.yml up -d` for a
+  RollHook app** — it resolves `${IMAGE_TAG:-…:latest}` and rolls the container
+  back to a stale `:latest`. Use `make <app>-up` (pins the running image) or
+  `make deploy APP=<app>`.
+- **Each Postgres app owns its migration journal in its own schema** (drizzle
+  `migrations.schema` + `migrationsSchema`); otherwise a whole-DB restore breaks
+  with `permission denied for schema drizzle`.
+- **Never run a bare `op read`/`op run` on the mini** — it blocks on a biometric
+  prompt and wedges the target. Use the `secrets-run` shim (see `## Secrets`).
+- **All container operations go through the Makefile** — a raw `docker`/`docker
+  compose` call can miss `op run` and a required secret.

@@ -58,7 +58,8 @@ endif
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune prune-cron-install \
-        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade
+        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
+        check deploy verify logs
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -668,3 +669,104 @@ prune-cron-install: require-prod
 	sudo install -o root -g root -m 644 cron/docker-prune /etc/cron.d/docker-prune
 	@echo "  ✓ /etc/cron.d/docker-prune installed (Sunday 04:30 — images + build cache, never volumes)"
 	@docker system df | awk 'NR==1 || /^Images|^Build Cache/'
+
+# Repo contract — the four targets every repo with a runtime ships.
+# Spec: dotfiles docs/agents-md.md §Repo contract. check is local and
+# side-effect-free; deploy / verify / logs act on one app at a time via APP=<name>.
+# Faces: AGENTS.md → Validate / Deploy / Verify & Monitor / Gotchas.
+
+# Known apps — the app directories under apps/. Both error paths list these.
+KNOWN_APPS := argo audio-gateway basalt-ui-marketing email-gateway fpp image-gen-gateway imgproxy jkrumm-com photo-gallery rollhook-marketing shutterflow weatherorb
+
+# app → primary compose service(s). RollHook-managed apps have no
+# container_name (the name is dynamic), so verify/logs resolve the running
+# container by this service label instead of a hard-coded name.
+APP_SERVICE_argo                := argo-api
+APP_SERVICE_audio-gateway       := audio-gateway
+APP_SERVICE_basalt-ui-marketing := basalt-ui-marketing
+APP_SERVICE_email-gateway       := email-gateway
+APP_SERVICE_fpp                 := fpp-server fpp-analytics
+APP_SERVICE_image-gen-gateway   := image-gen-gateway
+APP_SERVICE_imgproxy            := imgproxy
+APP_SERVICE_jkrumm-com          := jkrumm-com
+APP_SERVICE_photo-gallery       := photo-gallery
+APP_SERVICE_rollhook-marketing  := rollhook-marketing
+APP_SERVICE_shutterflow         := shutterflow-share
+APP_SERVICE_weatherorb          := weatherorb-edge
+
+## Local validation: compose config + shell syntax — no server, Docker mutation or secrets.
+check:
+	@if command -v docker >/dev/null 2>&1; then \
+		for f in compose.*.yml apps/*/compose.yml; do \
+			printf "→ docker compose -f %s config\n" "$$f"; \
+			docker compose -f "$$f" config --no-interpolate --quiet || exit 1; \
+		done; \
+	else \
+		echo "→ docker not found — parsing compose YAML with pyyaml"; \
+		uv run --no-project --with pyyaml python3 -c "import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]" compose.*.yml apps/*/compose.yml || exit 1; \
+	fi
+	@echo "→ bash -n over shell scripts"; \
+	for f in scripts/*.sh apps/*/scripts/*.sh; do bash -n "$$f" || exit 1; done; \
+	echo "OK: local validation passed"
+
+# deploy is the config-apply half of shipping: run it ON THE VPS (ENV=prod)
+# after `git pull`. It dispatches to the app's existing <app>-up target, which
+# recreates the app from apps/<app>/compose.yml while pinning the currently
+# running image — so a config change never rolls a RollHook app back to a stale
+# :latest (see AGENTS.md → RollHook). New app *code* is deployed by RollHook on
+# push (CI), never here.
+#
+# Per-app mapping — decided from the Makefile + the RollHook section:
+#   argo → argo-up · audio-gateway → audio-gateway-up ·
+#   basalt-ui-marketing → basalt-ui-marketing-up · email-gateway → email-gateway-up ·
+#   fpp → fpp-up · image-gen-gateway → image-gen-gateway-up · imgproxy → imgproxy-up ·
+#   jkrumm-com → jkrumm-com-up · photo-gallery → photo-gallery-up ·
+#   shutterflow → shutterflow-up · weatherorb → weatherorb-up
+#   rollhook-marketing has NO -up target: its image is built and rolled by CI
+#   (ghcr.io/jkrumm/rollhook-marketing), so deploy reports that and exits 0.
+# The dev-only -redeploy targets (argo/weatherorb/image-gen-gateway) push an
+# empty commit to trigger RollHook from a local clone — a dev convenience, not a
+# routine prod deploy, so deploy deliberately does not use them.
+## Apply a merged vps-repo change to one app on the VPS: make deploy APP=<name>.
+deploy:
+	@[ -n "$(APP)" ] || { echo "usage: make deploy APP=<app>"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
+	@[ "$(filter $(APP),$(KNOWN_APPS))" = "$(APP)" ] || { echo "ERROR: unknown app '$(APP)'"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
+	@case "$(APP)" in \
+		rollhook-marketing) echo "deployed by CI on push" ;; \
+		*) $(MAKE) --no-print-directory $(APP)-up ;; \
+	esac
+
+## Probe one app's production health; exit non-zero if not live and healthy: make verify APP=<name>.
+verify:
+	@[ -n "$(APP)" ] || { echo "usage: make verify APP=<app>"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
+	@[ "$(filter $(APP),$(KNOWN_APPS))" = "$(APP)" ] || { echo "ERROR: unknown app '$(APP)'"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
+	@case "$(APP)" in \
+		weatherorb)          url="https://weatherorb.com/" ;; \
+		shutterflow)         url="https://shutterflow.app/health" ;; \
+		basalt-ui-marketing) url="https://basalt-ui.com/" ;; \
+		jkrumm-com)          url="https://jkrumm.com/" ;; \
+		rollhook-marketing)  url="https://rollhook.com/" ;; \
+		*)                   url="" ;; \
+	esac; \
+	if [ -n "$$url" ]; then \
+		echo "→ curl -fsS $$url"; \
+		curl -fsS --max-time 20 "$$url" >/dev/null || { echo "✗ $(APP): unhealthy ($$url)"; exit 1; }; \
+		echo "✓ $(APP): healthy"; \
+	else \
+		for s in $(APP_SERVICE_$(APP)); do \
+			id=$$(ssh vps "docker ps -q --filter label=com.docker.compose.service=$$s" | head -1); \
+			[ -n "$$id" ] || { echo "✗ $(APP): no running container for service $$s"; exit 1; }; \
+			st=$$(ssh vps "docker inspect -f '{{.State.Health.Status}}' $$id"); \
+			[ "$$st" = "healthy" ] || { echo "✗ $(APP): $$s is $$st"; exit 1; }; \
+			echo "✓ $$s: healthy"; \
+		done; \
+	fi
+
+## Bounded 200-line tail of one app's production container, then exits (no -f): make logs APP=<name>.
+logs:
+	@[ -n "$(APP)" ] || { echo "usage: make logs APP=<app>"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
+	@[ "$(filter $(APP),$(KNOWN_APPS))" = "$(APP)" ] || { echo "ERROR: unknown app '$(APP)'"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
+	@first=$(firstword $(APP_SERVICE_$(APP))); \
+	id=$$(ssh vps "docker ps -q --filter label=com.docker.compose.service=$$first" | head -1); \
+	[ -n "$$id" ] || { echo "no running container for service $$first"; exit 1; }; \
+	ssh vps "docker logs --tail=200 $$id"
