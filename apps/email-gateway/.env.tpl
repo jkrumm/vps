@@ -22,9 +22,14 @@ EMAIL_GATEWAY_SY_SERENDIPITY_RECEIVER_EMAIL=op://vps/email-gateway/SY_SERENDIPIT
 EMAIL_GATEWAY_LLM_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 EMAIL_GATEWAY_LLM_API_KEY=op://common/anthropic/API_KEY
 
-# Jev decision model (typesafe-ai/jev) via Vercel AI Gateway — shadow-mode
-# spam/category decisions beside the LLM. Unset -> disabled.
-EMAIL_GATEWAY_JEV_API_KEY=op://common/vercel/COMMON_VERCEL_AI
+# Decision model (Cloudflare Clef) via the OpenRouter Decisions API —
+# shadow-mode spam/category decisions beside the LLM. Unset -> disabled.
+EMAIL_GATEWAY_OPENROUTER_API_KEY=op://common/openrouter/API_KEY
+
+# Usage/cost telemetry to argo over the internal proxy network (same as
+# image-gen-gateway). Unset -> reporting off.
+EMAIL_GATEWAY_ARGO_USAGE_URL=http://argo-api:4000/usage/records
+EMAIL_GATEWAY_ARGO_API_SECRET=op://common/api/SECRET
 
 # /admin UI — basic auth password (user "admin"); /admin 404s when unset.
 EMAIL_GATEWAY_ADMIN_PASSWORD=op://vps/email-gateway/ADMIN_PASSWORD
