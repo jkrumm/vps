@@ -4,7 +4,7 @@
 #
 # Ensures a dedicated HyperDX user (AGENT_EMAIL) exists in the team and that
 # its accessKey matches AGENT_ACCESS_KEY, so agents (Claude Code sessions,
-# sideclaw `otel`) can call the MCP server and REST v2 API without ever
+# agent-gateway `otel`) can call the MCP server and REST v2 API without ever
 # holding the human's password. Re-run after rotating any of the three
 # 1Password fields — idempotent re-runs are no-ops beyond the smoke test.
 #

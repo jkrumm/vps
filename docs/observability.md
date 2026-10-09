@@ -300,7 +300,7 @@ Internal services on `:4319` don't need rotation — they don't use the key.
 
 ## Agent access — MCP + REST
 
-Agents (Claude Code sessions, sideclaw's `otel` tool) reach ClickStack over two
+Agents (Claude Code sessions, agent-gateway's `otel` tool) reach ClickStack over two
 HTTP surfaces, both proxied by the HyperDX UI container and both authenticated
 with a HyperDX **user access key** — not the OTLP ingestion key above, a
 different credential with a different threat model (see "Two credentials"
