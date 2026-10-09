@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "research-gateway",
+  "displayName": "research-gateway - 16. Synthesis / consistency failures (count \u2014 consistency.failed + synthesis.rejected + synthesis.failed; the report shipped degraded)",
+  "interval": "1h",
+  "message": null,
+  "name": "research-gateway synthesis/consistency failures >= 3 (1h)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "research-gateway"
+  ],
+  "threshold": 3,
+  "thresholdType": "above",
+  "tile": "16. Synthesis / consistency failures (count \u2014 consistency.failed + synthesis.rejected + synthesis.failed; the report shipped degraded)"
+}

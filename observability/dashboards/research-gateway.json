@@ -361,6 +361,115 @@
       "w": 6,
       "x": 6,
       "y": 48
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Degraded stage",
+            "valueExpression": "",
+            "where": "ServiceName = 'research-gateway' AND Body IN ('consistency.failed', 'synthesis.rejected', 'synthesis.failed')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6ac8e58431091d239be63a1a",
+      "name": "16. Synthesis / consistency failures (count \u2014 consistency.failed + synthesis.rejected + synthesis.failed; the report shipped degraded)",
+      "w": 6,
+      "x": 12,
+      "y": 48
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "cost spike",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "source": "Logs",
+        "sqlTemplate": "SELECT (SELECT countIf(toFloat64OrZero(LogAttributes['costUsd']) + toFloat64OrZero(LogAttributes['searchUsd']) > 2)\n        FROM otel_logs WHERE ServiceName = 'research-gateway' AND Body = 'research.done'\n          AND TimestampTime > now() - INTERVAL 1 HOUR)\n     + (SELECT toUInt64(sum(toFloat64OrZero(LogAttributes['costUsd']) + toFloat64OrZero(LogAttributes['searchUsd'])) > 15)\n        FROM otel_logs WHERE ServiceName = 'research-gateway' AND Body = 'research.done'\n          AND TimestampTime > now() - INTERVAL 24 HOUR) AS cost_alert"
+      },
+      "h": 3,
+      "id": "6ac8e58431091d239be63a1b",
+      "name": "17. Cost spike (count \u2014 jobs over $2 in the last hour, plus 1 if the 24h spend exceeds $15; 0 otherwise, healthy)",
+      "w": 6,
+      "x": 18,
+      "y": 48
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT toStartOfDay(Timestamp) d, SpanAttributes['research.depth'] depth,\n       SpanAttributes['synthesis.outcome'] outcome, count() jobs,\n       countIf(SpanAttributes['research.reason']='assembled') assembled\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND SpanName='research.job'\n  AND SpanAttributes['synthesis.outcome'] != '' AND Timestamp > now() - INTERVAL 14 DAY\nGROUP BY d, depth, outcome ORDER BY d DESC, jobs DESC LIMIT 100"
+      },
+      "h": 6,
+      "id": "6ac8e58431091d239be63a1c",
+      "name": "18. Synthesis outcome (table \u2014 submitted/salvaged vs rejected_*/failed per day \u00d7 depth; anything but submitted is a degraded report)",
+      "w": 12,
+      "x": 0,
+      "y": 51
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT toStartOfDay(Timestamp) d, count() jobs,\n       countIf(toFloat64OrZero(SpanAttributes['worker.salvaged']) > 0) jobs_with_salvage,\n       sum(toFloat64OrZero(SpanAttributes['worker.salvaged'])) salvaged,\n       sum(toFloat64OrZero(SpanAttributes['research.workers'])) workers,\n       round(100*salvaged/nullIf(workers,0),1) salvage_pct\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND SpanName='research.job'\n  AND SpanAttributes['synthesis.outcome'] != '' AND Timestamp > now() - INTERVAL 14 DAY\nGROUP BY d ORDER BY d DESC LIMIT 30"
+      },
+      "h": 6,
+      "id": "6ac8e58431091d239be63a1d",
+      "name": "19. Worker salvage rate (table \u2014 jobs with a salvaged digest and salvaged workers / dispatched, per day)",
+      "w": 12,
+      "x": 12,
+      "y": 51
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT toStartOfDay(Timestamp) d, SpanAttributes['research.depth'] depth,\n       SpanAttributes['consistency.gate'] gate, count() jobs,\n       sum(toFloat64OrZero(SpanAttributes['consistency.failed'])) failed,\n       countIf(SpanAttributes['consistency.corrected']='true') corrected,\n       sum(toFloat64OrZero(SpanAttributes['consistency.edits'])) edits,\n       round(avg(Duration)/1e9) avg_job_s\nFROM $__sourceTable\nWHERE ServiceName='research-gateway' AND SpanName='research.job'\n  AND SpanAttributes['consistency.gate'] != '' AND Timestamp > now() - INTERVAL 14 DAY\nGROUP BY d, depth, gate ORDER BY d DESC, jobs DESC LIMIT 100"
+      },
+      "h": 6,
+      "id": "6ac8e58431091d239be63a1e",
+      "name": "20. Consistency pass \u2014 ran / skipped (and why) / failed, with edits (table, per day \u00d7 depth)",
+      "w": 24,
+      "x": 0,
+      "y": 57
     }
   ]
 }
