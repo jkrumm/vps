@@ -470,6 +470,41 @@
       "w": 24,
       "x": 0,
       "y": 57
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Given up",
+            "valueExpression": "",
+            "where": "ServiceName = 'research-gateway' AND Body = 'job.crash_loop_guard'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6ac8e9e131091d239be63b10",
+      "name": "21. Crash-loop guard (count \u2014 job.crash_loop_guard; a job given up on after repeated restarts, it may itself be crashing the process; empty is healthy)",
+      "w": 6,
+      "x": 0,
+      "y": 63
     }
   ]
 }
