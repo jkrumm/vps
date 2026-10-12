@@ -1,5 +1,5 @@
 ---
-# email-gateway — Bun + Elysia + Resend. Sends FPP contact-form,
+# email-gateway — Bun + Elysia + SES. Sends FPP contact-form,
 # daily-analytics, and SY Serendipity charter-request emails. Public via
 # Cloudflare Tunnel + Traefik at
 # email-gateway.${DOMAIN}. Deployed via RollHook on push to
@@ -21,19 +21,15 @@ services:
     environment:
       NODE_ENV: production
       SECRET_KEY: ${EMAIL_GATEWAY_SECRET_KEY}
-      RESEND_API_KEY: ${EMAIL_GATEWAY_RESEND_API_KEY}
       SES_REGION: eu-central-1
       SES_ACCESS_KEY_ID: ${EMAIL_GATEWAY_SES_ACCESS_KEY_ID}
       SES_SECRET_ACCESS_KEY: ${EMAIL_GATEWAY_SES_SECRET_ACCESS_KEY}
       SES_CONFIGURATION_SET: email-gateway
       SES_SNS_TOPIC_ARN: ${EMAIL_GATEWAY_SES_SNS_TOPIC_ARN}
-      # Per-template send provider (email-gateway README §Amazon SES). Unlisted
-      # templates stay on Resend; remove an entry to roll that template back.
-      SEND_PROVIDERS: fpp-sender=ses,fpp-receiver=ses,fpp-daily-analytics=ses,sy-serendipity-request=ses
       RECEIVER_EMAIL: ${EMAIL_GATEWAY_RECEIVER_EMAIL}
       SY_SERENDIPITY_RECEIVER_EMAIL: ${EMAIL_GATEWAY_SY_SERENDIPITY_RECEIVER_EMAIL}
       # Interim sender on the verified jkrumm.com domain. sy-serendipity.org was removed from
-      # Resend to free a domain slot: re-add it later (new DKIM key, DNS at the owner's provider),
+      # the old provider to free a domain slot: re-add it later (new DKIM key, DNS at the owner's provider),
       # then switch to requests@sy-serendipity.org.
       SY_SERENDIPITY_FROM_EMAIL: "SY Serendipity I <sy-serendipity@jkrumm.com>"
       LLM_BASE_URL: ${EMAIL_GATEWAY_LLM_BASE_URL}

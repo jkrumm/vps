@@ -14,11 +14,10 @@
 DOMAIN=op://vps/config/DOMAIN
 
 EMAIL_GATEWAY_SECRET_KEY=op://vps/email-gateway/SECRET_KEY
-EMAIL_GATEWAY_RESEND_API_KEY=op://vps/email-gateway/RESEND_API_KEY
 
 # Amazon SES (eu-central-1), provisioned by email-gateway's scripts/ses-provision.ts.
 # The IAM key is send-only, scoped to the identities + the email-gateway configuration
-# set. SES stays off for every route until SEND_PROVIDERS routes a template to it;
+# set. SES is the only send provider;
 # SES_SNS_TOPIC_ARN alone opens POST /webhooks/ses (SNS signature is its auth).
 EMAIL_GATEWAY_SES_ACCESS_KEY_ID=op://vps/email-gateway/SES_ACCESS_KEY_ID
 EMAIL_GATEWAY_SES_SECRET_ACCESS_KEY=op://vps/email-gateway/SES_SECRET_ACCESS_KEY
