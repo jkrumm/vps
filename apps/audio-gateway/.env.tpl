@@ -14,5 +14,5 @@ USAGE_HTTP_URL=http://argo-api:4000/usage/records
 USAGE_SOURCE_LABEL=audio-gateway
 ARGO_API_SECRET=op://common/api/SECRET
 MACHINE=vps
-# No podcast secrets here (IMAGE_GEN_API_KEY, ABS_*): the pipeline runs on the mini
+# No podcast secrets here (IMAGE_GATEWAY_API_KEY, ABS_*): the pipeline runs on the mini
 # instance; this container is STT/TTS only (PODCAST_ENABLED=false in compose.yml).

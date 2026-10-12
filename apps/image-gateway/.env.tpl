@@ -1,6 +1,6 @@
 # Production secrets template for the VPS.
 # Materialized into a real (gitignored) `.env` on the VPS via `op inject` — see DEPLOY.md.
-# Place this file in the vps repo at apps/image-gen-gateway/.env.tpl and re-run the env target
+# Place this file in the vps repo at apps/image-gateway/.env.tpl and re-run the env target
 # after rotating any secret.
 
 # Traefik's Host() rule interpolates ${DOMAIN} from THIS file, not the vps repo's top-level
@@ -12,7 +12,7 @@
 DOMAIN=op://vps/config/DOMAIN
 
 # Gateway's own bearer
-API_SECRET=op://vps/image-gen-gateway/API_SECRET
+API_SECRET=op://vps/image-gateway/API_SECRET
 
 # Upstream OpenAI-compatible endpoint (the unified IU endpoint, same item argo/research-gateway use)
 OPENAI_BASE_URL=op://common/anthropic/OPENAI_BASE_URL

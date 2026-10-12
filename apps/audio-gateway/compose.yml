@@ -61,7 +61,7 @@ services:
       # docs/podcast-editorial-room.md, Decision 2): the brain vault and the
       # research gateway are only reachable there. This container is STT/TTS
       # only and answers /v1/podcasts* with a 410 pointing at podcasts.mini.jkrumm.com,
-      # so none of the PODCAST_* / IMAGE_GEN_* / ABS_* wiring belongs here.
+      # so none of the PODCAST_* / IMAGE_GATEWAY_* / ABS_* wiring belongs here.
       PODCAST_ENABLED: "false"
     volumes:
       # Usage SQLite DB survives redeploys. Matches USAGE_DB=/data/usage.db.

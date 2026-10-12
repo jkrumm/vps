@@ -191,7 +191,7 @@ compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower
 compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStack with ports exposed)
 apps/argo/compose.yml         argo-api + argo-dashboard — personal API/agent backbone, RollHook-managed
 apps/audio-gateway/compose.yml  STT/TTS only (PODCAST_ENABLED=false) — podcast wiring is mini-only
-apps/image-gen-gateway/compose.yml  Backend for the /img skill, RollHook-managed
+apps/image-gateway/compose.yml  Backend for the /img skill, RollHook-managed
 apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, no Traefik router) — RollHook-managed, `make weatherorb-up` pins both images
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
@@ -479,7 +479,7 @@ which recreates it from `apps/<name>/compose.yml` while **pinning the currently
 running image** — so a config change can never roll a RollHook app back to a stale
 `:latest` (see `## RollHook`). `rollhook-marketing` has no `-up` target and is
 CI-only: `make deploy APP=rollhook-marketing` prints `deployed by CI on push` and
-exits 0. The dev-only `-redeploy` targets (argo, weatherorb, image-gen-gateway)
+exits 0. The dev-only `-redeploy` targets (argo, weatherorb, image-gateway)
 push an empty commit to trigger RollHook from a local clone; they are a dev
 convenience, not routine prod deploys, so `deploy` does not use them.
 
@@ -515,7 +515,7 @@ unhealthy; infra entries (which have no app health check) are skipped.
 | basalt-ui-marketing | `https://basalt-ui.com/` | — | none |
 | email-gateway | `https://email-gateway.<your-domain>/health` | `EmailGateway - HTTP` | none |
 | fpp | `https://server.free-planning-poker.com/health` · `https://analytics.free-planning-poker.com/health` | `FPP - Server - HTTP` · `FPP - Analytics - HTTP` | `fpp-server` · `fpp-analytics` |
-| image-gen-gateway | `https://image-gateway.<your-domain>/health` | `Image Gen Gateway - HTTP` | none |
+| image-gateway | `https://image-gateway.<your-domain>/health` | `Image Gen Gateway - HTTP` | none |
 | imgproxy | `https://img.<your-domain>/rs:fit:100/misc/monitor-probe.jpg` | `ImageCDN - HTTP` · `ImageCDN Origin - HTTP` | `imgproxy` |
 | jkrumm-com | `https://jkrumm.com/` | — | none |
 | photo-gallery | `https://photos.<your-domain>/` | `Photos - HTTP` | none |

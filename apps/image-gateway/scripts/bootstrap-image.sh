@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Seed the registry with an :initial image-gen-gateway image so RollHook has a
+# Seed the registry with an :initial image-gateway image so RollHook has a
 # running container to authorize OIDC deploys against. Run once per fresh
 # server before the first GitHub Actions deploy succeeds.
 #
 # Idempotent — re-running just rebuilds and re-pushes.
 #
-# Run via:  make image-gen-gateway-bootstrap-image
+# Run via:  make image-gateway-bootstrap-image
 # Requires: ROLLHOOK_SECRET in env (provided by op run via the Make target).
 
 set -euo pipefail
 
-: "${ROLLHOOK_SECRET:?ROLLHOOK_SECRET not set — run via 'make image-gen-gateway-bootstrap-image'}"
+: "${ROLLHOOK_SECRET:?ROLLHOOK_SECRET not set — run via 'make image-gateway-bootstrap-image'}"
 
 REGISTRY="rollhook.jkrumm.com"
-SRC_DIR="${IMAGE_GEN_SRC_DIR:-/tmp/image-gen-bootstrap}"
-REPO_URL="https://github.com/jkrumm/image-gen"
+SRC_DIR="${IMAGE_GATEWAY_SRC_DIR:-/tmp/image-gateway-bootstrap}"
+REPO_URL="https://github.com/jkrumm/image-gateway"
 
 if [ ! -d "${SRC_DIR}/.git" ]; then
   echo "[1/4] Cloning ${REPO_URL} → ${SRC_DIR}"
@@ -29,24 +29,24 @@ fi
 echo "[2/4] docker login ${REGISTRY}"
 echo "${ROLLHOOK_SECRET}" | docker login "${REGISTRY}" -u rollhook --password-stdin
 
-# NOTE: image-gen is a bun MONOREPO — the gateway depends on the `shared/`
+# NOTE: image-gateway is a bun MONOREPO — the gateway depends on the `shared/`
 # workspace package, so the build context is the REPO ROOT and the Dockerfile
 # path is gateway/Dockerfile. This differs from research-gateway (single
 # package, context == Dockerfile dir) and matches .github/workflows/deploy.yml,
 # which passes context: . and dockerfile: gateway/Dockerfile. Building with the
 # gateway dir as context fails on the missing shared/ workspace.
-echo "[3/4] Build ${REGISTRY}/image-gen-gateway:initial"
+echo "[3/4] Build ${REGISTRY}/image-gateway:initial"
 docker build \
-  -t "${REGISTRY}/image-gen-gateway:initial" \
-  -t "${REGISTRY}/image-gen-gateway:latest" \
+  -t "${REGISTRY}/image-gateway:initial" \
+  -t "${REGISTRY}/image-gateway:latest" \
   -f "${SRC_DIR}/gateway/Dockerfile" \
   "${SRC_DIR}"
 
 echo "[4/4] Push images"
-docker push "${REGISTRY}/image-gen-gateway:initial"
-docker push "${REGISTRY}/image-gen-gateway:latest"
+docker push "${REGISTRY}/image-gateway:initial"
+docker push "${REGISTRY}/image-gateway:latest"
 
 echo
 echo "Done. Now:"
-echo "  1. make image-gen-gateway-env"
-echo "  2. make image-gen-gateway-up"
+echo "  1. make image-gateway-env"
+echo "  2. make image-gateway-up"

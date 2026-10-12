@@ -6,22 +6,21 @@ resized/reformatted derivatives on demand; Cloudflare's edge caches those
 derivatives. Consumers: the static photo-gallery site, blog/articles, the
 Obsidian vault, and agents.
 
-`image-share` (homelab) is the layer that consumes this substrate for
-sharing/publishing; `shutterflow` is a separate, unrelated MacBook photography
-app and does not touch this CDN.
+`imgcli` (dotfiles) is the layer that consumes this substrate for
+sharing/publishing, talking to B2 directly; `shutterflow` is a separate,
+unrelated MacBook photography app and does not touch this CDN. (The homelab
+`image-share` service that used to sit in between was decommissioned on
+2026-10-12.)
 
 ```
 client → Cloudflare edge (cache) → tunnel → Traefik → imgproxy → B2 img/ (private)
 ```
 
 **This doc covers the CDN substrate only.** The image lives in a layered
-delivery chain: local truth (files on disk) → `image-share` (a bearer-auth'd
-service on the homelab; **share** = local → private, **publish** = private →
-public, and `publish` always stages a durable homelab copy before anything
-reaches this CDN) → the CDN documented here. The agent door into that whole
-chain is the `/img` skill (`dotfiles`); the private layer's own contract —
-schema, endpoints, key model — lives in image-share's `docs/design.md`. Don't
-duplicate that design here; this doc stays scoped to imgproxy/B2/Cloudflare.
+delivery chain: local truth (files on disk) → `imgcli` (uploads straight to
+B2 with the scoped keys below: `img/` for public, `private/` for private) →
+the CDN documented here. The agent door into that whole chain is the `/img`
+skill (`dotfiles`). This doc stays scoped to imgproxy/B2/Cloudflare.
 
 ---
 
@@ -83,8 +82,7 @@ The bucket stays **private** — B2 never serves it directly, only imgproxy read
 from it.
 
 **Staying unsigned is a permanent decision, not a deferred upgrade.** Every
-published URL — vault embeds, jkrumm.com articles, `imgcli` output, image-share's
-`cdnUrl` responses — is an unsigned literal baked into whatever it was pasted
+published URL — vault embeds, jkrumm.com articles, `imgcli` output — is an unsigned literal baked into whatever it was pasted
 into. Flipping `IMGPROXY_KEY`/`IMGPROXY_SALT` would invalidate all of them at
 once, with no way to retrofit a signature into already-published text. The
 access model is, and stays, the private bucket + the prefix-locked read-only
@@ -172,8 +170,9 @@ B2 account key inventory:
 | `b2-admin-jkrumm` | bucket `jkrumm`, incl. `deleteFiles` | `op://Private/Backblaze B2` (`MASTER_*` fields) | homelab `make restic-prune` / `restic-init` |
 | `b2-shared-append-only` | bucket `jkrumm`, no delete | `op://common/backblaze-s3` | backup scripts (vps pg/mariadb, homelab restic) |
 | `imgproxy-read` | bucket `jkrumm`, **prefix `img/`**, read-only | `op://vps/imgproxy` | imgproxy |
-| `images-write` | bucket `jkrumm`, **prefix `img/`**, write, no delete | `op://common/b2-images-write` | `imgcli sync` (legacy bulk mirror lane) plus `imgcli ls`/`info`/`url` (read-only) and `publish`'s `CDN_BASE` lookup — `imgcli upload` and all agent/Obsidian uploads now go through image-share's API instead |
-| `image-share-b2` | bucket `jkrumm`, **prefix `img/`**, `listFiles`/`readFiles`/`writeFiles`/`deleteFiles` | `op://homelab/image-share/{B2_KEY_ID,B2_APP_KEY}` | the image-share service on the homelab — the sole delete-capable key ever wired into automation |
+| `images-write` | bucket `jkrumm`, **prefix `img/`**, write, no delete | `op://common/b2-images-write` | `imgcli upload`/`publish`/`sync`/`ls`/`info`/`url` directly (no service in between) |
+| `images-private` | bucket `jkrumm`, **prefix `private/`**, `listBuckets`/`listFiles`/`readFiles`/`writeFiles`, no delete | `op://common/b2-images-private` | `imgcli private*` — uploads and mints presigned GET URLs (max 7 days) |
+| `image-share-b2` (key name unchanged; re-homed) | bucket `jkrumm`, **prefix `img/`**, `listFiles`/`readFiles`/`writeFiles`/`deleteFiles` | `op://common/b2-images-admin` | `imgcli rm` only — deliberately kept OUT of the mini's headless cache (MacBook-only, biometric `op`) |
 
 > The `MASTER_*` field names in `op://Private/Backblaze B2` are historical and
 > **do not hold the master key** — they hold `b2-admin-jkrumm`. The names are
@@ -192,22 +191,33 @@ b2 key create --bucket <bucket> --name-prefix img/ \
 b2 key create --bucket <bucket> --name-prefix img/ \
   images-write listBuckets,listFiles,readFiles,writeFiles
 
+b2 key create --bucket <bucket> --name-prefix private/ \
+  images-private listBuckets,listFiles,readFiles,writeFiles
+
 b2 account clear
 ```
 
-Neither gets `deleteFiles` — uploads must not be able to destroy originals, and
-the CDN must not be able to write at all.
+None of these three gets `deleteFiles` — uploads must not be able to destroy
+originals, and the CDN must not be able to write at all.
+
+`private/` is unreachable through imgproxy: `imgproxy-read` is prefix-locked to
+`img/` server-side, and `IMGPROXY_ALLOWED_SOURCES` is `s3://<bucket>/img/`. The
+only read path into `private/` is a presigned GET URL minted by `imgcli private*`
+with the `images-private` key (max 7 days).
 
 **Deletion is not impossible, though — it's scoped and gated.** The dedicated
-`image-share-b2` key (see the inventory above) carries `deleteFiles`, and it is
-reachable only through image-share's `DELETE /api/b2/:key` (bearer-auth'd,
-traversal-guarded on the decoded key). No agent machine and no other credential
-in this repo holds delete capability — the read-only and no-delete keys above
-are the norm, not a gap.
+admin key (`op://common/b2-images-admin`, see the inventory above) carries
+`deleteFiles` and is used only by `imgcli rm`, run from the MacBook where `op`
+is biometric-gated. It is deliberately absent from the mini's headless secrets
+cache, so no agent machine holds delete capability — the read-only and
+no-delete keys above are the norm, not a gap.
 
 B2 has a lifecycle rule on `img/`: hidden (overwritten or deleted) versions are
-purged after 30 days. Deletes and overwrites through `image-share-b2` no longer
+purged after 30 days. Deletes and overwrites through the admin key no longer
 accrete invisible version debris in the bucket.
+
+The B2-Mirror reverse backup of `img/` (formerly image-share's cron) no longer
+runs — image-share is gone, and nothing replaced it.
 
 > **Capture the output in the same command that stores it.** B2 prints the
 > `applicationKey` exactly once; a create whose secret you don't persist leaves
