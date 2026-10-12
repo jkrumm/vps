@@ -254,6 +254,14 @@ services:
       APP_SECRET: ${UMAMI_APP_SECRET}
       TRACKER_SCRIPT_NAME: p.js
       COLLECT_API_ENDPOINT: /api/p
+      # Sites that proxy the tracker through their own domain (Brave Shields bypass, e.g.
+      # sy-serendipity on Netlify) arrive with cf-connecting-ip = the proxy's IP. Netlify passes
+      # the visitor in x-nf-client-connection-ip; when the header is absent Umami falls back to
+      # its default chain (cf-connecting-ip), so direct-loading sites are unaffected.
+      CLIENT_IP_HEADER: x-nf-client-connection-ip
+      # Geo from the bundled GeoLite2 DB on the resolved IP, not Cloudflare's cf-ipcountry
+      # (which would name the proxy's country for proxied sites).
+      SKIP_LOCATION_HEADERS: "1"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/heartbeat || exit 1"]
       interval: 5s
