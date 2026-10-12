@@ -27,6 +27,9 @@ services:
       SES_SECRET_ACCESS_KEY: ${EMAIL_GATEWAY_SES_SECRET_ACCESS_KEY}
       SES_CONFIGURATION_SET: email-gateway
       SES_SNS_TOPIC_ARN: ${EMAIL_GATEWAY_SES_SNS_TOPIC_ARN}
+      # Per-template send provider (email-gateway README §Amazon SES). Unlisted
+      # templates stay on Resend; remove an entry to roll that template back.
+      SEND_PROVIDERS: fpp-daily-analytics=ses,sy-serendipity-request=ses
       RECEIVER_EMAIL: ${EMAIL_GATEWAY_RECEIVER_EMAIL}
       SY_SERENDIPITY_RECEIVER_EMAIL: ${EMAIL_GATEWAY_SY_SERENDIPITY_RECEIVER_EMAIL}
       # Interim sender on the verified jkrumm.com domain. sy-serendipity.org was removed from
