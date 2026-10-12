@@ -24,9 +24,10 @@ services:
       RESEND_API_KEY: ${EMAIL_GATEWAY_RESEND_API_KEY}
       RECEIVER_EMAIL: ${EMAIL_GATEWAY_RECEIVER_EMAIL}
       SY_SERENDIPITY_RECEIVER_EMAIL: ${EMAIL_GATEWAY_SY_SERENDIPITY_RECEIVER_EMAIL}
-      # Display name on the verified free-planning-poker.com domain until sy-serendipity.org
-      # is verified in Resend (DNS at the owner's provider), then requests@sy-serendipity.org.
-      SY_SERENDIPITY_FROM_EMAIL: "SY Serendipity I <no-reply@free-planning-poker.com>"
+      # Interim sender on the verified jkrumm.com domain. sy-serendipity.org was removed from
+      # Resend to free a domain slot: re-add it later (new DKIM key, DNS at the owner's provider),
+      # then switch to requests@sy-serendipity.org.
+      SY_SERENDIPITY_FROM_EMAIL: "SY Serendipity I <sy-serendipity@jkrumm.com>"
       LLM_BASE_URL: ${EMAIL_GATEWAY_LLM_BASE_URL}
       LLM_API_KEY: ${EMAIL_GATEWAY_LLM_API_KEY}
       LLM_MODEL: gpt-6-luna
