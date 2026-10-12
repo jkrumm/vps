@@ -39,6 +39,7 @@ services:
       IMAP_TLS_INSECURE: "true"
       ADMIN_PASSWORD: ${EMAIL_GATEWAY_ADMIN_PASSWORD}
       API_KEY: ${EMAIL_GATEWAY_API_KEY}
+      SY_SERENDIPITY_READ_KEY: ${EMAIL_GATEWAY_SY_SERENDIPITY_READ_KEY}
       DATA_DIR: /data
     volumes:
       - /var/lib/email-gateway:/data

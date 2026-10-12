@@ -38,6 +38,10 @@ EMAIL_GATEWAY_ADMIN_PASSWORD=op://vps/email-gateway/ADMIN_PASSWORD
 # /api/* bearer key (emails, stats, submissions); /api 404s when unset.
 EMAIL_GATEWAY_API_KEY=op://vps/email-gateway/API_KEY
 
+# GET /sy-serendipity/requests bearer key — read-only feed for the SY Serendipity
+# admin panel (Netlify). Opens nothing else; the route 404s when unset.
+EMAIL_GATEWAY_SY_SERENDIPITY_READ_KEY=op://vps/email-gateway/SY_SERENDIPITY_READ_KEY
+
 # IMAP ingest of hello@ from Proton Mail Bridge on the homelab (read-only),
 # over the tailnet (ACL: tag:vps -> tag:homelab tcp:1143). Bridge's cert is
 # self-signed for 127.0.0.1; the path is WireGuard-encrypted and ACL-scoped,
