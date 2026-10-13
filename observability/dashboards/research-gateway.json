@@ -505,6 +505,41 @@
       "w": 6,
       "x": 0,
       "y": 63
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Spawn errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'research-gateway' AND Body = 'human_solve.spawn_error'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "abf9697003368d3559ba523b",
+      "name": "22. Solver spawn errors (count \u2014 human_solve.spawn_error; the human-solve browser could not be started, every captcha escalation fails until fixed; empty is healthy)",
+      "w": 6,
+      "x": 6,
+      "y": 63
     }
   ]
 }

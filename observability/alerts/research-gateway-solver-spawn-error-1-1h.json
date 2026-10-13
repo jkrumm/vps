@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "research-gateway",
+  "displayName": "research-gateway - 22. Solver spawn errors (count \u2014 human_solve.spawn_error; the human-solve browser could not be started, every captcha escalation fails until fixed; empty is healthy)",
+  "interval": "1h",
+  "message": null,
+  "name": "research-gateway solver spawn errors >= 1 (1h)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "research-gateway"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "22. Solver spawn errors (count \u2014 human_solve.spawn_error; the human-solve browser could not be started, every captcha escalation fails until fixed; empty is healthy)"
+}
