@@ -33,7 +33,8 @@ services:
       SY_SERENDIPITY_FROM_EMAIL: "SY Serendipity I <hello@jkrumm.com>"
       # Public POST /jkrumm-contact (static personal site, no bearer): allowed browser Origins.
       JKRUMM_CONTACT_ORIGINS: "https://jkrumm.com,https://www.jkrumm.com"
-      JKRUMM_CONTACT_FROM_EMAIL: "jkrumm.com <contact@jkrumm.com>"
+      JKRUMM_CONTACT_FROM_EMAIL: "jkrumm.com <hello@jkrumm.com>"
+      JKRUMM_CONTACT_RECEIVER_EMAIL: "hello@jkrumm.com"
       LLM_BASE_URL: ${EMAIL_GATEWAY_LLM_BASE_URL}
       LLM_API_KEY: ${EMAIL_GATEWAY_LLM_API_KEY}
       LLM_MODEL: gpt-6-luna
