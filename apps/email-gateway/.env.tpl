@@ -30,7 +30,7 @@ EMAIL_GATEWAY_LLM_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 EMAIL_GATEWAY_LLM_API_KEY=op://common/anthropic/API_KEY
 
 # Decision lane: Cloudflare Clef. Default route is IU's unified endpoint
-# (clef-eu, reuses the LLM creds above, see DECISION_PROVIDER in compose.yml);
+# (decision-1-eu on the systemone API, reuses the LLM creds above, see DECISION_PROVIDER in compose.yml);
 # this OpenRouter key is the alternative route (DECISION_PROVIDER=openrouter).
 EMAIL_GATEWAY_OPENROUTER_API_KEY=op://common/openrouter/API_KEY
 
