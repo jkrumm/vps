@@ -111,5 +111,11 @@ ssh vps 'sudo -iu gh-runner env XDG_RUNTIME_DIR=/run/user/$(id -u gh-runner) \
   DOCKER_HOST=unix:///run/user/$(id -u gh-runner)/docker.sock docker system df'
 ```
 
+After a network outage the runners can stay offline for hours: the listener backs off up to
+~3 h between broker retries (seen 2026-10-14, when the VPS could not reach
+`broker.actions.githubusercontent.com` for ~30 min through a peering fault). Once
+`curl https://broker.actions.githubusercontent.com/health` answers 200 from the VPS, restart the
+units: `sudo systemctl restart 'actions.runner.*'`.
+
 A change to `cron/docker-prune` only takes effect after `make prune-cron-install ENV=prod` on
 the VPS.
