@@ -68,7 +68,7 @@ make fpp-sync-from-prod  # direct ssh+docker exec mariadb-dump from VPS → loca
 make fpp-restore-local   # pull latest S3 backup into local mariadb (DR drill / seed)
 make firewall            # show UFW status and rules
 make prune-cron-install  # prod — install the weekly Sunday 04:30 image + build-cache prune (cron/docker-prune); never volumes
-make gh-runner-setup REPO=jkrumm/<repo>  # prod — self-hosted Actions runner for one private repo (token on stdin, docs/gh-runner.md); gh-runner-remove undoes it
+make gh-runner-setup REPO=jkrumm/<repo> [N=2]  # prod — self-hosted Actions runner (instance) for one private repo (token on stdin, docs/gh-runner.md); gh-runner-remove undoes it
 make gh-runner-sync      # mini/MacBook (needs gh) — register a VPS runner for every private repo with workflows; DRY_RUN=1 previews
 
 # Restoring PROD from S3 has NO make target by design (it overwrites production).
@@ -222,7 +222,8 @@ scripts/db-counts.sh          Exact per-table COUNT(*) (Postgres + MariaDB) — 
 scripts/dump-weatherorb-accounts.sh  Hourly pg_dump of weatherorb_accounts → /var/backups/weatherorb-accounts (48 kept, homelab pulls as wo-backup)
 scripts/setup-weatherorb-backup-user.sh  Idempotent wo-backup user + backup dir — run via make weatherorb-backup-user
 scripts/setup-gh-runner.sh    Idempotent per-repo Actions runner for private repos — gh-runner user, rootless Docker, systemd unit (make gh-runner-setup / gh-runner-remove REPO=…, docs/gh-runner.md)
-scripts/gh-runner-sync.sh     Registers a runner for every private repo with workflows (make gh-runner-sync, runs where gh is authenticated)
+scripts/gh-runner-sync.sh     Registers the runner(s) of every private repo with workflows, per-repo count in instances() (make gh-runner-sync, runs where gh is authenticated)
+scripts/gh-runner-watchdog.sh Restarts runners stuck in reconnect back-off — installed by setup as a 5-min systemd timer
 scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
 scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
 scripts/sync-pg-from-vps.sh   Dev — ssh vps + docker exec pg_dump (whole DB) → local (fresh, no S3)
@@ -242,7 +243,7 @@ cron/pg-health.env.tpl        op template for the seeded pg-health cron env (mat
 cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
 cron/weatherorb-accounts-dump  weatherorb_accounts dump, hourly at :15 (root) — sources /etc/vps/weatherorb-accounts-dump.env (seeded from cron/weatherorb-accounts-dump.env.tpl)
-cron/docker-prune             Weekly image + build-cache prune, Sunday 04:30 (prod daemon) + 04:35 (gh-runner rootless daemon) (make prune-cron-install) — never volumes
+cron/docker-prune             Weekly image + build-cache prune, Sunday 04:30 (prod daemon, never volumes) + 04:35 (gh-runner rootless daemon, job volumes too) (make prune-cron-install)
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts
 ```
@@ -273,7 +274,7 @@ HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only). Auth via first-visit account cr
 
 Full design, URL/prefix conventions, the Cloudflare `Vary`/`Accept` caveat, and B2 provisioning: `docs/image-cdn.md`.
 
-**GitHub Actions runners** — one `vps-<repo>` registration per private jkrumm repo (labels `self-hosted`, `vps`), because the account's free hosted minutes run out and a personal account has no account-level runners. All run as `gh-runner` (no `docker`/`sudo` group) and build against its own rootless Docker daemon, never the prod one. Never on a public repo (fork-PR code execution on the prod host) — the setup script refuses. Install, remove, sync, security model: `docs/gh-runner.md`.
+**GitHub Actions runners** — one `vps-<repo>` registration per private jkrumm repo, more instances where a repo runs several jobs per push (labels `self-hosted`, `vps`), because the account's free hosted minutes run out and a personal account has no account-level runners. All run as `gh-runner` (no `docker`/`sudo` group) and build against its own rootless Docker daemon, never the prod one. Never on a public repo (fork-PR code execution on the prod host) — the setup script refuses. Install, remove, sync, security model: `docs/gh-runner.md`.
 
 **photo-gallery** — static Astro photo gallery at `photos.DOMAIN`. nginx:alpine serves a host-mounted directory (`/home/jkrumm/photo-gallery-dist:/usr/share/nginx/html:ro`). No image registry, no RollHook — content is built on the developer laptop and rsynced via SSH/Tailscale by the `photo-flow` CLI (`photoflow sync-gallery`). Watchtower auto-updates the nginx base image. The host directory must exist (and contain at least `index.html`) before `make photo-gallery-up`, otherwise the healthcheck fails.
 

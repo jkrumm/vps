@@ -11,16 +11,24 @@ One runner shared by all repos would need the repos in a GitHub organization.
 
 | | |
 |-|-|
-| Runner per repo | `vps-<repo>`, labels `self-hosted`, `Linux`, `X64`, `vps` |
+| Runner per repo | `vps-<repo>` (further instances `vps-<repo>-<n>`), labels `self-hosted`, `Linux`, `X64`, `vps` |
 | Workflow | `runs-on: [self-hosted, vps]` |
 | User | `gh-runner` (system user, no password, not in `docker`/`sudo`) — shared by all runners |
-| Install | `/home/gh-runner/runners/<repo>` |
-| Service | `actions.runner.jkrumm-<repo>.vps-<repo>.service` (systemd, runs as `gh-runner`) |
+| Install | `/home/gh-runner/runners/<repo>` (instance n: `<repo>@<n>`) |
+| Service | `actions.runner.jkrumm-<repo>.<runner-name>.service` (systemd, runs as `gh-runner`) |
+| Watchdog | `gh-runner-watchdog.timer` (every 5 min) restarts a runner stuck in reconnect back-off |
 | Docker | one rootless daemon in `gh-runner`'s user systemd (`systemctl --user` + linger) |
-| Code | `scripts/setup-gh-runner.sh`, `scripts/gh-runner-sync.sh`, `make gh-runner-{setup,remove,sync}` |
-| Disk hygiene | `cron/docker-prune` (Sunday 04:35, images + week-old build cache of the rootless daemon) |
+| Code | `scripts/setup-gh-runner.sh`, `scripts/gh-runner-sync.sh`, `scripts/gh-runner-watchdog.sh`, `make gh-runner-{setup,remove,sync}` |
+| Disk hygiene | `cron/docker-prune` (Sunday 04:35, images, week-old build cache and job volumes of the rootless daemon) |
 
-Each runner takes one job at a time, so a repo's parallel jobs queue behind each other.
+Each runner takes one job at a time, so a repo's parallel jobs queue behind each other. A repo
+with several jobs per push gets more instances: the count lives in `instances()` in
+`scripts/gh-runner-sync.sh` (weatherorb: 3). A repo with more than one instance needs a
+`concurrency:` group on its deploy workflows, or two quick pushes can deploy out of order.
+
+One core here is ~3.5× slower than a hosted runner's (2.0 GHz Skylake-SP; weatherorb's pytest:
+2m13s hosted, 8m46s here), but there are 12 of them — CPU-bound test suites should run in
+parallel (e.g. `pytest -n auto` with pytest-xdist).
 
 ## Why the VPS
 
@@ -59,7 +67,8 @@ gh api -X POST repos/$R/actions/runners/registration-token --jq .token \
   | ssh vps "cd ~/vps && make gh-runner-setup ENV=prod REPO=$R"
 ```
 
-or for every private repo with workflows that has no runner yet:
+Add `N=<n>` to both commands for a further instance. Or, for every private repo with workflows
+— its first runner plus the instances `instances()` asks for:
 
 ```bash
 make gh-runner-sync DRY_RUN=1   # preview
@@ -70,7 +79,9 @@ Then switch the repo's workflows to `runs-on: [self-hosted, vps]` and give jobs 
 `timeout-minutes` (a hung job holds that repo's only runner). The job steps must not assume
 the hosted image's preinstalled tools: install them per job (`oven-sh/setup-bun`,
 `astral-sh/setup-uv`, …). The host has `git`, `curl`, `unzip`, `docker` (rootless) — no
-rustup, Node or Python toolchains.
+rustup, Node or Python toolchains. Tool caches persist in `gh-runner`'s home between jobs, so
+`actions/cache`-backed options (`setup-uv`'s `enable-cache`, `setup-node`'s `cache`) only add an
+upload/download round trip here.
 
 Job `services:` containers work (verified: Postgres on a published port, reached from the
 host). Publish them on loopback with a dynamic port — `ports: ["127.0.0.1::5432"]`, then
@@ -111,11 +122,12 @@ ssh vps 'sudo -iu gh-runner env XDG_RUNTIME_DIR=/run/user/$(id -u gh-runner) \
   DOCKER_HOST=unix:///run/user/$(id -u gh-runner)/docker.sock docker system df'
 ```
 
-After a network outage the runners can stay offline for hours: the listener backs off up to
-~3 h between broker retries (seen 2026-10-14, when the VPS could not reach
-`broker.actions.githubusercontent.com` for ~30 min through a peering fault). Once
-`curl https://broker.actions.githubusercontent.com/health` answers 200 from the VPS, restart the
-units: `sudo systemctl restart 'actions.runner.*'`.
+After a network outage the listener backs off up to ~3 h between broker retries (seen
+2026-10-14, when the VPS could not reach `broker.actions.githubusercontent.com` for ~30 min
+through a peering fault). `gh-runner-watchdog.timer` handles that: a runner whose last state line
+is a `Runner connect error` older than 10 min, with no job running, is restarted once
+`https://broker.actions.githubusercontent.com/health` answers 200. What it did:
+`sudo journalctl -u gh-runner-watchdog -n 50`. Every `make gh-runner-setup` reinstalls it.
 
 A change to `cron/docker-prune` only takes effect after `make prune-cron-install ENV=prod` on
 the VPS.

@@ -12,6 +12,16 @@ set -euo pipefail
 
 OWNER="jkrumm"
 DRY_RUN="${DRY_RUN:-0}"
+# Runners per repo (default one). A repo whose workflows run several jobs per push (weatherorb:
+# four CI jobs plus deploys) otherwise serializes them on one runner. Lowering a count does not
+# remove instances — that is `make gh-runner-remove N=<n>`. A function, not an associative array:
+# macOS ships bash 3.2.
+instances() {
+  case "$1" in
+    weatherorb) echo 3 ;;
+    *) echo 1 ;;
+  esac
+}
 
 command -v gh >/dev/null || { echo "✗ gh not found — run this where gh is authenticated" >&2; exit 1; }
 
@@ -22,31 +32,46 @@ ok=0 added=0 failed=0
 # and the tally at the end is the result. `set -e` is off inside `(…) || …`, so every failure
 # path below returns explicitly.
 sync_repo() {
-  local name="$1" repo="${OWNER}/$1" files runner
+  local name="$1" repo="${OWNER}/$1" files runners n r added=0 failed=0
   if ! files="$(gh api "repos/${repo}/contents/.github/workflows" --jq '.[].name' 2>&1)"; then
     grep -q 'HTTP 404' <<<"${files}" && return 3
     echo "  ✗ ${repo}: could not list workflows: ${files}" >&2
     return 1
   fi
   grep -qE '\.ya?ml$' <<<"${files}" || return 3
-  runner="$(gh api "repos/${repo}/actions/runners" \
-    --jq ".runners[] | select(.name == \"vps-${name}\") | .status")" || {
+  runners="$(gh api "repos/${repo}/actions/runners" --jq '.runners[] | "\(.name) \(.status)"')" || {
     echo "  ✗ ${repo}: could not list runners" >&2
     return 1
   }
-  if [[ -n "${runner}" ]]; then
-    echo "  ${repo}: vps-${name} already registered (${runner})"
-    [[ "${runner}" == "online" ]] || echo "  ! ${repo}: vps-${name} is ${runner} — see docs/gh-runner.md → Operate" >&2
+  for n in $(seq 1 "$(instances "${name}")"); do
+    r=0
+    sync_instance "${repo}" "${name}" "${n}" "${runners}" || r=$?
+    [[ "${r}" -eq 1 ]] && failed=1
+    [[ "${r}" -eq 2 ]] && added=1
+  done
+  [[ "${failed}" -eq 0 ]] || return 1
+  [[ "${added}" -eq 0 ]] || return 2
+  return 0
+}
+
+# 0 = present, 2 = registered (or would be), 1 = failed.
+sync_instance() {
+  local repo="$1" name="$2" n="$3" runners="$4" runner status
+  runner="vps-${name}$([[ "${n}" == "1" ]] || echo "-${n}")"
+  status="$(awk -v r="${runner}" '$1 == r { print $2 }' <<<"${runners}")"
+  if [[ -n "${status}" ]]; then
+    echo "  ${repo}: ${runner} already registered (${status})"
+    [[ "${status}" == "online" ]] || echo "  ! ${repo}: ${runner} is ${status} — see docs/gh-runner.md → Operate" >&2
     return 0
   fi
   if [[ "${DRY_RUN}" == "1" ]]; then
-    echo "  ${repo}: would register vps-${name}"
+    echo "  ${repo}: would register ${runner}"
     return 2
   fi
-  echo "→ ${repo}: registering vps-${name}"
+  echo "→ ${repo}: registering ${runner}"
   if ! gh api -X POST "repos/${repo}/actions/runners/registration-token" --jq .token \
-    | ssh vps "cd ~/vps && make gh-runner-setup ENV=prod REPO=${repo}"; then
-    echo "  ✗ ${repo}: registration failed" >&2
+    | ssh vps "cd ~/vps && make gh-runner-setup ENV=prod REPO=${repo} N=${n}"; then
+    echo "  ✗ ${repo}: registration of ${runner} failed" >&2
     return 1
   fi
   return 2

@@ -9,6 +9,9 @@
 #   gh api -X POST repos/$R/actions/runners/remove-token --jq .token \
 #     | ssh vps "cd ~/vps && make gh-runner-remove ENV=prod REPO=$R"
 #
+# N=<n> (default 1) adds or removes a further instance of the same repo (`vps-<repo>-<n>`), so
+# its parallel jobs stop queuing behind each other; gh-runner-sync.sh keeps the per-repo count.
+#
 # `make gh-runner-sync` (scripts/gh-runner-sync.sh) does the first for every private repo that
 # has workflows and no runner yet. The token travels over stdin (never ssh/make argv); only
 # config.sh itself takes it as an argument, for the seconds it runs. A personal GitHub account
@@ -26,6 +29,7 @@ set -euo pipefail
 
 ACTION="${1:-}"
 GH_REPO="${2:-}"
+INSTANCE="${3:-1}"
 RUNNER_USER="gh-runner"
 RUNNER_LABELS="vps"
 # Install version — runners self-update after registration (one with updates disabled stops
@@ -43,11 +47,19 @@ die() {
 [[ "$(id -u)" -eq 0 ]] || die "run as root (sudo)"
 # Leading alphanumeric: no `.`/`..` segment can turn RUNNER_DIR (rm -rf'd by remove) into a parent.
 [[ "${GH_REPO}" =~ ^jkrumm/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "REPO=jkrumm/<repo> required (got '${GH_REPO}')"
+[[ "${INSTANCE}" =~ ^[1-9]$ ]] || die "N=1..9 required (got '${INSTANCE}')"
 
 REPO_NAME="${GH_REPO#*/}"
 RUNNER_NAME="vps-${REPO_NAME}"
 RUNNER_HOME="/home/${RUNNER_USER}"
 RUNNER_DIR="${RUNNER_HOME}/runners/${REPO_NAME}"
+# Instance 1 keeps the original name and directory. `@` cannot occur in a repo name, so no
+# instance directory collides with another repo's.
+if [[ "${INSTANCE}" != "1" ]]; then
+  RUNNER_NAME="vps-${REPO_NAME}-${INSTANCE}"
+  RUNNER_DIR="${RUNNER_DIR}@${INSTANCE}"
+fi
+WATCHDOG_SRC="$(dirname "$(readlink -f "$0")")/gh-runner-watchdog.sh"
 
 read_token() {
   local token=""
@@ -103,6 +115,23 @@ remove() {
   fi
   rm -rf "${RUNNER_DIR}"
   echo "  ✓ ${RUNNER_NAME} unregistered, its service and directory removed (user + rootless Docker kept)"
+}
+
+# Auto-recovery from the listener's multi-hour reconnect back-off (scripts/gh-runner-watchdog.sh).
+# Root runs a root-owned copy, never the deploy user's checkout.
+ensure_watchdog() {
+  install -o root -g root -m 0755 "${WATCHDOG_SRC}" /usr/local/sbin/gh-runner-watchdog
+  local unit=/etc/systemd/system/gh-runner-watchdog
+  local svc_body timer_body
+  svc_body="$(printf '[Unit]\nDescription=Restart GitHub Actions runners stuck in reconnect back-off\n\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/gh-runner-watchdog')"
+  timer_body="$(printf '[Unit]\nDescription=Check GitHub Actions runners every 5 minutes\n\n[Timer]\nOnBootSec=5min\nOnUnitActiveSec=5min\n\n[Install]\nWantedBy=timers.target')"
+  if [[ "$(cat "${unit}.service" 2>/dev/null)" != "${svc_body}" || "$(cat "${unit}.timer" 2>/dev/null)" != "${timer_body}" ]]; then
+    printf '%s\n' "${svc_body}" >"${unit}.service"
+    printf '%s\n' "${timer_body}" >"${unit}.timer"
+    systemctl daemon-reload
+  fi
+  systemctl enable --now --quiet gh-runner-watchdog.timer
+  echo "  ✓ gh-runner-watchdog.timer active"
 }
 
 ensure_user_and_docker() {
@@ -168,6 +197,7 @@ setup() {
     assert_private
   fi
   ensure_user_and_docker
+  ensure_watchdog
 
   local uid
   uid="$(id -u "${RUNNER_USER}")"
@@ -246,5 +276,5 @@ setup() {
 case "${ACTION}" in
   setup) setup ;;
   remove) remove ;;
-  *) die "usage: $0 setup|remove jkrumm/<repo>  (token on stdin)" ;;
+  *) die "usage: $0 setup|remove jkrumm/<repo> [instance]  (token on stdin)" ;;
 esac

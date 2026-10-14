@@ -388,15 +388,16 @@ weatherorb-account-bootstrap-image: require-prod
 ## homelab pulls the hourly accounts dump from over Tailscale SSH (cron/weatherorb-accounts-dump).
 weatherorb-backup-user: require-prod
 	sudo ./scripts/setup-weatherorb-backup-user.sh
-## Idempotent — self-hosted Actions runner for one private repo, REPO=jkrumm/<repo> (gh-runner user,
-## rootless Docker, systemd). Registration token on stdin; command + model in docs/gh-runner.md.
+## Idempotent — self-hosted Actions runner for one private repo, REPO=jkrumm/<repo> [N=<instance>]
+## (gh-runner user, rootless Docker, systemd, watchdog timer). Registration token on stdin; command
+## + model in docs/gh-runner.md.
 gh-runner-setup: require-prod
-	sudo ./scripts/setup-gh-runner.sh setup "$(REPO)"
-## Unregister REPO's runner, drop its service + directory (remove token on stdin, docs/gh-runner.md).
+	sudo ./scripts/setup-gh-runner.sh setup "$(REPO)" "$(or $(N),1)"
+## Unregister REPO's runner [N=<instance>], drop its service + directory (remove token on stdin).
 gh-runner-remove: require-prod
-	sudo ./scripts/setup-gh-runner.sh remove "$(REPO)"
-## Run where gh is authenticated (mini/MacBook): register a VPS runner for every private repo with
-## workflows that has none yet (DRY_RUN=1 to preview). Workflows still need runs-on: [self-hosted, vps].
+	sudo ./scripts/setup-gh-runner.sh remove "$(REPO)" "$(or $(N),1)"
+## Run where gh is authenticated (mini/MacBook): give every private repo with workflows its VPS
+## runner(s) (DRY_RUN=1 to preview). Workflows still need runs-on: [self-hosted, vps].
 gh-runner-sync:
 	./scripts/gh-runner-sync.sh
 ## Materialize apps/weatherorb/.env: the account service's secrets from .env.tpl (via `op inject`,
