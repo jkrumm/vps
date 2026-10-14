@@ -49,6 +49,10 @@ EMAIL_GATEWAY_API_KEY=op://vps/email-gateway/API_KEY
 # admin panel (Netlify). Opens nothing else; the route 404s when unset.
 EMAIL_GATEWAY_SY_SERENDIPITY_READ_KEY=op://vps/email-gateway/SY_SERENDIPITY_READ_KEY
 
+# POST /shutterflow bearer key — Shutterflow's auth-code mails. Opens nothing else;
+# the route 404s when unset. The same field feeds apps/shutterflow/.env.tpl.
+EMAIL_GATEWAY_SHUTTERFLOW_SECRET_KEY=op://vps/email-gateway/SHUTTERFLOW_SECRET_KEY
+
 # IMAP ingest of hello@ from Proton Mail Bridge on the homelab (read-only),
 # over the tailnet (ACL: tag:vps -> tag:homelab tcp:1143). Bridge's cert is
 # self-signed for 127.0.0.1; the path is WireGuard-encrypted and ACL-scoped,

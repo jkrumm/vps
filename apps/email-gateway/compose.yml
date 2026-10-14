@@ -35,6 +35,9 @@ services:
       JKRUMM_CONTACT_ORIGINS: "https://jkrumm.com,https://www.jkrumm.com"
       JKRUMM_CONTACT_FROM_EMAIL: "jkrumm.com <hello@jkrumm.com>"
       JKRUMM_CONTACT_RECEIVER_EMAIL: "hello@jkrumm.com"
+      # POST /shutterflow: Shutterflow's auth codes, own bearer; shutterflow.app is a verified SES identity.
+      SHUTTERFLOW_SECRET_KEY: ${EMAIL_GATEWAY_SHUTTERFLOW_SECRET_KEY}
+      SHUTTERFLOW_FROM_EMAIL: "Shutterflow <noreply@shutterflow.app>"
       LLM_BASE_URL: ${EMAIL_GATEWAY_LLM_BASE_URL}
       LLM_API_KEY: ${EMAIL_GATEWAY_LLM_API_KEY}
       LLM_MODEL: gpt-6-luna
