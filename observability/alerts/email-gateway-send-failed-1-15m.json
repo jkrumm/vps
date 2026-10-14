@@ -1,0 +1,20 @@
+{
+  "channel": {
+    "type": "webhook",
+    "webhook": "Slack #alerts"
+  },
+  "dashboard": "email-gateway",
+  "displayName": "email-gateway - 1. Sends failed (count — send.result failed; empty is healthy)",
+  "interval": "15m",
+  "message": null,
+  "name": "email-gateway send failed >= 1 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "email-gateway"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "1. Sends failed (count — send.result failed; empty is healthy)"
+}

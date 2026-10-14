@@ -10,6 +10,9 @@
 networks:
   proxy:
     external: true
+  # Reaches ClickStack's unauthed OTLP receiver (clickstack:4319) for traces + logs.
+  monitoring-net:
+    external: true
 
 services:
   email-gateway:
@@ -54,6 +57,9 @@ services:
       ADMIN_PASSWORD: ${EMAIL_GATEWAY_ADMIN_PASSWORD}
       API_KEY: ${EMAIL_GATEWAY_API_KEY}
       SY_SERENDIPITY_READ_KEY: ${EMAIL_GATEWAY_SY_SERENDIPITY_READ_KEY}
+      # Traces + logs -> ClickStack (HyperDX). Unset disables the exporter entirely.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: email-gateway
       DATA_DIR: /data
     volumes:
       - /var/lib/email-gateway:/data
@@ -80,6 +86,7 @@ services:
       - "rollhook.allowed_repos=jkrumm/email-gateway"
     networks:
       - proxy
+      - monitoring-net
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

@@ -1,0 +1,320 @@
+{
+  "filters": [],
+  "name": "email-gateway",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "email-gateway"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "color": "chart-green",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Failed sends",
+            "valueExpression": "",
+            "where": "ServiceName = 'email-gateway' AND Body = 'send.result' AND LogAttributes['status'] = 'failed'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ]
+      },
+      "h": 3,
+      "w": 6,
+      "x": 0,
+      "y": 0,
+      "name": "1. Sends failed (count — send.result failed; empty is healthy)"
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Bounced / complained",
+            "valueExpression": "",
+            "where": "ServiceName = 'email-gateway' AND Body = 'ses.event' AND LogAttributes['event_type'] IN ('Bounce','Complaint')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ]
+      },
+      "h": 3,
+      "w": 6,
+      "x": 6,
+      "y": 0,
+      "name": "2. Bounces and complaints (count — ses.event Bounce/Complaint; empty is healthy)"
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Failed jobs",
+            "valueExpression": "",
+            "where": "ServiceName = 'email-gateway' AND Body = 'job.failed' AND LogAttributes['outcome'] = 'error'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ]
+      },
+      "h": 3,
+      "w": 6,
+      "x": 12,
+      "y": 0,
+      "name": "3. Jobs failed (count — terminal job.failed; empty is healthy)"
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Ok ticks",
+            "valueExpression": "",
+            "where": "ServiceName = 'email-gateway' AND Body = 'sync.tick' AND LogAttributes['outcome'] = 'ok'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "w": 6,
+      "x": 18,
+      "y": 0,
+      "name": "4. Mailbox sync ok (count — sync.tick ok; 0 in 1h means sync stalled)"
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Paused snapshots",
+            "valueExpression": "",
+            "where": "ServiceName = 'email-gateway' AND Body = 'ses.account' AND LogAttributes['sending_enabled'] = 'false'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ]
+      },
+      "h": 3,
+      "w": 6,
+      "x": 0,
+      "y": 3,
+      "name": "5. SES sending paused (count — ses.account sending_enabled=false; empty is healthy)"
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "LLM errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'email-gateway' AND Body = 'llm.call' AND LogAttributes['outcome'] != 'ok'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ]
+      },
+      "h": 3,
+      "w": 6,
+      "x": 6,
+      "y": 3,
+      "name": "6. LLM lane erroring (count — llm.call not ok)"
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Logs",
+        "sqlTemplate": "SELECT toStartOfDay(Timestamp) d, LogAttributes['template'] template, LogAttributes['status'] status, count() n\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='send.result' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY d, template, status ORDER BY d DESC, n DESC LIMIT 100"
+      },
+      "h": 6,
+      "w": 12,
+      "x": 0,
+      "y": 6,
+      "name": "7. Sends by template and status (7d)"
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Logs",
+        "sqlTemplate": "SELECT toStartOfDay(Timestamp) d, LogAttributes['event_type'] event, LogAttributes['bounce_type'] bounce_type, count() n\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='ses.event' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY d, event, bounce_type ORDER BY d DESC, n DESC LIMIT 100"
+      },
+      "h": 6,
+      "w": 12,
+      "x": 12,
+      "y": 6,
+      "name": "8. SES events (7d) — bounce / complaint rate source"
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Logs",
+        "sqlTemplate": "SELECT Timestamp, LogAttributes['sending_enabled'] sending_enabled, LogAttributes['sent_24h'] sent_24h, LogAttributes['max_24h_send'] max_24h, LogAttributes['headroom_pct'] headroom_pct\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='ses.account' AND Timestamp > now() - INTERVAL 1 DAY\nORDER BY Timestamp DESC LIMIT 12"
+      },
+      "h": 6,
+      "w": 12,
+      "x": 0,
+      "y": 12,
+      "name": "9. SES quota headroom (latest snapshots)"
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanAttributes['job.kind'] kind, count() runs,\n       countIf(SpanAttributes['outcome']='error') errors,\n       countIf(SpanAttributes['outcome']='rate_limited') rate_limited,\n       round(quantile(0.95)(Duration)/1e9,2) p95_s\nFROM $__sourceTable\nWHERE ServiceName='email-gateway' AND SpanName LIKE 'job.%' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY kind ORDER BY runs DESC LIMIT 20"
+      },
+      "h": 6,
+      "w": 12,
+      "x": 12,
+      "y": 12,
+      "name": "10. Jobs by kind — runs, failures, p95 (7d)"
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Logs",
+        "sqlTemplate": "SELECT LogAttributes['provider'] provider, LogAttributes['mailbox'] mailbox, count() ticks,\n       countIf(LogAttributes['outcome']='ok') ok, max(Timestamp) last_tick,\n       sum(toUInt32OrZero(LogAttributes['ingested'])) ingested\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='sync.tick' AND Timestamp > now() - INTERVAL 1 DAY\nGROUP BY provider, mailbox ORDER BY last_tick DESC LIMIT 20"
+      },
+      "h": 6,
+      "w": 12,
+      "x": 0,
+      "y": 18,
+      "name": "11. Mailbox sync (24h)"
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Logs",
+        "sqlTemplate": "SELECT LogAttributes['lane'] lane, count() calls,\n       countIf(LogAttributes['outcome']!='ok') errors,\n       round(quantile(0.5)(toFloat64OrZero(LogAttributes['latency_ms']))/1000,1) p50_s,\n       round(quantile(0.95)(toFloat64OrZero(LogAttributes['latency_ms']))/1000,1) p95_s\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='llm.call' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY lane ORDER BY calls DESC LIMIT 20"
+      },
+      "h": 6,
+      "w": 12,
+      "x": 12,
+      "y": 18,
+      "name": "12. LLM lanes — calls, errors, latency (7d)"
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanAttributes['http.route'] route, count() n,\n       countIf(toUInt16OrZero(SpanAttributes['http.response.status_code'])>=500) s5xx,\n       round(quantile(0.95)(Duration)/1e9,2) p95_s\nFROM $__sourceTable\nWHERE ServiceName='email-gateway' AND SpanKind='Server' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY route ORDER BY n DESC LIMIT 30"
+      },
+      "h": 6,
+      "w": 12,
+      "x": 0,
+      "y": 24,
+      "name": "13. HTTP by route (7d)"
+    },
+    {
+      "config": {
+        "displayType": "search",
+        "select": "Timestamp, SeverityText, Body, TraceId",
+        "source": "Logs",
+        "where": "ServiceName:\"email-gateway\"",
+        "whereLanguage": "lucene"
+      },
+      "h": 8,
+      "w": 24,
+      "x": 0,
+      "y": 30,
+      "name": "14. Logs"
+    }
+  ]
+}
