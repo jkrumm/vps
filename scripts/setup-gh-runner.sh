@@ -41,7 +41,8 @@ die() {
 }
 
 [[ "$(id -u)" -eq 0 ]] || die "run as root (sudo)"
-[[ "${GH_REPO}" =~ ^jkrumm/[A-Za-z0-9._-]+$ ]] || die "REPO=jkrumm/<repo> required (got '${GH_REPO}')"
+# Leading alphanumeric: no `.`/`..` segment can turn RUNNER_DIR (rm -rf'd by remove) into a parent.
+[[ "${GH_REPO}" =~ ^jkrumm/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "REPO=jkrumm/<repo> required (got '${GH_REPO}')"
 
 REPO_NAME="${GH_REPO#*/}"
 RUNNER_NAME="vps-${REPO_NAME}"
@@ -68,31 +69,38 @@ service_name() {
   fi
 }
 
-# A runner on a public repo runs any fork PR's code on the prod host. The unauthenticated API
-# answers 404 for a private repo; only an explicit `"private": false` is refused, so an API
-# hiccup does not block a re-run of an already-registered private repo.
-assert_not_public() {
-  local body
-  body="$(curl -sS --max-time 20 "https://api.github.com/repos/${GH_REPO}" || true)"
-  if grep -q '"private": *false' <<<"${body}"; then
-    die "${GH_REPO} is PUBLIC — never register a self-hosted runner on a public repo"
-  fi
+# A runner on a public repo runs any fork PR's code on the prod host. Fails closed: the
+# unauthenticated API must answer 404 (how it reports a private repo); a 200 means public, and
+# anything else (rate limit, outage) refuses to register. Called before first registration only.
+assert_private() {
+  local code
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://api.github.com/repos/${GH_REPO}" || true)"
+  case "${code}" in
+    404) ;;
+    200) die "${GH_REPO} is PUBLIC — never register a self-hosted runner on a public repo" ;;
+    *) die "could not confirm ${GH_REPO} is private (GitHub API answered '${code}') — retry later" ;;
+  esac
 }
 
 remove() {
-  if [[ ! -f "${RUNNER_DIR}/.runner" ]]; then
-    echo "  ${RUNNER_NAME} is not registered — nothing to remove"
+  if [[ ! -d "${RUNNER_DIR}" ]]; then
+    echo "  ${RUNNER_DIR} does not exist — nothing to remove"
     return
   fi
-  local token svc
-  token="$(read_token remove)"
+  # Tolerates a half-installed or half-removed runner: every step is skipped once done.
+  local token="" svc
+  [[ -f "${RUNNER_DIR}/.runner" ]] && token="$(read_token remove)"
   svc="$(service_name)"
   if [[ -n "${svc}" ]]; then
-    (cd "${RUNNER_DIR}" && ./svc.sh stop && ./svc.sh uninstall)
+    if [[ -f "/etc/systemd/system/${svc}" ]]; then
+      (cd "${RUNNER_DIR}" && { ./svc.sh stop || true; } && ./svc.sh uninstall)
+    fi
     rm -rf "/etc/systemd/system/${svc}.d"
     systemctl daemon-reload
   fi
-  (cd "${RUNNER_DIR}" && as_runner ./config.sh remove --token "${token}")
+  if [[ -n "${token}" ]]; then
+    (cd "${RUNNER_DIR}" && as_runner ./config.sh remove --token "${token}")
+  fi
   rm -rf "${RUNNER_DIR}"
   echo "  ✓ ${RUNNER_NAME} unregistered, its service and directory removed (user + rootless Docker kept)"
 }
@@ -155,8 +163,10 @@ ensure_user_and_docker() {
 setup() {
   # Read the token before anything else touches stdin (apt and installdependencies.sh would eat it).
   local token=""
-  [[ -f "${RUNNER_DIR}/.runner" ]] || token="$(read_token registration)"
-  assert_not_public
+  if [[ ! -f "${RUNNER_DIR}/.runner" ]]; then
+    token="$(read_token registration)"
+    assert_private
+  fi
   ensure_user_and_docker
 
   local uid
@@ -174,15 +184,18 @@ setup() {
     rm -f "${tarball}"
     if ! DEBIAN_FRONTEND=noninteractive "${RUNNER_DIR}/bin/installdependencies.sh" </dev/null >"${log}" 2>&1; then
       cat "${log}" >&2
+      rm -f "${log}"
       die "installdependencies.sh failed"
     fi
     rm -f "${log}"
     echo "  ✓ runner ${RUNNER_VERSION} unpacked into ${RUNNER_DIR} (sha256 verified)"
   fi
 
+  local registered_now=0
   if [[ -f "${RUNNER_DIR}/.runner" ]]; then
     echo "  ${RUNNER_NAME} already registered"
   else
+    registered_now=1
     (cd "${RUNNER_DIR}" && as_runner ./config.sh --unattended --replace \
       --url "https://github.com/${GH_REPO}" --token "${token}" \
       --name "${RUNNER_NAME}" --labels "${RUNNER_LABELS}" --work _work)
@@ -192,7 +205,7 @@ setup() {
   # The runner loads its install dir's .env into every job: point `docker` at the rootless socket.
   # Track whether anything the running service reads changed, so a re-run does not restart it
   # (and kill an in-flight job) for nothing.
-  local changed=0 env_file="${RUNNER_DIR}/.env" want
+  local changed="${registered_now}" env_file="${RUNNER_DIR}/.env" want
   want="DOCKER_HOST=unix:///run/user/${uid}/docker.sock"
   touch "${env_file}"
   if ! grep -qx "${want}" "${env_file}"; then
@@ -220,13 +233,14 @@ setup() {
     changed=1
   fi
 
-  systemctl enable "${svc}" >/dev/null 2>&1
+  systemctl enable --quiet "${svc}"
   if [[ "${changed}" -eq 1 ]]; then
     systemctl restart "${svc}"
   elif ! systemctl is-active --quiet "${svc}"; then
     systemctl start "${svc}"
   fi
-  echo "  ✓ ${svc} $(systemctl is-active "${svc}")"
+  systemctl is-active --quiet "${svc}" || die "${svc} is not active — journalctl -u ${svc} -n 50"
+  echo "  ✓ ${svc} active"
 }
 
 case "${ACTION}" in
