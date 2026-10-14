@@ -98,8 +98,16 @@ remove() {
 }
 
 ensure_user_and_docker() {
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq uidmap slirp4netns docker-ce-rootless-extras \
-    </dev/null >/dev/null
+  # NEVER let this upgrade the prod Docker packages: an unpinned `apt-get install
+  # docker-ce-rootless-extras` drags docker-ce to the latest release and restarts dockerd, and
+  # with live-restore every socket-proxy keeps a stale docker.sock mount (RollHook, Traefik's
+  # Docker provider and Watchtower all go blind — 2026-10-14). Install only what is missing,
+  # rootless-extras pinned to the docker-ce version already running.
+  local pkgs=(--no-upgrade uidmap slirp4netns)
+  if ! dpkg-query -W -f '${Status}' docker-ce-rootless-extras 2>/dev/null | grep -q 'install ok installed'; then
+    pkgs+=("docker-ce-rootless-extras=$(dpkg-query -W -f '${Version}' docker-ce)")
+  fi
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${pkgs[@]}" </dev/null >/dev/null
 
   if id "${RUNNER_USER}" >/dev/null 2>&1; then
     echo "  ${RUNNER_USER} already exists"
