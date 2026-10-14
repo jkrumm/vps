@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Self-hosted GitHub Actions runners for jkrumm's PRIVATE repos — one registration per repo.
+# Self-hosted GitHub Actions runners for jkrumm's PRIVATE repos — one registration per repo and
+# instance.
 # Idempotent. Run via make (it sudo's this script), from a machine with an authenticated `gh`:
 #
 #   R=jkrumm/<repo>
@@ -12,8 +13,8 @@
 # N=<n> (default 1) adds or removes a further instance of the same repo (`vps-<repo>-<n>`), so
 # its parallel jobs stop queuing behind each other; gh-runner-sync.sh keeps the per-repo count.
 #
-# `make gh-runner-sync` (scripts/gh-runner-sync.sh) does the first for every private repo that
-# has workflows and no runner yet. The token travels over stdin (never ssh/make argv); only
+# `make gh-runner-sync` (scripts/gh-runner-sync.sh) does the first for every runner a private
+# repo with workflows is missing. `reapply` re-runs setup for every installed runner (no token). The token travels over stdin (never ssh/make argv); only
 # config.sh itself takes it as an argument, for the seconds it runs. A personal GitHub account
 # has no account-level runners, hence one registration per repo. Model + lifecycle:
 # docs/gh-runner.md.
@@ -45,6 +46,20 @@ die() {
 }
 
 [[ "$(id -u)" -eq 0 ]] || die "run as root (sudo)"
+
+# After a change to this script: re-assert every installed runner (`<repo>@<n>` → instance n).
+# Registered runners need no token, so stdin is closed.
+if [[ "${ACTION}" == "reapply" ]]; then
+  for dir in "/home/${RUNNER_USER}/runners"/*/; do
+    [[ -f "${dir}.runner" ]] || continue
+    base="$(basename "${dir}")"
+    instance=1
+    [[ "${base}" != *@* ]] || instance="${base#*@}"
+    echo "→ ${base}"
+    "$(readlink -f "$0")" setup "jkrumm/${base%@*}" "${instance}" </dev/null
+  done
+  exit 0
+fi
 # Leading alphanumeric: no `.`/`..` segment can turn RUNNER_DIR (rm -rf'd by remove) into a parent.
 [[ "${GH_REPO}" =~ ^jkrumm/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "REPO=jkrumm/<repo> required (got '${GH_REPO}')"
 [[ "${INSTANCE}" =~ ^[1-9]$ ]] || die "N=1..9 required (got '${INSTANCE}')"
@@ -53,8 +68,8 @@ REPO_NAME="${GH_REPO#*/}"
 RUNNER_NAME="vps-${REPO_NAME}"
 RUNNER_HOME="/home/${RUNNER_USER}"
 RUNNER_DIR="${RUNNER_HOME}/runners/${REPO_NAME}"
-# Instance 1 keeps the original name and directory. `@` cannot occur in a repo name, so no
-# instance directory collides with another repo's.
+# Instance 1 keeps the original name and directory (gh-runner-sync.sh mirrors the name rule).
+# `@` cannot occur in a repo name, so no instance directory collides with another repo's.
 if [[ "${INSTANCE}" != "1" ]]; then
   RUNNER_NAME="vps-${REPO_NAME}-${INSTANCE}"
   RUNNER_DIR="${RUNNER_DIR}@${INSTANCE}"
@@ -253,9 +268,11 @@ setup() {
   svc="$(service_name)"
   [[ -n "${svc}" ]] || die "svc.sh did not record a systemd unit for ${RUNNER_NAME}"
 
-  # Jobs need the rootless daemon, which lives in the user's systemd instance.
+  # Jobs need the rootless daemon, which lives in the user's systemd instance. svc.sh's unit has
+  # Restart=no: a killed runsvc.sh (OOM, crash) would leave the runner offline for good. A clean
+  # exit (stop, the listener's own "no retry needed") stays down.
   local dropin="/etc/systemd/system/${svc}.d/rootless-docker.conf" dropin_body
-  dropin_body="$(printf '[Unit]\nWants=user@%s.service\nAfter=user@%s.service' "${uid}" "${uid}")"
+  dropin_body="$(printf '[Unit]\nWants=user@%s.service\nAfter=user@%s.service\n\n[Service]\nRestart=on-failure\nRestartSec=30' "${uid}" "${uid}")"
   if [[ "$(cat "${dropin}" 2>/dev/null)" != "${dropin_body}" ]]; then
     install -d "$(dirname "${dropin}")"
     printf '%s\n' "${dropin_body}" >"${dropin}"
@@ -276,5 +293,5 @@ setup() {
 case "${ACTION}" in
   setup) setup ;;
   remove) remove ;;
-  *) die "usage: $0 setup|remove jkrumm/<repo> [instance]  (token on stdin)" ;;
+  *) die "usage: $0 setup|remove jkrumm/<repo> [instance] | reapply  (token on stdin)" ;;
 esac

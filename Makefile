@@ -42,7 +42,7 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: help require-prod require-dev weatherorb-up weatherorb-down weatherorb-env weatherorb-bootstrap-image weatherorb-account-bootstrap-image weatherorb-backup-user weatherorb-redeploy gh-runner-setup gh-runner-remove gh-runner-sync \
+.PHONY: help require-prod require-dev weatherorb-up weatherorb-down weatherorb-env weatherorb-bootstrap-image weatherorb-account-bootstrap-image weatherorb-backup-user weatherorb-redeploy gh-runner-setup gh-runner-remove gh-runner-reapply gh-runner-sync \
         up down networking-up networking-down infra-up infra-down infra-upgrade monitoring-up monitoring-down \
         rollhook-update \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
@@ -396,6 +396,10 @@ gh-runner-setup: require-prod
 ## Unregister REPO's runner [N=<instance>], drop its service + directory (remove token on stdin).
 gh-runner-remove: require-prod
 	sudo ./scripts/setup-gh-runner.sh remove "$(REPO)" "$(or $(N),1)"
+## Re-run setup for every installed runner after a change to the setup script (no token; restarts
+## only runners whose config changed — run while idle).
+gh-runner-reapply: require-prod
+	sudo ./scripts/setup-gh-runner.sh reapply
 ## Run where gh is authenticated (mini/MacBook): give every private repo with workflows its VPS
 ## runner(s) (DRY_RUN=1 to preview). Workflows still need runs-on: [self-hosted, vps].
 gh-runner-sync:

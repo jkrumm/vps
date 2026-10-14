@@ -16,24 +16,34 @@ set -euo pipefail
 
 STUCK_AFTER_S="${STUCK_AFTER_S:-600}"
 BROKER="https://broker.actions.githubusercontent.com/health"
+# The listener's own state lines (runner 2.338 wording). If a release rewords them, detection
+# stops matching — the per-run summary's `0 in back-off` after an outage is the tell.
+STATE_LINES='Runner connect error|Listening for Jobs|Running job|completed with result|reconnected'
+STUCK_LINE='Runner connect error'
+
+# A job in flight means the listener is connected; never kill it. Fails closed: an unreadable
+# cgroup counts as busy.
+job_running() {
+  local procs
+  procs="$(systemd-cgls --no-pager -u "$1" 2>&1)" || return 0
+  grep -q 'Runner.Worker' <<<"${procs}"
+}
 
 units="$(systemctl list-units 'actions.runner.*' --type=service --state=active --no-legend --plain | awk '{print $1}')"
 [[ -n "${units}" ]] || exit 0
 
 broker_up=""
 now="$(date +%s)"
-restarted=0
+checked=0 stuck=0 restarted=0
 
 while IFS= read -r unit; do
-  last="$(journalctl -u "${unit}" -n 300 -o short-unix --no-pager \
-    | grep -E 'Runner connect error|Listening for Jobs|Running job|completed with result|reconnected' \
-    | tail -1 || true)"
-  [[ "${last}" == *"Runner connect error"* ]] || continue
+  checked=$((checked + 1))
+  last="$(journalctl -u "${unit}" -n 300 -o short-unix --no-pager | grep -E "${STATE_LINES}" | tail -1 || true)"
+  [[ "${last}" == *"${STUCK_LINE}"* ]] || continue
   age=$((now - ${last%%.*}))
   ((age >= STUCK_AFTER_S)) || continue
-
-  # A job in flight means the listener is connected; never kill it.
-  systemd-cgls --no-pager -u "${unit}" 2>/dev/null | grep -q 'Runner.Worker' && continue
+  stuck=$((stuck + 1))
+  job_running "${unit}" && continue
 
   if [[ -z "${broker_up}" ]]; then
     code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "${BROKER}" || true)"
@@ -44,9 +54,14 @@ while IFS= read -r unit; do
     continue
   fi
 
+  # Re-check right before the restart: the broker may just have handed the listener a job.
+  job_running "${unit}" && continue
   echo "${unit}: in reconnect back-off for ${age}s with the broker reachable — restarting"
-  systemctl restart "${unit}"
-  restarted=$((restarted + 1))
+  if systemctl restart "${unit}"; then
+    restarted=$((restarted + 1))
+  else
+    echo "${unit}: restart failed" >&2
+  fi
 done <<<"${units}"
 
-((restarted == 0)) || echo "restarted ${restarted} runner(s)"
+echo "checked ${checked} runner(s): ${stuck} in back-off, ${restarted} restarted"

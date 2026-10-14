@@ -67,7 +67,8 @@ gh api -X POST repos/$R/actions/runners/registration-token --jq .token \
   | ssh vps "cd ~/vps && make gh-runner-setup ENV=prod REPO=$R"
 ```
 
-Add `N=<n>` to both commands for a further instance. Or, for every private repo with workflows
+For a further instance, add `N=<n>` to `make gh-runner-setup` (and later to `make
+gh-runner-remove`). Or, for every private repo with workflows
 — its first runner plus the instances `instances()` asks for:
 
 ```bash
@@ -76,7 +77,7 @@ make gh-runner-sync
 ```
 
 Then switch the repo's workflows to `runs-on: [self-hosted, vps]` and give jobs a
-`timeout-minutes` (a hung job holds that repo's only runner). The job steps must not assume
+`timeout-minutes` (a hung job holds one of that repo's runners until it times out). The job steps must not assume
 the hosted image's preinstalled tools: install them per job (`oven-sh/setup-bun`,
 `astral-sh/setup-uv`, …). The host has `git`, `curl`, `unzip`, `docker` (rootless) — no
 rustup, Node or Python toolchains. Tool caches persist in `gh-runner`'s home between jobs, so
@@ -87,6 +88,13 @@ Job `services:` containers work (verified: Postgres on a published port, reached
 host). Publish them on loopback with a dynamic port — `ports: ["127.0.0.1::5432"]`, then
 `${{ job.services.<name>.ports['5432'] }}` — because runners of several repos share this host
 and a fixed port collides. No privileged containers (rootless).
+
+After a change to `scripts/setup-gh-runner.sh` (or the watchdog), re-apply it to every installed
+runner — no token needed, and each runner restarts only if its config changed:
+
+```bash
+ssh vps "cd ~/vps && git pull --ff-only && make gh-runner-reapply ENV=prod"
+```
 
 Setup is idempotent: on a registered runner it re-asserts the user, rootless Docker, `.env`,
 drop-in and service, ignores the token, and only restarts the service when something it reads
@@ -99,7 +107,7 @@ name.
 ```bash
 R=jkrumm/<repo>
 gh api -X POST repos/$R/actions/runners/remove-token --jq .token \
-  | ssh vps "cd ~/vps && make gh-runner-remove ENV=prod REPO=$R"
+  | ssh vps "cd ~/vps && make gh-runner-remove ENV=prod REPO=$R"   # N=<n> for an instance
 ```
 
 Unregisters the runner and removes its systemd unit, drop-in and directory. The user and the
@@ -127,7 +135,9 @@ After a network outage the listener backs off up to ~3 h between broker retries 
 through a peering fault). `gh-runner-watchdog.timer` handles that: a runner whose last state line
 is a `Runner connect error` older than 10 min, with no job running, is restarted once
 `https://broker.actions.githubusercontent.com/health` answers 200. What it did:
-`sudo journalctl -u gh-runner-watchdog -n 50`. Every `make gh-runner-setup` reinstalls it.
+`sudo journalctl -u gh-runner-watchdog -n 50`. Every `make gh-runner-setup` reinstalls it. A
+runner process that dies (OOM, crash) is restarted by systemd (`Restart=on-failure` in the
+setup's drop-in; svc.sh's own unit has none).
 
 A change to `cron/docker-prune` only takes effect after `make prune-cron-install ENV=prod` on
 the VPS.

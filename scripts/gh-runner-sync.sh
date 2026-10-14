@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Give every PRIVATE jkrumm repo that has GitHub Actions workflows its own runner on the VPS.
-# Idempotent: repos that already have `vps-<repo>` registered are skipped. Run where `gh` is
+# Give every PRIVATE jkrumm repo that has GitHub Actions workflows its runner(s) on the VPS.
+# Idempotent: runner names already registered on the repo are skipped, missing ones added. Run where `gh` is
 # authenticated (the mini or the MacBook), NOT on the VPS:  make gh-runner-sync  [DRY_RUN=1]
 #
 # Registration only — each repo's workflows still need `runs-on: [self-hosted, vps]` (a commit in
@@ -14,8 +14,8 @@ OWNER="jkrumm"
 DRY_RUN="${DRY_RUN:-0}"
 # Runners per repo (default one). A repo whose workflows run several jobs per push (weatherorb:
 # four CI jobs plus deploys) otherwise serializes them on one runner. Lowering a count does not
-# remove instances — that is `make gh-runner-remove N=<n>`. A function, not an associative array:
-# macOS ships bash 3.2.
+# remove instances — that is `make gh-runner-remove N=<n>`. At most 9 (setup-gh-runner.sh's
+# limit). A function, not an associative array: macOS ships bash 3.2.
 instances() {
   case "$1" in
     weatherorb) echo 3 ;;
@@ -46,8 +46,7 @@ sync_repo() {
   for n in $(seq 1 "$(instances "${name}")"); do
     r=0
     sync_instance "${repo}" "${name}" "${n}" "${runners}" || r=$?
-    [[ "${r}" -eq 1 ]] && failed=1
-    [[ "${r}" -eq 2 ]] && added=1
+    if [[ "${r}" -eq 1 ]]; then failed=1; elif [[ "${r}" -eq 2 ]]; then added=1; fi
   done
   [[ "${failed}" -eq 0 ]] || return 1
   [[ "${added}" -eq 0 ]] || return 2
@@ -56,8 +55,9 @@ sync_repo() {
 
 # 0 = present, 2 = registered (or would be), 1 = failed.
 sync_instance() {
-  local repo="$1" name="$2" n="$3" runners="$4" runner status
-  runner="vps-${name}$([[ "${n}" == "1" ]] || echo "-${n}")"
+  local repo="$1" name="$2" n="$3" runners="$4" runner="vps-$2" status
+  # Same naming rule as setup-gh-runner.sh.
+  [[ "${n}" == "1" ]] || runner+="-${n}"
   status="$(awk -v r="${runner}" '$1 == r { print $2 }' <<<"${runners}")"
   if [[ -n "${status}" ]]; then
     echo "  ${repo}: ${runner} already registered (${status})"
@@ -89,5 +89,5 @@ while IFS= read -r name; do
   esac
 done <<<"${repos}"
 
-echo "runners: ${ok} present, ${added} $([[ "${DRY_RUN}" == "1" ]] && echo "to register" || echo registered), ${failed} failed"
+echo "repos: ${ok} complete, ${added} $([[ "${DRY_RUN}" == "1" ]] && echo "to register" || echo registered), ${failed} failed"
 [[ "${failed}" -eq 0 ]]
