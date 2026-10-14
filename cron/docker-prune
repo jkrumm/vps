@@ -12,3 +12,6 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 30 4 * * 0 jkrumm /bin/bash -c 'echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af && docker builder prune -f --filter until=168h' >> /home/jkrumm/docker-prune.log 2>&1
+# Same for the shutterflow Actions runner's rootless daemon (docs/gh-runner.md) — every deploy
+# build lands there. The line is a no-op until `make gh-runner-setup` has created the user.
+35 4 * * 0 gh-runner /bin/bash -c 'export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock; echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af && docker builder prune -f --filter until=168h' >> /home/gh-runner/docker-prune.log 2>&1

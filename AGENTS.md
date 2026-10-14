@@ -68,6 +68,7 @@ make fpp-sync-from-prod  # direct ssh+docker exec mariadb-dump from VPS → loca
 make fpp-restore-local   # pull latest S3 backup into local mariadb (DR drill / seed)
 make firewall            # show UFW status and rules
 make prune-cron-install  # prod — install the weekly Sunday 04:30 image + build-cache prune (cron/docker-prune); never volumes
+make gh-runner-setup     # prod — self-hosted Actions runner for jkrumm/shutterflow (token on stdin, docs/gh-runner.md); gh-runner-remove undoes it
 
 # Restoring PROD from S3 has NO make target by design (it overwrites production).
 # Gated, human-only DR scripts: scripts/restore-pg.sh + apps/fpp/scripts/restore-mariadb.sh
@@ -219,6 +220,7 @@ scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liv
 scripts/db-counts.sh          Exact per-table COUNT(*) (Postgres + MariaDB) — read-only, diff-friendly verification (make db-counts)
 scripts/dump-weatherorb-accounts.sh  Hourly pg_dump of weatherorb_accounts → /var/backups/weatherorb-accounts (48 kept, homelab pulls as wo-backup)
 scripts/setup-weatherorb-backup-user.sh  Idempotent wo-backup user + backup dir — run via make weatherorb-backup-user
+scripts/setup-gh-runner.sh    Idempotent shutterflow Actions runner — gh-runner user, rootless Docker, systemd unit (make gh-runner-setup / gh-runner-remove, docs/gh-runner.md)
 scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
 scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
 scripts/sync-pg-from-vps.sh   Dev — ssh vps + docker exec pg_dump (whole DB) → local (fresh, no S3)
@@ -238,7 +240,7 @@ cron/pg-health.env.tpl        op template for the seeded pg-health cron env (mat
 cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
 cron/weatherorb-accounts-dump  weatherorb_accounts dump, hourly at :15 (root) — sources /etc/vps/weatherorb-accounts-dump.env (seeded from cron/weatherorb-accounts-dump.env.tpl)
-cron/docker-prune             Weekly image + build-cache prune, Sunday 04:30 (make prune-cron-install) — never volumes
+cron/docker-prune             Weekly image + build-cache prune, Sunday 04:30 (prod daemon) + 04:35 (gh-runner rootless daemon) (make prune-cron-install) — never volumes
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts
 ```
@@ -268,6 +270,8 @@ HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only). Auth via first-visit account cr
 > **Load-bearing invariant:** the B2 key must be created with `--name-prefix img/` — that server-side restriction, not `IMGPROXY_S3_ALLOWED_BUCKETS`, is what keeps this public unauthenticated service away from the database dumps in the same bucket. Never point it at `op://common/backblaze-s3/*` (bucket-wide, has `writeFiles`).
 
 Full design, URL/prefix conventions, the Cloudflare `Vary`/`Accept` caveat, and B2 provisioning: `docs/image-cdn.md`.
+
+**GitHub Actions runner** — `vps-shutterflow` (labels `self-hosted`, `vps`), registered to the private jkrumm/shutterflow repo only, because its GitHub Free minutes run out. Runs as `gh-runner` (no `docker`/`sudo` group) and builds against its own rootless Docker daemon, never the prod one. Never register it on a public repo (fork-PR code execution on the prod host). Install, remove, security model: `docs/gh-runner.md`.
 
 **photo-gallery** — static Astro photo gallery at `photos.DOMAIN`. nginx:alpine serves a host-mounted directory (`/home/jkrumm/photo-gallery-dist:/usr/share/nginx/html:ro`). No image registry, no RollHook — content is built on the developer laptop and rsynced via SSH/Tailscale by the `photo-flow` CLI (`photoflow sync-gallery`). Watchtower auto-updates the nginx base image. The host directory must exist (and contain at least `index.html`) before `make photo-gallery-up`, otherwise the healthcheck fails.
 
