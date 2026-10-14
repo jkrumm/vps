@@ -123,7 +123,7 @@ setup() {
       "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"
     echo "${RUNNER_SHA256}  ${tarball}" | sha256sum -c --quiet
     install -d -o "${RUNNER_USER}" -g "${RUNNER_USER}" -m 0750 "${RUNNER_DIR}"
-    runuser -u "${RUNNER_USER}" -- tar -xzf "${tarball}" -C "${RUNNER_DIR}"
+    runuser -u "${RUNNER_USER}" -- tar -xzf - -C "${RUNNER_DIR}" <"${tarball}"
     rm -f "${tarball}"
     "${RUNNER_DIR}/bin/installdependencies.sh" >/dev/null
     echo "  ✓ runner ${RUNNER_VERSION} unpacked (sha256 verified)"
