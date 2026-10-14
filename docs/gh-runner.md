@@ -72,6 +72,11 @@ the hosted image's preinstalled tools: install them per job (`oven-sh/setup-bun`
 `astral-sh/setup-uv`, …). The host has `git`, `curl`, `unzip`, `docker` (rootless) — no
 rustup, Node or Python toolchains.
 
+Job `services:` containers work (verified: Postgres on a published port, reached from the
+host). Publish them on loopback with a dynamic port — `ports: ["127.0.0.1::5432"]`, then
+`${{ job.services.<name>.ports['5432'] }}` — because runners of several repos share this host
+and a fixed port collides. No privileged containers (rootless).
+
 Setup is idempotent: on a registered runner it re-asserts the user, rootless Docker, `.env`,
 drop-in and service, ignores the token, and only restarts the service when something it reads
 changed (a restart kills an in-flight job). To re-register (e.g. after the runner was deleted
