@@ -42,7 +42,7 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: help require-prod require-dev weatherorb-up weatherorb-down weatherorb-env weatherorb-bootstrap-image weatherorb-account-bootstrap-image weatherorb-backup-user weatherorb-redeploy gh-runner-setup gh-runner-remove \
+.PHONY: help require-prod require-dev weatherorb-up weatherorb-down weatherorb-env weatherorb-bootstrap-image weatherorb-account-bootstrap-image weatherorb-backup-user weatherorb-redeploy gh-runner-setup gh-runner-remove gh-runner-sync \
         up down networking-up networking-down infra-up infra-down infra-upgrade monitoring-up monitoring-down \
         rollhook-update \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
@@ -388,13 +388,17 @@ weatherorb-account-bootstrap-image: require-prod
 ## homelab pulls the hourly accounts dump from over Tailscale SSH (cron/weatherorb-accounts-dump).
 weatherorb-backup-user: require-prod
 	sudo ./scripts/setup-weatherorb-backup-user.sh
-## Idempotent — self-hosted Actions runner for jkrumm/shutterflow (gh-runner user, rootless Docker,
-## systemd). Registration token on stdin; full command + model in docs/gh-runner.md.
+## Idempotent — self-hosted Actions runner for one private repo, REPO=jkrumm/<repo> (gh-runner user,
+## rootless Docker, systemd). Registration token on stdin; command + model in docs/gh-runner.md.
 gh-runner-setup: require-prod
-	sudo ./scripts/setup-gh-runner.sh setup
-## Unregister the shutterflow runner and drop its service (remove token on stdin, docs/gh-runner.md).
+	sudo ./scripts/setup-gh-runner.sh setup "$(REPO)"
+## Unregister REPO's runner, drop its service + directory (remove token on stdin, docs/gh-runner.md).
 gh-runner-remove: require-prod
-	sudo ./scripts/setup-gh-runner.sh remove
+	sudo ./scripts/setup-gh-runner.sh remove "$(REPO)"
+## Run where gh is authenticated (mini/MacBook): register a VPS runner for every private repo with
+## workflows that has none yet (DRY_RUN=1 to preview). Workflows still need runs-on: [self-hosted, vps].
+gh-runner-sync:
+	./scripts/gh-runner-sync.sh
 ## Materialize apps/weatherorb/.env: the account service's secrets from .env.tpl (via `op inject`,
 ## so RollHook's `docker compose up` resolves them without op) plus this host's tailscale peer
 ## list — the mini's tailnet IP and MagicDNS name are the only two values the edge needs, and

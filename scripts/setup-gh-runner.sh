@@ -1,51 +1,57 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Self-hosted GitHub Actions runner for jkrumm/shutterflow — install or remove.
-# Idempotent. Run via make (it sudo's this script):
+# Self-hosted GitHub Actions runners for jkrumm's PRIVATE repos — one registration per repo.
+# Idempotent. Run via make (it sudo's this script), from a machine with an authenticated `gh`:
 #
-#   gh api -X POST repos/jkrumm/shutterflow/actions/runners/registration-token --jq .token \
-#     | ssh vps 'cd ~/vps && make gh-runner-setup ENV=prod'
-#   gh api -X POST repos/jkrumm/shutterflow/actions/runners/remove-token --jq .token \
-#     | ssh vps 'cd ~/vps && make gh-runner-remove ENV=prod'
+#   R=jkrumm/<repo>
+#   gh api -X POST repos/$R/actions/runners/registration-token --jq .token \
+#     | ssh vps "cd ~/vps && make gh-runner-setup ENV=prod REPO=$R"
+#   gh api -X POST repos/$R/actions/runners/remove-token --jq .token \
+#     | ssh vps "cd ~/vps && make gh-runner-remove ENV=prod REPO=$R"
 #
-# The token arrives on stdin (never argv, never a file) and is only needed to register or
-# remove; re-running setup on a registered runner ignores it. Why the runner exists, the
-# security model and the full lifecycle: docs/gh-runner.md.
+# `make gh-runner-sync` (scripts/gh-runner-sync.sh) does the first for every private repo that
+# has workflows and no runner yet. The token travels over stdin (never ssh/make argv); only
+# config.sh itself takes it as an argument, for the seconds it runs. A personal GitHub account
+# has no account-level runners, hence one registration per repo. Model + lifecycle:
+# docs/gh-runner.md.
 #
 # Isolation: the `gh-runner` system user is NOT in the docker or sudo groups. Jobs build images
 # against its own ROOTLESS Docker daemon (user namespace, ~gh-runner/.local/share/docker), so a
 # job can neither reach the prod daemon (root-equivalent: every container, every env secret) nor
 # read /home/<deploy-user> (0750, re-asserted below) where the op-injected apps/*/.env live.
+# All of this host's runners share that user and daemon: the repos have one owner, the boundary
+# that matters is runner ↔ prod.
 # =============================================================================
 set -euo pipefail
 
 ACTION="${1:-}"
-GH_REPO="jkrumm/shutterflow"
+GH_REPO="${2:-}"
 RUNNER_USER="gh-runner"
-RUNNER_NAME="vps-shutterflow"
 RUNNER_LABELS="vps"
-# Install version — the runner self-updates after registration (a runner with updates disabled
-# stops receiving jobs ~30 days after the next release), so this pins first install only.
+# Install version — runners self-update after registration (one with updates disabled stops
+# receiving jobs ~30 days after the next release), so this pins first install only.
 RUNNER_VERSION="2.338.0"
 RUNNER_SHA256="af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32"
 # Distinct from the deploy user's 100000:65536 block.
 SUBID_RANGE="200000-265535"
 
-if [[ "$(id -u)" -ne 0 ]]; then
-  echo "✗ run as root (sudo)" >&2
+die() {
+  echo "✗ $*" >&2
   exit 1
-fi
+}
 
+[[ "$(id -u)" -eq 0 ]] || die "run as root (sudo)"
+[[ "${GH_REPO}" =~ ^jkrumm/[A-Za-z0-9._-]+$ ]] || die "REPO=jkrumm/<repo> required (got '${GH_REPO}')"
+
+REPO_NAME="${GH_REPO#*/}"
+RUNNER_NAME="vps-${REPO_NAME}"
 RUNNER_HOME="/home/${RUNNER_USER}"
-RUNNER_DIR="${RUNNER_HOME}/actions-runner"
+RUNNER_DIR="${RUNNER_HOME}/runners/${REPO_NAME}"
 
 read_token() {
   local token=""
   [[ -t 0 ]] || IFS= read -r token || true
-  if [[ -z "${token}" ]]; then
-    echo "✗ pipe a $1 token on stdin (see the header of $0)" >&2
-    exit 1
-  fi
+  [[ -n "${token}" ]] || die "pipe a $1 token on stdin (see the header of $0)"
   printf '%s' "${token}"
 }
 
@@ -57,7 +63,20 @@ as_runner() {
 }
 
 service_name() {
-  [[ -f "${RUNNER_DIR}/.service" ]] && cat "${RUNNER_DIR}/.service"
+  if [[ -f "${RUNNER_DIR}/.service" ]]; then
+    cat "${RUNNER_DIR}/.service"
+  fi
+}
+
+# A runner on a public repo runs any fork PR's code on the prod host. The unauthenticated API
+# answers 404 for a private repo; only an explicit `"private": false` is refused, so an API
+# hiccup does not block a re-run of an already-registered private repo.
+assert_not_public() {
+  local body
+  body="$(curl -sS --max-time 20 "https://api.github.com/repos/${GH_REPO}" || true)"
+  if grep -q '"private": *false' <<<"${body}"; then
+    die "${GH_REPO} is PUBLIC — never register a self-hosted runner on a public repo"
+  fi
 }
 
 remove() {
@@ -65,27 +84,28 @@ remove() {
     echo "  ${RUNNER_NAME} is not registered — nothing to remove"
     return
   fi
-  local token
+  local token svc
   token="$(read_token remove)"
-  if [[ -n "$(service_name)" ]]; then
+  svc="$(service_name)"
+  if [[ -n "${svc}" ]]; then
     (cd "${RUNNER_DIR}" && ./svc.sh stop && ./svc.sh uninstall)
+    rm -rf "/etc/systemd/system/${svc}.d"
+    systemctl daemon-reload
   fi
   (cd "${RUNNER_DIR}" && as_runner ./config.sh remove --token "${token}")
-  echo "  ✓ ${RUNNER_NAME} unregistered and its service removed (user + rootless Docker kept)"
+  rm -rf "${RUNNER_DIR}"
+  echo "  ✓ ${RUNNER_NAME} unregistered, its service and directory removed (user + rootless Docker kept)"
 }
 
-setup() {
-  # Read the token before anything else touches stdin (apt and installdependencies.sh would eat it).
-  local token=""
-  [[ -f "${RUNNER_DIR}/.runner" ]] || token="$(read_token registration)"
-
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq uidmap slirp4netns </dev/null >/dev/null
+ensure_user_and_docker() {
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq uidmap slirp4netns docker-ce-rootless-extras \
+    </dev/null >/dev/null
 
   if id "${RUNNER_USER}" >/dev/null 2>&1; then
     echo "  ${RUNNER_USER} already exists"
   else
     adduser --system --group --disabled-password --shell /bin/bash \
-      --home "${RUNNER_HOME}" --gecos "GitHub Actions runner (${GH_REPO})" "${RUNNER_USER}"
+      --home "${RUNNER_HOME}" --gecos "GitHub Actions runners (private repos)" "${RUNNER_USER}"
     echo "  ✓ created ${RUNNER_USER}"
   fi
 
@@ -96,10 +116,11 @@ setup() {
     fi
   done
   chmod 0750 "${RUNNER_HOME}"
-  DEPLOY_USER="${SUDO_USER:-jkrumm}"
-  DEPLOY_HOME="$(getent passwd "${DEPLOY_USER}" | cut -d: -f6)"
-  chmod o-rwx "${DEPLOY_HOME}"
-  echo "  ✓ ${DEPLOY_HOME} not world-traversable"
+  local deploy_user deploy_home
+  deploy_user="${SUDO_USER:-jkrumm}"
+  deploy_home="$(getent passwd "${deploy_user}" | cut -d: -f6)"
+  chmod o-rwx "${deploy_home}"
+  echo "  ✓ ${deploy_home} not world-traversable"
 
   grep -q "^${RUNNER_USER}:" /etc/subuid || usermod --add-subuids "${SUBID_RANGE}" "${RUNNER_USER}"
   grep -q "^${RUNNER_USER}:" /etc/subgid || usermod --add-subgids "${SUBID_RANGE}" "${RUNNER_USER}"
@@ -113,24 +134,42 @@ setup() {
     [[ -S "/run/user/${uid}/bus" ]] && break
     sleep 1
   done
+  [[ -S "/run/user/${uid}/bus" ]] || die "${RUNNER_USER}'s systemd instance never came up (check user@${uid}.service)"
 
   if [[ ! -f "${RUNNER_HOME}/.config/systemd/user/docker.service" ]]; then
     as_runner dockerd-rootless-setuptool.sh install
   fi
   as_runner systemctl --user enable --now docker.service >/dev/null
-  as_runner env DOCKER_HOST="unix:///run/user/${uid}/docker.sock" docker info --format '  ✓ rootless Docker {{.ServerVersion}} ({{.SecurityOptions}})'
+  as_runner env DOCKER_HOST="unix:///run/user/${uid}/docker.sock" \
+    docker info --format '  ✓ rootless Docker {{.ServerVersion}} ({{.SecurityOptions}})'
+}
+
+setup() {
+  # Read the token before anything else touches stdin (apt and installdependencies.sh would eat it).
+  local token=""
+  [[ -f "${RUNNER_DIR}/.runner" ]] || token="$(read_token registration)"
+  assert_not_public
+  ensure_user_and_docker
+
+  local uid
+  uid="$(id -u "${RUNNER_USER}")"
 
   if [[ ! -x "${RUNNER_DIR}/config.sh" ]]; then
-    local tarball
+    local tarball log
     tarball="$(mktemp)"
-    curl -fsSL -o "${tarball}" \
+    log="$(mktemp)"
+    curl -fsSL --connect-timeout 20 --max-time 600 -o "${tarball}" \
       "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"
     echo "${RUNNER_SHA256}  ${tarball}" | sha256sum -c --quiet
-    install -d -o "${RUNNER_USER}" -g "${RUNNER_USER}" -m 0750 "${RUNNER_DIR}"
+    install -d -o "${RUNNER_USER}" -g "${RUNNER_USER}" -m 0750 "${RUNNER_HOME}/runners" "${RUNNER_DIR}"
     runuser -u "${RUNNER_USER}" -- tar -xzf - -C "${RUNNER_DIR}" <"${tarball}"
     rm -f "${tarball}"
-    DEBIAN_FRONTEND=noninteractive "${RUNNER_DIR}/bin/installdependencies.sh" </dev/null >/dev/null 2>&1
-    echo "  ✓ runner ${RUNNER_VERSION} unpacked (sha256 verified)"
+    if ! DEBIAN_FRONTEND=noninteractive "${RUNNER_DIR}/bin/installdependencies.sh" </dev/null >"${log}" 2>&1; then
+      cat "${log}" >&2
+      die "installdependencies.sh failed"
+    fi
+    rm -f "${log}"
+    echo "  ✓ runner ${RUNNER_VERSION} unpacked into ${RUNNER_DIR} (sha256 verified)"
   fi
 
   if [[ -f "${RUNNER_DIR}/.runner" ]]; then
@@ -142,36 +181,48 @@ setup() {
     echo "  ✓ registered ${RUNNER_NAME} on ${GH_REPO} (labels: self-hosted, Linux, X64, ${RUNNER_LABELS})"
   fi
 
-  # The runner reads .env into every job's environment: point `docker` at the rootless socket.
-  local env_file="${RUNNER_DIR}/.env"
+  # The runner loads its install dir's .env into every job: point `docker` at the rootless socket.
+  # Track whether anything the running service reads changed, so a re-run does not restart it
+  # (and kill an in-flight job) for nothing.
+  local changed=0 env_file="${RUNNER_DIR}/.env" want
+  want="DOCKER_HOST=unix:///run/user/${uid}/docker.sock"
   touch "${env_file}"
-  sed -i '/^DOCKER_HOST=/d' "${env_file}"
-  echo "DOCKER_HOST=unix:///run/user/${uid}/docker.sock" >>"${env_file}"
+  if ! grep -qx "${want}" "${env_file}"; then
+    sed -i '/^DOCKER_HOST=/d' "${env_file}"
+    echo "${want}" >>"${env_file}"
+    changed=1
+  fi
   chown "${RUNNER_USER}:${RUNNER_USER}" "${env_file}"
 
   if [[ -z "$(service_name)" ]]; then
     (cd "${RUNNER_DIR}" && ./svc.sh install "${RUNNER_USER}" >/dev/null)
+    changed=1
   fi
   local svc
   svc="$(service_name)"
+  [[ -n "${svc}" ]] || die "svc.sh did not record a systemd unit for ${RUNNER_NAME}"
+
   # Jobs need the rootless daemon, which lives in the user's systemd instance.
-  install -d "/etc/systemd/system/${svc}.d"
-  cat >"/etc/systemd/system/${svc}.d/rootless-docker.conf" <<EOF
-[Unit]
-Wants=user@${uid}.service
-After=user@${uid}.service
-EOF
-  systemctl daemon-reload
-  systemctl enable --now "${svc}" >/dev/null
-  systemctl restart "${svc}"
+  local dropin="/etc/systemd/system/${svc}.d/rootless-docker.conf" dropin_body
+  dropin_body="$(printf '[Unit]\nWants=user@%s.service\nAfter=user@%s.service' "${uid}" "${uid}")"
+  if [[ "$(cat "${dropin}" 2>/dev/null)" != "${dropin_body}" ]]; then
+    install -d "$(dirname "${dropin}")"
+    printf '%s\n' "${dropin_body}" >"${dropin}"
+    systemctl daemon-reload
+    changed=1
+  fi
+
+  systemctl enable "${svc}" >/dev/null 2>&1
+  if [[ "${changed}" -eq 1 ]]; then
+    systemctl restart "${svc}"
+  elif ! systemctl is-active --quiet "${svc}"; then
+    systemctl start "${svc}"
+  fi
   echo "  ✓ ${svc} $(systemctl is-active "${svc}")"
 }
 
 case "${ACTION}" in
   setup) setup ;;
   remove) remove ;;
-  *)
-    echo "usage: $0 setup|remove  (token on stdin)" >&2
-    exit 1
-    ;;
+  *) die "usage: $0 setup|remove jkrumm/<repo>  (token on stdin)" ;;
 esac
