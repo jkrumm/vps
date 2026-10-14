@@ -10,12 +10,10 @@
 # non-root uid — same trade-off as apps/email-gateway/.env.tpl), and lives on the VPS only.
 
 POSTGRES_DB=op://vps/config/POSTGRES_DB
-DOMAIN=op://vps/config/DOMAIN
 
 SHUTTERFLOW_DB_PASSWORD=op://vps/shutterflow/DB_PASSWORD
 SHUTTERFLOW_BETTER_AUTH_SECRET=op://vps/shutterflow/BETTER_AUTH_SECRET
-# Bearer for the email gateway's POST /shutterflow (auth-code mails) — the gateway's own field.
-SHUTTERFLOW_EMAIL_GATEWAY_SECRET_KEY=op://vps/email-gateway/SHUTTERFLOW_SECRET_KEY
+SHUTTERFLOW_RESEND_API_KEY=op://vps/shutterflow/RESEND_API_KEY
 SHUTTERFLOW_GOOGLE_CLIENT_ID=op://vps/shutterflow/GOOGLE_CLIENT_ID
 SHUTTERFLOW_GOOGLE_CLIENT_SECRET=op://vps/shutterflow/GOOGLE_CLIENT_SECRET
 SHUTTERFLOW_IMGPROXY_KEY=op://vps/shutterflow/IMGPROXY_KEY
