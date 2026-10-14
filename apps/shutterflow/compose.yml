@@ -48,9 +48,10 @@ services:
       # Postgres refuses `schema`. Every table is schema-qualified (pgSchema) and the migration
       # journal lives in `shutterflow` too (migrationsSchema), so no search_path is needed.
       DATABASE_URL: postgresql://shutterflow:${SHUTTERFLOW_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      # Mail: Resend, sending-only key restricted to the shutterflow.app domain.
-      RESEND_API_KEY: ${SHUTTERFLOW_RESEND_API_KEY}
-      MAIL_FROM: Shutterflow <noreply@shutterflow.app>
+      # Mail: auth codes go through the email gateway (SES; it owns the template and the
+      # noreply@shutterflow.app sender).
+      EMAIL_GATEWAY_URL: https://email-gateway.${DOMAIN}
+      EMAIL_GATEWAY_SECRET_KEY: ${SHUTTERFLOW_EMAIL_GATEWAY_SECRET_KEY}
       # SSO — Google only (GitHub skipped).
       GOOGLE_CLIENT_ID: ${SHUTTERFLOW_GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${SHUTTERFLOW_GOOGLE_CLIENT_SECRET}
