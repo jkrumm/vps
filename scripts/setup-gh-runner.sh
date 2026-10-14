@@ -75,7 +75,11 @@ remove() {
 }
 
 setup() {
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq uidmap slirp4netns >/dev/null
+  # Read the token before anything else touches stdin (apt and installdependencies.sh would eat it).
+  local token=""
+  [[ -f "${RUNNER_DIR}/.runner" ]] || token="$(read_token registration)"
+
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq uidmap slirp4netns </dev/null >/dev/null
 
   if id "${RUNNER_USER}" >/dev/null 2>&1; then
     echo "  ${RUNNER_USER} already exists"
@@ -125,15 +129,13 @@ setup() {
     install -d -o "${RUNNER_USER}" -g "${RUNNER_USER}" -m 0750 "${RUNNER_DIR}"
     runuser -u "${RUNNER_USER}" -- tar -xzf - -C "${RUNNER_DIR}" <"${tarball}"
     rm -f "${tarball}"
-    "${RUNNER_DIR}/bin/installdependencies.sh" >/dev/null
+    DEBIAN_FRONTEND=noninteractive "${RUNNER_DIR}/bin/installdependencies.sh" </dev/null >/dev/null 2>&1
     echo "  ✓ runner ${RUNNER_VERSION} unpacked (sha256 verified)"
   fi
 
   if [[ -f "${RUNNER_DIR}/.runner" ]]; then
     echo "  ${RUNNER_NAME} already registered"
   else
-    local token
-    token="$(read_token registration)"
     (cd "${RUNNER_DIR}" && as_runner ./config.sh --unattended --replace \
       --url "https://github.com/${GH_REPO}" --token "${token}" \
       --name "${RUNNER_NAME}" --labels "${RUNNER_LABELS}" --work _work)
