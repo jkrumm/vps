@@ -51,6 +51,11 @@ services:
       DOMAIN: ${DOMAIN}
       MINI_TAILSCALE_IP: ${MINI_TAILSCALE_IP}
       MINI_TAILNET_HOST: ${MINI_TAILNET_HOST}
+      # Spans per request into ClickStack (weatherorb ADR 0018). ngx_otel exports OTLP/gRPC only,
+      # so it uses the bearertokenauth :4317 receiver with the HyperDX ingest key (the same public
+      # key browser bundles ship). Empty → tracing off, nginx still starts.
+      OTEL_EDGE_ENDPOINT: clickstack:4317
+      OTEL_EDGE_AUTHORIZATION: ${WEATHERORB_EDGE_OTEL_AUTHORIZATION:-}
     mem_limit: 256m
     security_opt:
       - no-new-privileges:true
@@ -60,6 +65,7 @@ services:
     networks:
       - proxy
       - weatherorb-internal
+      - monitoring-net
     healthcheck:
       # 127.0.0.1, not localhost: busybox wget resolves localhost to ::1 first and nginx
       # answers on IPv4 — the first start sat at "health: starting" with connection refused.
@@ -119,9 +125,14 @@ services:
       # Magic link stays off until a weatherorb.com domain exists in Resend; set both together.
       # RESEND_API_KEY: ${WEATHERORB_ACCOUNT_RESEND_API_KEY}
       # MAIL_FROM: WeatherOrb <login@weatherorb.com>
+      # Traces and logs into ClickStack's unauthed internal receiver (weatherorb ADR 0018).
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: weatherorb-account
+      DEPLOYMENT_ENVIRONMENT: production
     networks:
       - postgres-net
       - weatherorb-internal
+      - monitoring-net
     healthcheck:
       # 127.0.0.1, not localhost — same busybox wget IPv6 trap as the edge.
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4200/health"]
@@ -144,6 +155,8 @@ networks:
   proxy:
     external: true
   postgres-net:
+    external: true
+  monitoring-net:
     external: true
   # Compose-internal edge ↔ account link. A plain bridge (not `internal: true`) so the account
   # service keeps outbound egress for Resend once magic link is on.
