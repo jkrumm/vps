@@ -93,10 +93,11 @@ services:
       - "traefik.http.routers.shutterflow.middlewares=security-headers@file"
       # Paths that carry secrets in the URL get their own router with Traefik's tracing and access
       # log off — Traefik records url.path/url.full/url.query and has no per-router redaction:
-      # share links (bearer token in the path, 0019), better-auth (OAuth callback code + state)
+      # share links (bearer token in the path, 0019; `/share/<slug>-<key>` is the canonical form, 0024),
+      # better-auth (OAuth callback code + state)
       # and desktop SSO (state, code_challenge). The share server's own spans redact them
       # (apps/share telemetry), so these requests are still traced, just not by Traefik.
-      - "traefik.http.routers.shutterflow-links.rule=Host(`shutterflow.app`) && (PathPrefix(`/s/`) || PathPrefix(`/api/v1/public/shares/`) || PathPrefix(`/api/auth/`) || PathPrefix(`/api/v1/desktop/sso/`))"
+      - "traefik.http.routers.shutterflow-links.rule=Host(`shutterflow.app`) && (PathPrefix(`/share/`) || PathPrefix(`/s/`) || PathPrefix(`/api/v1/public/shares/`) || PathPrefix(`/api/auth/`) || PathPrefix(`/api/v1/desktop/sso/`))"
       - "traefik.http.routers.shutterflow-links.priority=100"
       - "traefik.http.routers.shutterflow-links.entrypoints=websecure"
       - "traefik.http.routers.shutterflow-links.tls.certresolver=letsencrypt"
