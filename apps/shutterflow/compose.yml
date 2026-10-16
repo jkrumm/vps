@@ -72,6 +72,8 @@ services:
       IMGPROXY_BASE_URL: https://cdn.shutterflow.app
       IMGPROXY_KEY: ${SHUTTERFLOW_IMGPROXY_KEY}
       IMGPROXY_SALT: ${SHUTTERFLOW_IMGPROXY_SALT}
+      # Custom domains (0037): the entitled user ids. Empty turns the feature off (403).
+      CUSTOM_DOMAINS_USER_IDS: ${SHUTTERFLOW_CUSTOM_DOMAINS_USER_IDS:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: shutterflow-share
     healthcheck:

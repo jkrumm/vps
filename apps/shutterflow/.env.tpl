@@ -34,3 +34,7 @@ SHUTTERFLOW_STORAGE_B2_APP_KEY=op://vps/shutterflow/STORAGE_B2_APP_KEY
 SHUTTERFLOW_CDN_B2_KEY_ID=op://vps/shutterflow/CDN_B2_KEY_ID
 SHUTTERFLOW_CDN_B2_APP_KEY=op://vps/shutterflow/CDN_B2_APP_KEY
 # No masters key here, ever: the server must not be able to read originals (0018).
+
+# Custom domains (shutterflow 0037): the entitlement allowlist, comma-separated share-server user
+# ids. Kept in 1Password rather than here because this repo is public.
+SHUTTERFLOW_CUSTOM_DOMAINS_USER_IDS=op://vps/shutterflow/CUSTOM_DOMAINS_USER_IDS
