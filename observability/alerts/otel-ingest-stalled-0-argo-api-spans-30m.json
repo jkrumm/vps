@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "Argo API",
   "displayName": "Argo API - Spans ingested (all kinds \u2014 0 in 30m means OTel ingest stalled, not a quiet API)",
   "interval": "30m",

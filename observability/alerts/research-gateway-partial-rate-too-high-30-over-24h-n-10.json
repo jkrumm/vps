@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "research-gateway",
   "displayName": "research-gateway - 15. Partial rate too high (count \u2014 partial jobs when the 24h partial share > 30% AND >= 10 research.done rows; 0 otherwise, healthy)",
   "interval": "1h",

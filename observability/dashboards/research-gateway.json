@@ -535,7 +535,7 @@
         "source": "Logs"
       },
       "h": 3,
-      "id": "abf9697003368d3559ba523b",
+      "id": "6acf6528743aaf59da366e63",
       "name": "22. Solver spawn errors (count \u2014 human_solve.spawn_error; the human-solve browser could not be started, every captcha escalation fails until fixed; empty is healthy)",
       "w": 6,
       "x": 6,

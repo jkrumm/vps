@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "research-gateway",
   "displayName": "research-gateway - 13. Memory pressure (count \u2014 admission shed at 85% of the cgroup limit; the only warning before an OOM kill)",
   "interval": "15m",

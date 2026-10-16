@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
+  "dashboard": "email-gateway",
+  "displayName": "email-gateway - 3. Jobs failed (count \u2014 terminal job.failed; empty is healthy)",
+  "interval": "15m",
+  "message": null,
+  "name": "email-gateway job failed >= 1 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "email-gateway"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "3. Jobs failed (count \u2014 terminal job.failed; empty is healthy)"
+}

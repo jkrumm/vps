@@ -1,10 +1,12 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "email-gateway",
-  "displayName": "email-gateway - 6. LLM lane erroring (count — llm.call not ok)",
+  "displayName": "email-gateway - 6. LLM lane erroring (count \u2014 llm.call not ok)",
   "interval": "15m",
   "message": null,
   "name": "email-gateway LLM lane erroring >= 3 (15m)",
@@ -16,5 +18,5 @@
   ],
   "threshold": 3,
   "thresholdType": "above",
-  "tile": "6. LLM lane erroring (count — llm.call not ok)"
+  "tile": "6. LLM lane erroring (count \u2014 llm.call not ok)"
 }

@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "research-gateway",
   "displayName": "research-gateway - 16. Synthesis / consistency failures (count \u2014 consistency.failed + synthesis.rejected + synthesis.failed; the report shipped degraded)",
   "interval": "1h",

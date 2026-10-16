@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "research-gateway",
   "displayName": "research-gateway - 14. Drain cut live jobs (count \u2014 process.drained with remaining > 0; the window elapsed mid-job)",
   "interval": "1h",

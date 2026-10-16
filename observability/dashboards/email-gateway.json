@@ -11,6 +11,14 @@
     {
       "config": {
         "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
         "displayType": "number",
         "numberFormat": {
           "mantissa": 0,
@@ -26,7 +34,18 @@
             "whereLanguage": "sql"
           }
         ],
-        "source": "Logs",
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6acf6527743aaf59da366e3f",
+      "name": "1. Sends failed (count \u2014 send.result failed; empty is healthy)",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-green",
         "colorRules": [
           {
             "color": "chart-error",
@@ -34,17 +53,7 @@
             "operator": "gte",
             "value": 1
           }
-        ]
-      },
-      "h": 3,
-      "w": 6,
-      "x": 0,
-      "y": 0,
-      "name": "1. Sends failed (count — send.result failed; empty is healthy)"
-    },
-    {
-      "config": {
-        "color": "chart-green",
+        ],
         "displayType": "number",
         "numberFormat": {
           "mantissa": 0,
@@ -60,7 +69,18 @@
             "whereLanguage": "sql"
           }
         ],
-        "source": "Logs",
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6acf6527743aaf59da366e40",
+      "name": "2. Bounces and complaints (count \u2014 ses.event Bounce/Complaint; empty is healthy)",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-green",
         "colorRules": [
           {
             "color": "chart-error",
@@ -68,17 +88,7 @@
             "operator": "gte",
             "value": 1
           }
-        ]
-      },
-      "h": 3,
-      "w": 6,
-      "x": 6,
-      "y": 0,
-      "name": "2. Bounces and complaints (count — ses.event Bounce/Complaint; empty is healthy)"
-    },
-    {
-      "config": {
-        "color": "chart-green",
+        ],
         "displayType": "number",
         "numberFormat": {
           "mantissa": 0,
@@ -94,21 +104,14 @@
             "whereLanguage": "sql"
           }
         ],
-        "source": "Logs",
-        "colorRules": [
-          {
-            "color": "chart-error",
-            "label": "failures",
-            "operator": "gte",
-            "value": 1
-          }
-        ]
+        "source": "Logs"
       },
       "h": 3,
+      "id": "6acf6527743aaf59da366e41",
+      "name": "3. Jobs failed (count \u2014 terminal job.failed; empty is healthy)",
       "w": 6,
       "x": 12,
-      "y": 0,
-      "name": "3. Jobs failed (count — terminal job.failed; empty is healthy)"
+      "y": 0
     },
     {
       "config": {
@@ -131,14 +134,23 @@
         "source": "Logs"
       },
       "h": 3,
+      "id": "6acf6527743aaf59da366e42",
+      "name": "4. Mailbox sync ok (count \u2014 sync.tick ok; 0 in 1h means sync stalled)",
       "w": 6,
       "x": 18,
-      "y": 0,
-      "name": "4. Mailbox sync ok (count — sync.tick ok; 0 in 1h means sync stalled)"
+      "y": 0
     },
     {
       "config": {
         "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "failures",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
         "displayType": "number",
         "numberFormat": {
           "mantissa": 0,
@@ -154,7 +166,18 @@
             "whereLanguage": "sql"
           }
         ],
-        "source": "Logs",
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "6acf6527743aaf59da366e43",
+      "name": "5. SES sending paused (count \u2014 ses.account sending_enabled=false; empty is healthy)",
+      "w": 6,
+      "x": 0,
+      "y": 3
+    },
+    {
+      "config": {
+        "color": "chart-green",
         "colorRules": [
           {
             "color": "chart-error",
@@ -162,17 +185,7 @@
             "operator": "gte",
             "value": 1
           }
-        ]
-      },
-      "h": 3,
-      "w": 6,
-      "x": 0,
-      "y": 3,
-      "name": "5. SES sending paused (count — ses.account sending_enabled=false; empty is healthy)"
-    },
-    {
-      "config": {
-        "color": "chart-green",
+        ],
         "displayType": "number",
         "numberFormat": {
           "mantissa": 0,
@@ -188,21 +201,14 @@
             "whereLanguage": "sql"
           }
         ],
-        "source": "Logs",
-        "colorRules": [
-          {
-            "color": "chart-error",
-            "label": "failures",
-            "operator": "gte",
-            "value": 1
-          }
-        ]
+        "source": "Logs"
       },
       "h": 3,
+      "id": "6acf6527743aaf59da366e44",
+      "name": "6. LLM lane erroring (count \u2014 llm.call not ok)",
       "w": 6,
       "x": 6,
-      "y": 3,
-      "name": "6. LLM lane erroring (count — llm.call not ok)"
+      "y": 3
     },
     {
       "config": {
@@ -213,10 +219,11 @@
         "sqlTemplate": "SELECT toStartOfDay(Timestamp) d, LogAttributes['template'] template, LogAttributes['status'] status, count() n\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='send.result' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY d, template, status ORDER BY d DESC, n DESC LIMIT 100"
       },
       "h": 6,
+      "id": "6acf6527743aaf59da366e45",
+      "name": "7. Sends by template and status (7d)",
       "w": 12,
       "x": 0,
-      "y": 6,
-      "name": "7. Sends by template and status (7d)"
+      "y": 6
     },
     {
       "config": {
@@ -227,10 +234,11 @@
         "sqlTemplate": "SELECT toStartOfDay(Timestamp) d, LogAttributes['event_type'] event, LogAttributes['bounce_type'] bounce_type, count() n\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='ses.event' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY d, event, bounce_type ORDER BY d DESC, n DESC LIMIT 100"
       },
       "h": 6,
+      "id": "6acf6527743aaf59da366e46",
+      "name": "8. SES events (7d) \u2014 bounce / complaint rate source",
       "w": 12,
       "x": 12,
-      "y": 6,
-      "name": "8. SES events (7d) — bounce / complaint rate source"
+      "y": 6
     },
     {
       "config": {
@@ -241,10 +249,11 @@
         "sqlTemplate": "SELECT Timestamp, LogAttributes['sending_enabled'] sending_enabled, LogAttributes['sent_24h'] sent_24h, LogAttributes['max_24h_send'] max_24h, LogAttributes['headroom_pct'] headroom_pct\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='ses.account' AND Timestamp > now() - INTERVAL 1 DAY\nORDER BY Timestamp DESC LIMIT 12"
       },
       "h": 6,
+      "id": "6acf6527743aaf59da366e47",
+      "name": "9. SES quota headroom (latest snapshots)",
       "w": 12,
       "x": 0,
-      "y": 12,
-      "name": "9. SES quota headroom (latest snapshots)"
+      "y": 12
     },
     {
       "config": {
@@ -255,10 +264,11 @@
         "sqlTemplate": "SELECT SpanAttributes['job.kind'] kind, count() runs,\n       countIf(SpanAttributes['outcome']='error') errors,\n       countIf(SpanAttributes['outcome']='rate_limited') rate_limited,\n       round(quantile(0.95)(Duration)/1e9,2) p95_s\nFROM $__sourceTable\nWHERE ServiceName='email-gateway' AND SpanName LIKE 'job.%' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY kind ORDER BY runs DESC LIMIT 20"
       },
       "h": 6,
+      "id": "6acf6527743aaf59da366e48",
+      "name": "10. Jobs by kind \u2014 runs, failures, p95 (7d)",
       "w": 12,
       "x": 12,
-      "y": 12,
-      "name": "10. Jobs by kind — runs, failures, p95 (7d)"
+      "y": 12
     },
     {
       "config": {
@@ -269,10 +279,11 @@
         "sqlTemplate": "SELECT LogAttributes['provider'] provider, LogAttributes['mailbox'] mailbox, count() ticks,\n       countIf(LogAttributes['outcome']='ok') ok, max(Timestamp) last_tick,\n       sum(toUInt32OrZero(LogAttributes['ingested'])) ingested\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='sync.tick' AND Timestamp > now() - INTERVAL 1 DAY\nGROUP BY provider, mailbox ORDER BY last_tick DESC LIMIT 20"
       },
       "h": 6,
+      "id": "6acf6527743aaf59da366e49",
+      "name": "11. Mailbox sync (24h)",
       "w": 12,
       "x": 0,
-      "y": 18,
-      "name": "11. Mailbox sync (24h)"
+      "y": 18
     },
     {
       "config": {
@@ -283,10 +294,11 @@
         "sqlTemplate": "SELECT LogAttributes['lane'] lane, count() calls,\n       countIf(LogAttributes['outcome']!='ok') errors,\n       round(quantile(0.5)(toFloat64OrZero(LogAttributes['latency_ms']))/1000,1) p50_s,\n       round(quantile(0.95)(toFloat64OrZero(LogAttributes['latency_ms']))/1000,1) p95_s\nFROM $__sourceTable\nWHERE ServiceName = 'email-gateway' AND Body='llm.call' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY lane ORDER BY calls DESC LIMIT 20"
       },
       "h": 6,
+      "id": "6acf6527743aaf59da366e4a",
+      "name": "12. LLM lanes \u2014 calls, errors, latency (7d)",
       "w": 12,
       "x": 12,
-      "y": 18,
-      "name": "12. LLM lanes — calls, errors, latency (7d)"
+      "y": 18
     },
     {
       "config": {
@@ -297,10 +309,11 @@
         "sqlTemplate": "SELECT SpanAttributes['http.route'] route, count() n,\n       countIf(toUInt16OrZero(SpanAttributes['http.response.status_code'])>=500) s5xx,\n       round(quantile(0.95)(Duration)/1e9,2) p95_s\nFROM $__sourceTable\nWHERE ServiceName='email-gateway' AND SpanKind='Server' AND Timestamp > now() - INTERVAL 7 DAY\nGROUP BY route ORDER BY n DESC LIMIT 30"
       },
       "h": 6,
+      "id": "6acf6527743aaf59da366e4b",
+      "name": "13. HTTP by route (7d)",
       "w": 12,
       "x": 0,
-      "y": 24,
-      "name": "13. HTTP by route (7d)"
+      "y": 24
     },
     {
       "config": {
@@ -311,10 +324,11 @@
         "whereLanguage": "lucene"
       },
       "h": 8,
+      "id": "6acf6527743aaf59da366e4c",
+      "name": "14. Logs",
       "w": 24,
       "x": 0,
-      "y": 30,
-      "name": "14. Logs"
+      "y": 30
     }
   ]
 }

@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "VPS \u2014 Overview",
   "displayName": "VPS \u2014 Overview - Edge p95 latency",
   "interval": "15m",

@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "research-gateway",
   "displayName": "research-gateway - 17. Cost spike (count \u2014 jobs over $2 in the last hour, plus 1 if the 24h spend exceeds $15; 0 otherwise, healthy)",
   "interval": "1h",

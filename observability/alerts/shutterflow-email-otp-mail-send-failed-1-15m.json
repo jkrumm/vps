@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "shutterflow",
   "displayName": "shutterflow - 1. OTP mail send failures (count \u2014 email-otp: mail send failed; empty is healthy)",
   "interval": "15m",

@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "research-gateway",
   "displayName": "research-gateway - 21. Crash-loop guard (count \u2014 job.crash_loop_guard; a job given up on after repeated restarts, it may itself be crashing the process; empty is healthy)",
   "interval": "15m",

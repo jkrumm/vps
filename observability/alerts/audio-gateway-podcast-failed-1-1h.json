@@ -1,8 +1,10 @@
 {
-  "channel": {
-    "type": "webhook",
-    "webhook": "Slack #alerts"
-  },
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    }
+  ],
   "dashboard": "audio-gateway",
   "displayName": "audio-gateway - P4. Podcast jobs failed (count \u2014 podcast.failed log lines)",
   "interval": "1h",
