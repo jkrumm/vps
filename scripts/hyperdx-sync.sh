@@ -29,7 +29,8 @@
 # Alert files reference env-specific ids by NAME instead: `dashboardId` +
 # `tileId` become `dashboard`/`tile` (tile title, i.e. the tile's own `name`),
 # `savedSearchId` becomes `savedSearch`, and `channel.webhookId` becomes
-# `channel.webhook`. `apply` resolves those names back into ids via
+# `channels[].webhook` (the singular `channel` mirrors `channels[0]` and is
+# not stored). `apply` resolves those names back into ids via
 # GET /dashboards, /saved-searches, /webhooks and fails with a clear message
 # naming the unresolved reference. Run `make hyperdx-webhook-setup` before
 # applying any alert that references a webhook by name.
@@ -207,7 +208,7 @@ import sys
 
 # `channels` is the server-side mirror of `channel` (HyperDX >= 2.36) and carries a raw
 # webhook id; the request schema only takes `channel`, so it never round-trips.
-ALERT_STRIP_KEYS = {"id", "state", "teamId", "silenced", "executionErrors", "createdAt", "updatedAt", "channels"}
+ALERT_STRIP_KEYS = {"id", "state", "teamId", "silenced", "executionErrors", "createdAt", "updatedAt"}
 
 
 def slugify(name):
@@ -227,6 +228,8 @@ webhook_name_by_id = {w["id"]: w.get("name") for w in webhooks}
 
 count = 0
 for alert in alerts:
+    if "weatherorb" in (alert.get("tags") or []):
+        continue  # owned and applied by the weatherorb repo (ops/clickstack/alerts.json)
     a = {k: v for k, v in alert.items() if k not in ALERT_STRIP_KEYS}
 
     dashboard_id = a.pop("dashboardId", None)
@@ -250,15 +253,22 @@ for alert in alerts:
             sys.exit(f"ERROR: alert '{alert.get('name')}' references unknown savedSearchId {saved_search_id}")
         a["savedSearch"] = name
 
-    channel = a.get("channel")
-    if isinstance(channel, dict) and channel.get("type") == "webhook":
-        webhook_id = channel.get("webhookId")
-        name = webhook_name_by_id.get(webhook_id)
-        if name is None:
-            sys.exit(f"ERROR: alert '{alert.get('name')}' references unknown webhookId {webhook_id}")
-        channel = {k: v for k, v in channel.items() if k != "webhookId"}
-        channel["webhook"] = name
-        a["channel"] = channel
+    # `channels` (HyperDX >= 2.36, 1-10 webhooks) is the source of truth; the singular `channel` is its
+    # first-entry mirror, so the file keeps only `channels`, webhooks by name.
+    channels = a.pop("channels", None) or ([a["channel"]] if a.get("channel") else [])
+    a.pop("channel", None)
+    named = []
+    for channel in channels:
+        if isinstance(channel, dict) and channel.get("type") == "webhook":
+            webhook_id = channel.get("webhookId")
+            name = webhook_name_by_id.get(webhook_id)
+            if name is None:
+                sys.exit(f"ERROR: alert '{alert.get('name')}' references unknown webhookId {webhook_id}")
+            channel = {k: v for k, v in channel.items() if k != "webhookId"}
+            channel["webhook"] = name
+        named.append(channel)
+    if named:
+        a["channels"] = named
 
     slug_source = alert.get("name") or f"alert-{alert.get('id', 'unknown')}"
     slug = slugify(slug_source)
@@ -471,13 +481,22 @@ if saved_search_name is not None:
         sys.exit(f"ERROR: unresolved savedSearch reference '{saved_search_name}'")
     alert["savedSearchId"] = search_id
 
-channel = alert.get("channel")
-if isinstance(channel, dict) and "webhook" in channel:
-    webhook_name = channel.pop("webhook")
-    webhook_id = webhook_id_by_name.get(webhook_name)
-    if webhook_id is None:
-        sys.exit(f"ERROR: unresolved webhook reference '{webhook_name}'")
-    channel["webhookId"] = webhook_id
+# Files carry `channels` (names) or the legacy singular `channel`; the API gets both, `channel` mirroring
+# channels[0] (a body with only `channel` would replace a multi-channel alert with one).
+channels = alert.pop("channels", None) or ([alert["channel"]] if alert.get("channel") else [])
+resolved = []
+for channel in channels:
+    if isinstance(channel, dict) and "webhook" in channel:
+        channel = dict(channel)
+        webhook_name = channel.pop("webhook")
+        webhook_id = webhook_id_by_name.get(webhook_name)
+        if webhook_id is None:
+            sys.exit(f"ERROR: unresolved webhook reference '{webhook_name}'")
+        channel["webhookId"] = webhook_id
+    resolved.append(channel)
+if resolved:
+    alert["channels"] = resolved
+    alert["channel"] = resolved[0]
 
 print(json.dumps(alert))
 PY
