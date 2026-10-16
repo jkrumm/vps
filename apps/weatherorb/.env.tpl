@@ -1,7 +1,8 @@
 # weatherorb scoped env template — materialized via `op inject` to apps/weatherorb/.env so
 # RollHook's `docker compose up` (which doesn't go through `op run`) can resolve the ${VAR}
 # interpolations in apps/weatherorb/compose.yml. `make weatherorb-env` also appends DOMAIN,
-# MINI_TAILSCALE_IP and MINI_TAILNET_HOST (read from this host's tailscale peer list — not secrets).
+# MINI_TAILSCALE_IP and MINI_TAILNET_HOST (read from this host's tailscale peer list) and
+# VPS_TAILSCALE_IP (from the root .env) — none of them secrets.
 #
 # Refresh after rotating any secret:
 #   make weatherorb-env

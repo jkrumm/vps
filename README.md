@@ -103,7 +103,8 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | audio-gateway | `.../audio-gateway` | STT/TTS gateway (podcast wiring is mini-only here) | RollHook |
 | image-gateway | `.../image-gateway` | Image generation behind the `/img` skill | RollHook |
 | weatherorb-edge | `.../weatherorb-edge` | Tailscale-serve edge for the weatherorb weather/wave service | RollHook |
-| weatherorb-account | `.../weatherorb-account` | Bun + Better Auth account service (own database `weatherorb_accounts`), reached only by the edge — no Traefik router | RollHook |
+| weatherorb-account | `.../weatherorb-account` | Bun + Better Auth account service (own database `weatherorb_accounts`), reached only by the edge — its one Traefik router is the tailnet-only alert-worker door | RollHook |
+| weatherorb-egress | `python:3.13-alpine` + `apps/weatherorb/egress/proxy.py` | CONNECT-only egress proxy for the forecast-alert webhooks (weatherorb ADR 0023): tailnet-only `:18443`, IP-literal `:443` targets, non-public refused | `make weatherorb-up` (no pin, Watchtower off) |
 | email-gateway | `.../email-gateway` | Bun + Resend — FPP contact-form + analytics + SY Serendipity charter-request emails | RollHook |
 | basalt-ui-marketing | `.../basalt-ui-marketing` | basalt-ui.com marketing/docs site (Astro) | RollHook |
 | jkrumm-com | `.../jkrumm-com` | jkrumm.com portfolio site (Astro) | RollHook |

@@ -194,7 +194,8 @@ compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStac
 apps/argo/compose.yml         argo-api + argo-dashboard — personal API/agent backbone, RollHook-managed
 apps/audio-gateway/compose.yml  STT/TTS only (PODCAST_ENABLED=false) — podcast wiring is mini-only
 apps/image-gateway/compose.yml  Backend for the /img skill, RollHook-managed
-apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, no Traefik router) — RollHook-managed, `make weatherorb-up` pins both images
+apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, one tailnet-only worker router) — RollHook-managed, `make weatherorb-up` pins both images — + weatherorb-egress (stdlib CONNECT proxy for the alert webhooks, ADR 0023: tailnet-only :18443, own bridge network, public python image, no pin)
+apps/weatherorb/egress/        proxy.py (the egress proxy; IP-literal :443 CONNECT only, refuses non-public targets) + test_proxy.py (`python3 -m unittest`, stdlib only)
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
 apps/jkrumm-com/compose.yml   jkrumm.com portfolio site (Astro, repo-root Dockerfile) — managed by RollHook, edge cache pattern in docs/edge-cache.md
@@ -389,7 +390,7 @@ See `~/SourceRoot/rollhook/README.md` for implementation details (shutdown patte
 
 Never violate these:
 
-- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), all bound to `${VPS_TAILSCALE_IP}` — **and the FPP MariaDB exception below**
+- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), `18443` (weatherorb-egress CONNECT proxy), all bound to `${VPS_TAILSCALE_IP}` — **and the FPP MariaDB exception below**
 - Zero inbound *public* ports — cloudflared is outbound-only, SSH via Tailscale only — **except 33306 (FPP MariaDB)**
 - UFW: default-deny inbound, only `tailscale0` allowed in; sshd may listen on all interfaces (never rebind it — boot-order lock-out). `make firewall` is the proof
 - Provider firewall: only TCP 33306 inbound (FPP MariaDB), nothing else

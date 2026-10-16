@@ -1,4 +1,5 @@
-# Production compose for the VPS — weatherorb edge + account service. Mirrors apps/research-gateway.
+# Production compose for the VPS — weatherorb edge + account service + alert egress proxy.
+# Mirrors apps/research-gateway.
 #
 # Public via the Cloudflare Tunnel (apex + www CNAMEs → the tunnel, orange cloud,
 # each with a tunnel ingress hostname, like basalt-ui.com). The container is nginx: it
@@ -6,8 +7,10 @@
 # the tailnet to the tileserver on the Mac mini, caching responses on disk for exactly
 # the TTL the origin sets. The mini does every computation; nothing here renders a tile.
 #
-# `.env` here holds MINI_TAILSCALE_IP and MINI_TAILNET_HOST (plus DOMAIN), written by
+# `.env` here holds MINI_TAILSCALE_IP, MINI_TAILNET_HOST and VPS_TAILSCALE_IP (plus DOMAIN), written by
 # `make weatherorb-env` from 1Password and the VPS's own tailscale peer list — nothing tracked.
+# VPS_TAILSCALE_IP is the same value Traefik binds :443 to; RollHook re-runs compose without op,
+# so the egress port publish below needs it in this file (`:?` fails loudly instead of binding 0.0.0.0).
 # The router hosts are literal (weatherorb.com is its own zone), so RollHook re-running
 # compose without op cannot blank them.
 # The mini side of the hop is `tailscale serve` on :8082 (`weatherorb.serve.public`, dotfiles-private
@@ -16,7 +19,8 @@
 # weatherorb-account is the Bun + Elysia + Better Auth account service (weatherorb ADR 0013),
 # built from the weatherorb repo (deploy/account/Dockerfile) and rolled by RollHook as image
 # `weatherorb-account`. Only the edge talks to it: nginx proxies /api/auth/ and /api/account/
-# to weatherorb-account:4200 over `weatherorb-internal`. No Traefik router, nothing public.
+# to weatherorb-account:4200 over `weatherorb-internal`. Its one Traefik router is the tailnet-only
+# forecast-alert worker door (ADR 0023, below); nothing public.
 # Its database is `weatherorb_accounts` (own database, role weatherorb_account) on the shared
 # Postgres; an hourly pg_dump lands in /var/backups/weatherorb-accounts (cron/weatherorb-accounts-dump)
 # and the homelab pulls it over Tailscale SSH as the `wo-backup` user.
@@ -30,12 +34,22 @@
 #   5. make weatherorb-up                       (genesis start; migrations run on boot)
 #   6. push to jkrumm/weatherorb:master        → RollHook deploys from then on
 #
-# The two services roll independently. RollHook selects the container by image name
+# weatherorb-egress is the forecast-alert egress proxy (weatherorb ADR 0023): the mini's webhook
+# worker POSTs to URLs strangers typed, and every delivery leaves through this CONNECT proxy
+# (mini -> tailnet -> this proxy -> the receiver) so the receiver sees the VPS's public IP, never
+# the home IP. Tailnet only: the port is published on ${VPS_TAILSCALE_IP} alone, and the tailnet
+# ACL grants only the mini's tag tcp:18443. Plain python:3.13-alpine running the stdlib script in
+# ./egress/proxy.py (mounted read-only), so there is no image to build, pin or roll; Watchtower
+# stays off it. It takes IP literals on port 443 only and refuses every non-public address as a
+# second layer behind the mini's guard. Its own bridge network shares no container with any other
+# service. Tests: `python3 -m unittest` in ./egress.
+#
+# The two RollHook services roll independently. RollHook selects the container by image name
 # (precedent: apps/fpp/compose.yml fpp-analytics-updater, apps/argo/compose.yml per-service
 # ${<NAME>_IMAGE:-${IMAGE_TAG:-…}}), so a roll of one service cannot redeploy the other. Both
 # images must therefore be bootstrap-seeded, and `make weatherorb-up` pins BOTH running images
 # (WEATHERORB_EDGE_IMAGE, WEATHERORB_ACCOUNT_IMAGE) so neither is rolled back to a stale :latest
-# when the other's roll re-runs compose.
+# when the other's roll re-runs compose. weatherorb-egress is a public image and needs no pin.
 #
 # /var/lib/weatherorb/basemap is the 8 GB planet PMTiles extract plus sprites and glyphs,
 # copied once from the mini with `make basemap-push` in the weatherorb repo. Not a volume:
@@ -140,6 +154,8 @@ services:
       - postgres-net
       - weatherorb-internal
       - monitoring-net
+      # Only for the tailnet-only worker door below (weatherorb ADR 0023).
+      - proxy
     healthcheck:
       # 127.0.0.1, not localhost — same busybox wget IPv6 trap as the edge.
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4200/health"]
@@ -153,10 +169,68 @@ services:
         max-size: "10m"
         max-file: "3"
     labels:
-      - "traefik.enable=false"
+      # One router, the forecast-alert worker door (weatherorb ADR 0023): the mini's deliver_alerts
+      # workflow reads alert definitions and reports deliveries here. Tailnet only — the name resolves
+      # to this server's tailnet IP (a grey-cloud A record, so Cloudflare never proxies it into the
+      # tunnel despite its *.jkrumm.com wildcard ingress), where Traefik listens; the path
+      # prefix keeps every other account route off it. The public edge never reaches /api/worker/
+      # (its /api/ door 404s it, and the service refuses any request stamped X-Weatherorb-Edge).
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.weatherorb-worker.rule=Host(`weatherorb-worker.${DOMAIN}`) && PathPrefix(`/api/worker/`)"
+      - "traefik.http.routers.weatherorb-worker.entrypoints=websecure"
+      - "traefik.http.routers.weatherorb-worker.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.weatherorb-worker.middlewares=rate-limit@file,security-headers@file"
+      - "traefik.http.services.weatherorb-worker.loadbalancer.server.port=4200"
       - "com.centurylinklabs.watchtower.enable=false"
       # rollhook OIDC authorization — only this repo may deploy this container
       - "rollhook.allowed_repos=jkrumm/weatherorb"
+
+  # ---------------------------------------------------------------------------
+  # weatherorb-egress — CONNECT-only egress proxy for the alert webhooks (ADR 0023).
+  # ---------------------------------------------------------------------------
+  weatherorb-egress:
+    image: python:3.13-alpine
+    restart: unless-stopped
+    command: python /app/proxy.py
+    user: "65534:65534"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    environment:
+      # 0.0.0.0 is the container's own wildcard, not the host's: the bridge address is not known up
+      # front, so the proxy cannot bind it by IP. The exposure is the publish below, which binds the
+      # tailnet IP only, on a network no other container joins. The proxy refuses a wildcard LISTEN_HOST
+      # unless this is acknowledged with ALLOW_CONTAINER_BIND, so a bare-metal run cannot expose itself.
+      LISTEN_HOST: 0.0.0.0
+      LISTEN_PORT: "18443"
+      ALLOW_CONTAINER_BIND: "1"
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./egress/proxy.py:/app/proxy.py:ro
+    networks:
+      - weatherorb-egress
+    ports:
+      - "${VPS_TAILSCALE_IP:?}:18443:18443"
+    healthcheck:
+      # Connect and hang up: the proxy closes a connection that sent nothing without a log line.
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 18443), 3).close()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=false"
+      - "com.centurylinklabs.watchtower.enable=false"
 
 networks:
   proxy:
@@ -168,6 +242,9 @@ networks:
   # Compose-internal edge ↔ account link. A plain bridge (not `internal: true`) so the account
   # service keeps outbound egress for Resend once magic link is on.
   weatherorb-internal:
+  # Shared with nobody: the egress proxy has outbound internet through the bridge and no route to
+  # any other service's network.
+  weatherorb-egress:
 
 volumes:
   weatherorb-edge-cache:
