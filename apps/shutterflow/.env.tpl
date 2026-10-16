@@ -33,7 +33,12 @@ SHUTTERFLOW_STORAGE_B2_APP_KEY=op://vps/shutterflow/STORAGE_B2_APP_KEY
 # CDN key: listBuckets,listFiles,readFiles on shutterflow/prod/derivatives/ only.
 SHUTTERFLOW_CDN_B2_KEY_ID=op://vps/shutterflow/CDN_B2_KEY_ID
 SHUTTERFLOW_CDN_B2_APP_KEY=op://vps/shutterflow/CDN_B2_APP_KEY
-# No masters key here, ever: the server must not be able to read originals (0018).
+# No masters key for the server, ever: it must not be able to read originals (0018).
+
+# imgproxy's key (shutterflow 0042): readFiles ONLY on shutterflow/prod/masters/, its own item,
+# passed to the shutterflow-imgproxy container only.
+SHUTTERFLOW_IMGPROXY_B2_KEY_ID=op://vps/shutterflow-imgproxy/B2_KEY_ID
+SHUTTERFLOW_IMGPROXY_B2_APP_KEY=op://vps/shutterflow-imgproxy/B2_APP_KEY
 
 # Custom domains (shutterflow 0037): the entitlement allowlist, comma-separated share-server user
 # ids. Kept in 1Password rather than here because this repo is public.
