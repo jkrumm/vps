@@ -3,6 +3,10 @@
     {
       "type": "webhook",
       "webhook": "Slack #alerts"
+    },
+    {
+      "type": "webhook",
+      "webhook": "Warden ingest"
     }
   ],
   "dashboard": "research-gateway",
