@@ -21,14 +21,15 @@ Each alert file is named `<slug>.json` (slugified from the alert name, or
 `alert-<id>` when unnamed), with ids/timestamps/state/team stripped. Alerts
 reference dashboards, tiles, saved searches, and webhooks by **name** instead
 of by env-specific id: `dashboardId`+`tileId` become `dashboard`+`tile` (tile
-title), `savedSearchId` becomes `savedSearch`, `channel.webhookId` becomes
-`channel.webhook`.
+title), `savedSearchId` becomes `savedSearch`, `channels[].webhookId` becomes
+`channels[].webhook` (every alert: `Slack #alerts` + `Warden ingest`).
 
 ## Loop
 
 ```bash
 # Webhook first — alerts referencing a channel resolve the webhook by name.
 make hyperdx-webhook-setup                 # prod-only, idempotent
+make hyperdx-warden-webhook-setup          # prod-only, idempotent — alerts also notify warden
 
 # Pull every dashboard and alert from an env down to these directories
 make hyperdx-export ENV=dev
