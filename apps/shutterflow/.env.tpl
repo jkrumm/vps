@@ -40,6 +40,11 @@ SHUTTERFLOW_CDN_B2_APP_KEY=op://vps/shutterflow/CDN_B2_APP_KEY
 SHUTTERFLOW_IMGPROXY_B2_KEY_ID=op://vps/shutterflow-imgproxy/B2_KEY_ID
 SHUTTERFLOW_IMGPROXY_B2_APP_KEY=op://vps/shutterflow-imgproxy/B2_APP_KEY
 
+# The master-serving canary's reference (shutterflow 0042 safety 5): one of the owner's synced
+# Finals and its sha256. Never re-edit or delete that Final while it is the reference.
+SHUTTERFLOW_CANARY_OBJECT_KEY=op://vps/shutterflow/CANARY_OBJECT_KEY
+SHUTTERFLOW_CANARY_SHA256=op://vps/shutterflow/CANARY_SHA256
+
 # Custom domains (shutterflow 0037): the entitlement allowlist, comma-separated share-server user
 # ids. Kept in 1Password rather than here because this repo is public.
 SHUTTERFLOW_CUSTOM_DOMAINS_USER_IDS=op://vps/shutterflow/CUSTOM_DOMAINS_USER_IDS

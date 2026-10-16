@@ -72,6 +72,17 @@ services:
       IMGPROXY_BASE_URL: https://cdn.shutterflow.app
       IMGPROXY_KEY: ${SHUTTERFLOW_IMGPROXY_KEY}
       IMGPROXY_SALT: ${SHUTTERFLOW_IMGPROXY_SALT}
+      # Master serving (shutterflow 0042): photos are signed imgproxy URLs on the synced Finals.
+      # The server holds no masters key; it only names the prefix and signs.
+      MASTERS_BUCKET: ${SHUTTERFLOW_B2_BUCKET}
+      MASTERS_PREFIX: shutterflow/prod/masters/
+      # The zip and the publish check fetch on the internal network, never through Cloudflare.
+      IMGPROXY_INTERNAL_URL: http://shutterflow-imgproxy:8080
+      # The canary's reference master (0042 safety 5): at boot and nightly it fetches every
+      # variant through the public CDN and scans it; a leak switches master serving off.
+      # Values live in 1Password (they name the owner's account id and a file).
+      CANARY_OBJECT_KEY: ${SHUTTERFLOW_CANARY_OBJECT_KEY}
+      CANARY_SHA256: ${SHUTTERFLOW_CANARY_SHA256}
       # Custom domains (0037): the entitled user ids. Empty turns the feature off (403).
       CUSTOM_DOMAINS_USER_IDS: ${SHUTTERFLOW_CUSTOM_DOMAINS_USER_IDS:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
