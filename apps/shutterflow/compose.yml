@@ -173,7 +173,7 @@ services:
       # --- Masters are never served as they are (shutterflow 0042 safety 1). Set explicitly so a
       # default change cannot flip them; the canary proves the result after every deploy.
       IMGPROXY_STRIP_METADATA: "true"          # EXIF/IPTC/XMP: GPS, maker notes, the embedded original
-      IMGPROXY_KEEP_COPYRIGHT: "true"          # the one field that survives
+      IMGPROXY_KEEP_COPYRIGHT: "false"         # nothing survives: "true" left an empty XMP/IPTC skeleton
       IMGPROXY_STRIP_COLOR_PROFILE: "true"     # convert to sRGB, drop the ICC profile
       IMGPROXY_AUTO_ROTATE: "true"             # bake the orientation before the tag is dropped
       IMGPROXY_SKIP_PROCESSING_FORMATS: ""     # every source is re-encoded, none passed through
