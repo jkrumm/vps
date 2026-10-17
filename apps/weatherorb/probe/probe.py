@@ -12,13 +12,14 @@ The key is read once from `PROBE_KEY_FILE` (default /run/secrets/probe_key). It 
 Authorization header and nowhere else: not a log line, not a span attribute. Without a key the probe
 says so on stderr, waits (so a restart policy does not hot-loop) and exits 2.
 
-Config by env: `PROBE_KEY_FILE`, `PROBE_BASE_URL` (default https://weatherorb.com),
+Config by env: `PROBE_KEY_FILE`, `PROBE_BASE_URL` (default https://weatherorb.com; http only for a loopback host),
 `OTEL_EXPORTER_OTLP_ENDPOINT` (default http://clickstack:4319), `PROBE_ALIVE_FILE` (touched every
 loop, the container healthcheck reads its age).
 """
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import random
@@ -46,6 +47,8 @@ EXPORT_TIMEOUT_S = 5.0
 MAX_BODY_BYTES = 4 * 1024 * 1024
 FAIL_CLOSED_SLEEP_S = 60.0
 CHUNK = 64 * 1024
+EXPORT_DRAIN_BYTES = 64 * 1024
+LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 DEFAULT_KEY_FILE = "/run/secrets/probe_key"
 DEFAULT_BASE_URL = "https://weatherorb.com"
@@ -95,6 +98,18 @@ def random_point(rng: random.Random) -> tuple[float, float]:
 
 def endpoint_url(base_url: str) -> str:
     return base_url.rstrip("/") + PATH
+
+
+def base_url_allowed(base_url: str) -> bool:
+    """https anywhere; http only to loopback, so the key never crosses a network in cleartext."""
+    try:
+        parts = urlsplit(base_url)
+        host = parts.hostname
+    except ValueError:
+        return False
+    if not host:
+        return False
+    return parts.scheme == "https" or (parts.scheme == "http" and host in LOCAL_HOSTS)
 
 
 def classify(status: int, body: bytes) -> str:
@@ -193,13 +208,14 @@ def _attr(key: str, value: str | int | bool) -> dict:
     return {"key": key, "value": {"stringValue": value}}
 
 
-def build_payload(result: Result, trace_id: str, span_id: str, base_url: str = DEFAULT_BASE_URL) -> dict:
+def build_payload(result: Result, trace_id: str, span_id: str, base_url: str) -> dict:
     attributes = [
-        _attr("http.status_code", result.status),
         _attr("weatherorb.route_class", ROUTE_CLASS),
         _attr("weatherorb.probe.ok", result.ok),
         _attr("http.url", endpoint_url(base_url)),
     ]
+    if result.status:  # no HTTP answer, no status code
+        attributes.insert(0, _attr("http.status_code", result.status))
     status: dict = {"code": STATUS_UNSET}
     if not result.ok:
         attributes.append(_attr("weatherorb.probe.error", result.reason))
@@ -230,6 +246,19 @@ def build_payload(result: Result, trace_id: str, span_id: str, base_url: str = D
     }
 
 
+def _drain(response, deadline: float) -> None:
+    """Read and discard at most EXPORT_DRAIN_BYTES, stopping at the deadline; the status already told."""
+    remaining = EXPORT_DRAIN_BYTES
+    try:
+        while remaining > 0 and time.monotonic() < deadline:
+            chunk = response.read1(min(CHUNK, remaining))
+            if not chunk:
+                return
+            remaining -= len(chunk)
+    except (OSError, http.client.HTTPException):
+        pass  # a 2xx was received: the collector has the span
+
+
 def export_span(endpoint: str, payload: dict, timeout: float = EXPORT_TIMEOUT_S) -> str:
     """POST the span; return '' on success or a one-line failure description."""
     request = urllib.request.Request(
@@ -238,9 +267,10 @@ def export_span(endpoint: str, payload: dict, timeout: float = EXPORT_TIMEOUT_S)
         headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
         method="POST",
     )
+    deadline = time.monotonic() + timeout
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            response.read()
+            _drain(response, deadline)
     except urllib.error.HTTPError as exc:
         exc.close()
         return f"http {exc.code}"
@@ -321,8 +351,8 @@ def main(
         stop.wait(fail_closed_sleep)
         return 2
     base_url = env.get("PROBE_BASE_URL") or DEFAULT_BASE_URL
-    if urlsplit(base_url).scheme not in ("http", "https"):
-        sys.stderr.write("probe: PROBE_BASE_URL must be an http(s) URL\n")
+    if not base_url_allowed(base_url):
+        sys.stderr.write("probe: PROBE_BASE_URL must be https (http only for a loopback host)\n")
         stop.wait(fail_closed_sleep)
         return 2
     otlp = env.get("OTEL_EXPORTER_OTLP_ENDPOINT") or DEFAULT_OTLP_ENDPOINT

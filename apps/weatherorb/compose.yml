@@ -54,6 +54,8 @@
 # and `make weatherorb-env` writes WEATHERORB_PROBE_KEY_FILE=<that path> into .env when the file
 # exists. Unset, the mount falls back to /dev/null and the probe fails closed: it logs why, waits
 # 60 s and exits 2 (so the restart policy cannot hot-loop). Tests: `python3 -m unittest` in ./probe.
+# Key rotation: run `create-key`, rewrite the file in place (same inode, owner 65534, mode 0400),
+# then `make weatherorb-up`, which recreates the probe; revoke the old key with `revoke-key`.
 #
 # The two RollHook services roll independently. RollHook selects the container by image name
 # (precedent: apps/fpp/compose.yml fpp-analytics-updater, apps/argo/compose.yml per-service

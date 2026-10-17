@@ -347,7 +347,10 @@ shutterflow-bootstrap-image: require-prod
 ## target pins BOTH running images so neither is rolled back to a stale :latest by the other.
 ## The stack also runs weatherorb-egress (CONNECT proxy for the forecast-alert webhooks, ADR 0023,
 ## tailnet-only on :18443) and weatherorb-probe (external /v1 availability probe, ADR 0026):
-## public python images with the scripts mounted from the repo, so no pin.
+## public python images with the scripts mounted from the repo, so no pin. A changed probe.py or
+## proxy.py does not change the compose config hash, so a plain `up -d` keeps the container running
+## the old script: the last step force-recreates exactly those two services (also what applies a
+## rotated probe key file).
 ## `docker ps -a` (not `docker ps`) — same fix as argo-up above:
 ## a stopped-but-present container must still be pinned, not mistaken for
 ## genesis and rolled back to a stale :latest.
@@ -368,7 +371,9 @@ weatherorb-up: require-prod
 	  echo "  pinning $$SVC → $$IMG"; \
 	  PINS="$$PINS $$VAR=$$IMG"; \
 	done; \
-	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d
+	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d && \
+	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env \
+	  up -d --no-deps --force-recreate weatherorb-probe weatherorb-egress
 weatherorb-down: require-prod ; $(OP_RUN) docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env down
 
 ## Trigger a fresh RollHook deploy by pushing an empty commit to weatherorb's master.

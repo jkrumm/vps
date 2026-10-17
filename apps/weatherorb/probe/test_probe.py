@@ -199,7 +199,7 @@ class PayloadTest(unittest.TestCase):
     def test_good_span(self):
         result = probe.Result(True, 200, "", 1_700_000_000_000_000_000, 1_700_000_000_312_000_000)
         trace_id, span_id = "0123456789abcdef" * 2, "0123456789abcdef"
-        resource, span = self.span_of(probe.build_payload(result, trace_id, span_id))
+        resource, span = self.span_of(probe.build_payload(result, trace_id, span_id, "https://weatherorb.com"))
 
         self.assertEqual(
             self.attrs(resource["attributes"]),
@@ -227,10 +227,10 @@ class PayloadTest(unittest.TestCase):
 
     def test_bad_span(self):
         result = probe.Result(False, 0, "timeout", 10, 20)
-        _, span = self.span_of(probe.build_payload(result, "c" * 32, "d" * 16))
+        _, span = self.span_of(probe.build_payload(result, "c" * 32, "d" * 16, "https://weatherorb.com"))
         self.assertEqual(span["status"], {"code": 2, "message": "timeout"})
         attributes = self.attrs(span["attributes"])
-        self.assertEqual(attributes["http.status_code"], {"intValue": "0"})
+        self.assertNotIn("http.status_code", attributes)
         self.assertEqual(attributes["weatherorb.probe.ok"], {"boolValue": False})
         self.assertEqual(attributes["weatherorb.probe.error"], {"stringValue": "timeout"})
 
@@ -243,7 +243,7 @@ class PayloadTest(unittest.TestCase):
         collector = FakeServer(lambda h: reply(h, 200, "{}"))
         self.addCleanup(collector.close)
         result = probe.Result(True, 200, "", 1, 2)
-        payload = probe.build_payload(result, "a" * 32, "b" * 16)
+        payload = probe.build_payload(result, "a" * 32, "b" * 16, "https://weatherorb.com")
         self.assertEqual(probe.export_span(collector.url, payload), "")
         (request,) = collector.requests
         self.assertEqual(request["method"], "POST")
@@ -251,9 +251,30 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(request["headers"]["content-type"], "application/json")
         self.assertEqual(json.loads(request["body"]), payload)
 
+    def test_export_drain_is_bounded_against_a_trickling_body(self):
+        release = threading.Event()
+        self.addCleanup(release.set)
+
+        def trickle(handler):
+            handler.send_response(200)
+            handler.send_header("Transfer-Encoding", "chunked")
+            handler.end_headers()
+            with contextlib.suppress(OSError):
+                while not release.is_set():
+                    handler.wfile.write(b"1\r\n.\r\n")
+                    handler.wfile.flush()
+                    time.sleep(0.1)
+
+        collector = FakeServer(trickle)
+        self.addCleanup(collector.close)
+        payload = probe.build_payload(probe.Result(True, 200, "", 1, 2), "a" * 32, "b" * 16, "https://weatherorb.com")
+        started = time.monotonic()
+        self.assertEqual(probe.export_span(collector.url, payload, timeout=0.5), "")
+        self.assertLess(time.monotonic() - started, 1.5)
+
     def test_export_failures_are_described_not_raised(self):
         result = probe.Result(True, 200, "", 1, 2)
-        payload = probe.build_payload(result, "a" * 32, "b" * 16)
+        payload = probe.build_payload(result, "a" * 32, "b" * 16, "https://weatherorb.com")
         self.assertEqual(probe.export_span(dead_url(), payload), "ConnectionRefusedError")
         broken = FakeServer(lambda h: reply(h, 503, "no"))
         self.addCleanup(broken.close)
@@ -299,6 +320,34 @@ class KeyFileTest(unittest.TestCase):
             self.assertEqual(called, [])
             self.assertIn("does not exist", err.getvalue())
             self.assertIn("WEATHERORB_PROBE_KEY_FILE", err.getvalue())
+
+    def test_main_refuses_a_key_over_cleartext(self):
+        path = self.write(KEY + "\n")
+        for url in ("http://weatherorb.com", "http://192.0.2.1:8080", "ftp://127.0.0.1", "weatherorb.com", "https://"):
+            err = io.StringIO()
+            called = []
+            with contextlib.redirect_stderr(err):
+                code = probe.main(
+                    {"PROBE_KEY_FILE": path, "PROBE_BASE_URL": url},
+                    fail_closed_sleep=0,
+                    install_signals=False,
+                    runner=lambda *a, **k: called.append(1) or 0,
+                )
+            self.assertEqual((code, called), (2, []), url)
+            self.assertIn("PROBE_BASE_URL must be https", err.getvalue())
+            self.assertNotIn(KEY, err.getvalue())
+
+    def test_main_accepts_https_and_loopback_http(self):
+        path = self.write(KEY + "\n")
+        for url in ("https://weatherorb.com", "http://127.0.0.1:8082", "http://localhost", "http://[::1]:8082"):
+            called = []
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = probe.main(
+                    {"PROBE_KEY_FILE": path, "PROBE_BASE_URL": url},
+                    install_signals=False,
+                    runner=lambda *a, **k: called.append(1) or 0,
+                )
+            self.assertEqual((code, called), (0, [1]), url)
 
     def test_main_fail_closed_waits_before_exiting(self):
         started = time.monotonic()
