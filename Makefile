@@ -2,6 +2,8 @@
 export
 
 ENV ?= dev
+# gid RollHook's container runs as (it re-runs compose and reads apps/*/.env); see weatherorb-env
+ROLLHOOK_GID ?= 999
 
 # Compose derives volume names as <project>_<name>, project defaulting to this dir.
 MARIADB_DEV_VOLUME ?= $(notdir $(CURDIR))_mariadb-dev-data
@@ -418,6 +420,9 @@ gh-runner-sync:
 ## VPS's own tailnet IP (the value Traefik binds, from the root .env) is the third, for the egress
 ## proxy's port publish. None is a secret. A fourth, WEATHERORB_PROBE_KEY_FILE, names the host-local
 ## key file of weatherorb-probe (/etc/vps/weatherorb-probe-key) and is written only when that file exists.
+## The file holds secrets, so it is 0640 owner:ROLLHOOK_GID, not world-readable: RollHook re-runs
+## compose from inside its container as uid/gid 999 (apps dir bind-mounted), which must read it; the
+## deploy user reads it as owner. gid 999 has no host members (systemd-journal, empty).
 ## Re-run after rotating a secret, a mini rename or a re-join.
 weatherorb-env: require-prod
 	@# Both halves go to one temp file that replaces .env atomically, so a failed second half
@@ -427,7 +432,7 @@ weatherorb-env: require-prod
 	  host=$$(tailscale status --json | jq -r ".Peer[] | select(.HostName==\"mini\") | .DNSName") && host=$${host%.} && \
 	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\nVPS_TAILSCALE_IP=%s\n" "$$DOMAIN" "$$ip" "$$host" "$${VPS_TAILSCALE_IP:?}" >> apps/weatherorb/.env.tmp && \
 	  if [ -f /etc/vps/weatherorb-probe-key ]; then printf "WEATHERORB_PROBE_KEY_FILE=/etc/vps/weatherorb-probe-key\n" >> apps/weatherorb/.env.tmp; fi && \
-	  chmod 644 apps/weatherorb/.env.tmp && mv -f apps/weatherorb/.env.tmp apps/weatherorb/.env && \
+	  chmod 640 apps/weatherorb/.env.tmp && sudo chgrp $(ROLLHOOK_GID) apps/weatherorb/.env.tmp && mv -f apps/weatherorb/.env.tmp apps/weatherorb/.env && \
 	  echo "Wrote apps/weatherorb/.env (mini = $$host)"' || { rm -f apps/weatherorb/.env.tmp; exit 1; }
 
 ## image-gateway stack (Bun image API, RollHook-managed) — apps/image-gateway/compose.yml
