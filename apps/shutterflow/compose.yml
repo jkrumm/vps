@@ -177,9 +177,12 @@ services:
       # (shutterflow P16-38). 8 of the host's 12 cores; the queue stays unbounded (default 0).
       IMGPROXY_WORKERS: "8"
       # Seconds. TIMEOUT covers queue wait + download + processing; DOWNLOAD_TIMEOUT a 20-50 MB
-      # master from B2 (the default 5 s was hit at the tail).
-      IMGPROXY_TIMEOUT: "30"
-      IMGPROXY_DOWNLOAD_TIMEOUT: "20"
+      # master from B2 (the default 5 s was hit at the tail). imgproxy OSS has no source-download
+      # retry, so a slow B2 read must finish inside one try: under a cold burst downloads took
+      # 12-15 s and two were cut at 20 s (shutterflow P16-43). The share server's warmer and the
+      # gallery retry what still fails.
+      IMGPROXY_TIMEOUT: "45"
+      IMGPROXY_DOWNLOAD_TIMEOUT: "30"
       IMGPROXY_KEY: ${SHUTTERFLOW_IMGPROXY_KEY}
       IMGPROXY_SALT: ${SHUTTERFLOW_IMGPROXY_SALT}
 
