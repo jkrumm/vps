@@ -168,10 +168,18 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    mem_limit: 1g
+    # 8 workers, each decoding a full 26 MP master at once.
+    mem_limit: 2g
     environment:
       IMGPROXY_BIND: ":8080"
-      IMGPROXY_WORKERS: "4"
+      # A cold gallery asks for ~65 thumbs at once and a render takes ~1 s (download p50 0.26 s,
+      # p95 1.2 s; processing p50 0.6 s), so 4 workers left the tail queued past the timeout
+      # (shutterflow P16-38). 8 of the host's 12 cores; the queue stays unbounded (default 0).
+      IMGPROXY_WORKERS: "8"
+      # Seconds. TIMEOUT covers queue wait + download + processing; DOWNLOAD_TIMEOUT a 20-50 MB
+      # master from B2 (the default 5 s was hit at the tail).
+      IMGPROXY_TIMEOUT: "30"
+      IMGPROXY_DOWNLOAD_TIMEOUT: "20"
       IMGPROXY_KEY: ${SHUTTERFLOW_IMGPROXY_KEY}
       IMGPROXY_SALT: ${SHUTTERFLOW_IMGPROXY_SALT}
 
@@ -201,12 +209,16 @@ services:
       # anything else (raw, skip_processing, strip_metadata, …) is refused, signed or not.
       IMGPROXY_ALLOWED_PROCESSING_OPTIONS: "rs,s,q,f,att,fn,cb,exp"
 
-      # --- Caching: signed URLs expire after 1h (0019), so renditions are cached no longer —
-      # a revoked share's images die with the signature, not a year later.
-      IMGPROXY_TTL: "3600"
+      # --- Caching (shutterflow 0042, caching and revocation): every URL carries `exp:` (the next
+      # Monday 00:00 UTC) and imgproxy clamps max-age to the time left until it, so a week is the
+      # ceiling and no cached copy outlives its URL. Cloudflare respects it (cache rule on
+      # cdn.shutterflow.app, shutterflow deploy/image-serving.md).
+      IMGPROXY_TTL: "604800"
       IMGPROXY_CACHE_CONTROL_PASSTHROUGH: "false"
-      IMGPROXY_AUTO_WEBP: "true"
-      IMGPROXY_AUTO_AVIF: "true"
+      # Every URL pins f:jpg, so these were inert apart from `Vary: Accept`, which splits the
+      # edge cache per browser Accept header.
+      IMGPROXY_AUTO_WEBP: "false"
+      IMGPROXY_AUTO_AVIF: "false"
 
       # --- Observability — v4 still needs the ENABLE flags next to the OTEL_* vars.
       IMGPROXY_OPEN_TELEMETRY_ENABLE: "true"
