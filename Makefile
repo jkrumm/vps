@@ -58,7 +58,7 @@ endif
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
-        shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image \
+        shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-warden-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
         check deploy verify logs _deploy-affected
@@ -326,7 +326,10 @@ shutterflow-up: require-prod
 shutterflow-down: require-prod ; $(OP_RUN) docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env down
 
 ## Materialize apps/shutterflow/.env from .env.tpl (via `op inject`) plus the `proxy` network
-## CIDR as SHUTTERFLOW_TRUSTED_PROXIES. Re-run after rotating any secret.
+## CIDR as SHUTTERFLOW_TRUSTED_PROXIES, and apps/shutterflow/key-broker.env (the key broker's own
+## item only). That one holds an account-wide B2 key, so it is 0640 owner:ROLLHOOK_GID like
+## weatherorb's .env: RollHook's compose run (uid/gid 999) must read every env_file of the stack.
+## Re-run after rotating any secret.
 shutterflow-env: require-prod
 	op --account tkrumm inject -i apps/shutterflow/.env.tpl -o apps/shutterflow/.env -f
 	@CIDR=$$(docker network inspect proxy --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'); \
@@ -334,11 +337,22 @@ shutterflow-env: require-prod
 	echo "SHUTTERFLOW_TRUSTED_PROXIES=$$CIDR" >> apps/shutterflow/.env
 	chmod 644 apps/shutterflow/.env
 	@echo "Wrote apps/shutterflow/.env (chmod 644, gitignored)"
+	op --account tkrumm inject -i apps/shutterflow/key-broker.env.tpl -o apps/shutterflow/key-broker.tmp.env -f
+	@chmod 640 apps/shutterflow/key-broker.tmp.env && sudo chgrp $(ROLLHOOK_GID) apps/shutterflow/key-broker.tmp.env && \
+	  mv -f apps/shutterflow/key-broker.tmp.env apps/shutterflow/key-broker.env || { rm -f apps/shutterflow/key-broker.tmp.env; exit 1; }
+	@echo "Wrote apps/shutterflow/key-broker.env (0640 owner:$(ROLLHOOK_GID), gitignored)"
 
 ## One-shot bootstrap — build + push :initial from a shipped source tree (the repo is private;
 ## see apps/shutterflow/scripts/bootstrap-image.sh for the one-line `git archive | ssh` step).
 shutterflow-bootstrap-image: require-prod
 	$(OP_RUN) ./apps/shutterflow/scripts/bootstrap-image.sh
+
+## Build + push the key broker image (shutterflow 0040) from a shipped source tree — the same
+## `git archive | ssh` step as shutterflow-bootstrap-image, TAG = the shipped commit's sha. No CI
+## deploys the broker: bump its tag in apps/shutterflow/compose.yml, then make shutterflow-up.
+shutterflow-key-broker-image: require-prod
+	@[ -n "$(TAG)" ] || { echo "  ✗ TAG=<shutterflow commit sha> required"; exit 1; }
+	$(OP_RUN) ./apps/shutterflow/scripts/key-broker-image.sh $(TAG)
 
 ## weatherorb stack (nginx edge in front of the tileserver on the Mac mini + the account service,
 ## both RollHook-managed) — apps/weatherorb/compose.yml. Public at weatherorb.com through the

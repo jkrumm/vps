@@ -41,3 +41,9 @@ SHUTTERFLOW_CANARY_SHA256=op://vps/shutterflow/CANARY_SHA256
 # Custom domains (shutterflow 0037): the entitlement allowlist, comma-separated share-server user
 # ids. Kept in 1Password rather than here because this repo is public.
 SHUTTERFLOW_CUSTOM_DOMAINS_USER_IDS=op://vps/shutterflow/CUSTOM_DOMAINS_USER_IDS
+
+# Hosted storage (shutterflow 0040): the secret the share server signs key-broker requests with
+# (the same value as the broker's own item), and the entitlement allowlist (user ids, so here
+# rather than in this public repo). The broker's B2 key is NOT here: key-broker.env.tpl.
+SHUTTERFLOW_BROKER_HMAC_SECRET=op://vps/shutterflow/BROKER_HMAC_SECRET
+SHUTTERFLOW_HOSTED_STORAGE_USER_IDS=op://vps/shutterflow/HOSTED_STORAGE_USER_IDS

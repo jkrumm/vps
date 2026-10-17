@@ -25,6 +25,16 @@ networks:
     external: true
   monitoring-net:
     external: true
+  # Hosted storage (shutterflow 0040): the share server ↔ key broker request path. Internal, so
+  # nothing else reaches the broker and the broker reaches nothing through it.
+  shutterflow-broker:
+    internal: true
+  # The broker's only way out: B2's API (an internal network has no outbound route).
+  shutterflow-broker-egress: {}
+
+volumes:
+  # The broker's purge ledger (closed accounts and their grace periods), its only state.
+  shutterflow-key-broker-state: {}
 
 services:
 
@@ -77,6 +87,12 @@ services:
       CANARY_SHA256: ${SHUTTERFLOW_CANARY_SHA256}
       # Custom domains (0037): the entitled user ids. Empty turns the feature off (403).
       CUSTOM_DOMAINS_USER_IDS: ${SHUTTERFLOW_CUSTOM_DOMAINS_USER_IDS:-}
+      # Hosted storage (shutterflow 0040): per-device B2 keys come from the key broker below; this
+      # server holds only the request-signing secret. HOSTED_STORAGE_USER_IDS is the entitlement
+      # allowlist (1Password: it names user ids); empty turns the storage routes off (403).
+      BROKER_URL: http://shutterflow-key-broker:4300
+      BROKER_HMAC_SECRET: ${SHUTTERFLOW_BROKER_HMAC_SECRET}
+      HOSTED_STORAGE_USER_IDS: ${SHUTTERFLOW_HOSTED_STORAGE_USER_IDS:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: shutterflow-share
     healthcheck:
@@ -131,6 +147,7 @@ services:
       - proxy
       - postgres-net
       - monitoring-net
+      - shutterflow-broker
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -227,6 +244,37 @@ services:
     networks:
       - proxy
       - monitoring-net
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ---------------------------------------------------------------------------
+  # shutterflow-key-broker — mints each signed-in desktop a B2 key for its own account prefix
+  # (shutterflow 0040, deploy/hosted-storage.md). Its B2 key can create and delete keys and files
+  # account-wide, so: no published port, no Traefik router, reachable only from the share server
+  # over the internal network, and its secrets come from their own env file
+  # (key-broker.env, op://vps/shutterflow-key-broker only — never the share server's .env).
+  # Not RollHook-managed: built by `make shutterflow-key-broker-image TAG=<sha>`, pinned here.
+  # ---------------------------------------------------------------------------
+  shutterflow-key-broker:
+    image: rollhook.jkrumm.com/shutterflow-key-broker:9c78d2d11a58e8240f0c9bc700fccd0adb33048e
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    env_file:
+      - key-broker.env
+    environment:
+      STORAGE_ENV: prod
+      # The nightly usage report, HMAC-signed, over the internal network.
+      USAGE_REPORT_URL: http://shutterflow-share:4100/api/v1/internal/storage/usage
+    volumes:
+      - shutterflow-key-broker-state:/var/lib/key-broker
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    networks:
+      - shutterflow-broker
+      - shutterflow-broker-egress
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
