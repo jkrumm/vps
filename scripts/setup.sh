@@ -305,7 +305,7 @@ fi
 # 10. Create Docker external networks
 # =============================================================================
 log "Creating Docker networks..."
-for network in proxy postgres-net valkey-net monitoring-net mariadb-net; do
+for network in proxy postgres-net valkey-net monitoring-net mariadb-net weatherorb-account; do
   if docker network inspect "${network}" &>/dev/null; then
     skip "Network ${network} already exists"
   else

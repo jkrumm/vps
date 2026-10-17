@@ -167,8 +167,9 @@ services:
       - postgres-net
       - weatherorb-internal
       - monitoring-net
-      # Only for the tailnet-only worker door below (weatherorb ADR 0023).
-      - proxy
+      # Shared with Traefik alone, for the tailnet-only worker door below (weatherorb ADR 0023):
+      # the account is deliberately not on the shared `proxy` network.
+      - weatherorb-account
     healthcheck:
       # 127.0.0.1, not localhost — same busybox wget IPv6 trap as the edge.
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4200/health"]
@@ -188,12 +189,16 @@ services:
       # tunnel despite its *.jkrumm.com wildcard ingress), where Traefik listens; the path
       # prefix keeps every other account route off it. The public edge never reaches /api/worker/
       # (its /api/ door 404s it, and the service refuses any request stamped X-Weatherorb-Edge).
+      # The ipAllowList is the second lock: cloudflared reaches Traefik from a container address, so
+      # a tunnel request fails it whatever the DNS record says; a tailnet client arrives from the
+      # CGNAT range (the :443 publish keeps its source address).
       - "traefik.enable=true"
-      - "traefik.docker.network=proxy"
+      - "traefik.docker.network=weatherorb-account"
       - "traefik.http.routers.weatherorb-worker.rule=Host(`weatherorb-worker.${DOMAIN}`) && PathPrefix(`/api/worker/`)"
       - "traefik.http.routers.weatherorb-worker.entrypoints=websecure"
       - "traefik.http.routers.weatherorb-worker.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.weatherorb-worker.middlewares=rate-limit@file,security-headers@file"
+      - "traefik.http.middlewares.weatherorb-worker-tailnet.ipallowlist.sourcerange=100.64.0.0/10"
+      - "traefik.http.routers.weatherorb-worker.middlewares=weatherorb-worker-tailnet@docker,rate-limit@file,security-headers@file"
       - "traefik.http.services.weatherorb-worker.loadbalancer.server.port=4200"
       - "com.centurylinklabs.watchtower.enable=false"
       # rollhook OIDC authorization — only this repo may deploy this container
@@ -296,6 +301,10 @@ services:
 
 networks:
   proxy:
+    external: true
+  # Account <-> Traefik only (the worker door). Created by scripts/setup.sh like the other external
+  # networks; Traefik joins it through compose.networking.yml.
+  weatherorb-account:
     external: true
   postgres-net:
     external: true

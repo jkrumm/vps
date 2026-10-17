@@ -7,6 +7,11 @@ networks:
     external: true
   monitoring-net:
     external: true
+  # weatherorb-account <-> Traefik only (the account's tailnet-only worker door); the account is
+  # not on `proxy`. Created by scripts/setup.sh. On a running server `docker network connect
+  # weatherorb-account traefik` applies it without recreating Traefik.
+  weatherorb-account:
+    external: true
   socket-proxy-net:
     driver: bridge
     internal: true
@@ -100,6 +105,7 @@ services:
       - proxy
       - socket-proxy-net
       - monitoring-net   # reach clickstack:4318 for OTLP traces + metrics
+      - weatherorb-account   # the account's worker door
     labels:
       # Traefik dashboard — Tailscale-only via DNS (A record → Tailscale IP, DNS-only/grey cloud).
       # Docker NAT rewrites source IPs, so ipAllowList is ineffective here.
