@@ -60,14 +60,6 @@ services:
       # `docker network inspect proxy` by `make shutterflow-env`, not written here.
       TRUSTED_PROXY_HEADERS: cf-connecting-ip
       TRUSTED_PROXIES: ${SHUTTERFLOW_TRUSTED_PROXIES}
-      # Derivatives store — the server's own B2 key: read/write/delete on
-      # shutterflow/prod/derivatives/ ONLY. It can never reach masters/, img/ or backups/.
-      STORAGE_BUCKET: ${SHUTTERFLOW_B2_BUCKET}
-      STORAGE_ENDPOINT: ${SHUTTERFLOW_B2_ENDPOINT}
-      STORAGE_REGION: ${SHUTTERFLOW_B2_REGION}
-      STORAGE_ACCESS_KEY_ID: ${SHUTTERFLOW_STORAGE_B2_KEY_ID}
-      STORAGE_SECRET_ACCESS_KEY: ${SHUTTERFLOW_STORAGE_B2_APP_KEY}
-      STORAGE_DERIVATIVES_PREFIX: shutterflow/prod/derivatives/
       # Signed CDN URLs — same key/salt as the imgproxy service below.
       IMGPROXY_BASE_URL: https://cdn.shutterflow.app
       IMGPROXY_KEY: ${SHUTTERFLOW_IMGPROXY_KEY}
