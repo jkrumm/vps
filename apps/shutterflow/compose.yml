@@ -125,17 +125,19 @@ services:
       - "traefik.http.routers.shutterflow-links.observability.tracing=false"
       - "traefik.http.routers.shutterflow-links.observability.accesslogs=false"
       - "traefik.http.routers.shutterflow.service=shutterflow"
-      # Custom domains (shutterflow 0037), the owner's portfolio host: the verification probe only,
-      # so "Check now" can reach the share server while photo-gallery still serves the site.
-      # Tracing and access logs off: 0037 keeps custom hostnames out of telemetry.
-      - "traefik.http.routers.shutterflow-custom-probe.rule=Host(`photos.${DOMAIN}`) && PathPrefix(`/.well-known/shutterflow/`)"
-      - "traefik.http.routers.shutterflow-custom-probe.priority=300"
-      - "traefik.http.routers.shutterflow-custom-probe.entrypoints=websecure"
-      - "traefik.http.routers.shutterflow-custom-probe.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.shutterflow-custom-probe.middlewares=security-headers@file"
-      - "traefik.http.routers.shutterflow-custom-probe.service=shutterflow"
-      - "traefik.http.routers.shutterflow-custom-probe.observability.tracing=false"
-      - "traefik.http.routers.shutterflow-custom-probe.observability.accesslogs=false"
+      # Custom domains (shutterflow 0037): the owner's portfolio host, every path. Its own router so
+      # the origin's routers stay as they are; priority 300 beats the host's old router
+      # (photo-gallery, default priority = rule length). Tracing and access logs off for the whole
+      # host: 0037 keeps custom hostnames out of telemetry, and it covers the share-token paths.
+      # The share server still traces these requests with host.kind. No rate-limit (one tunnel IP).
+      - "traefik.http.routers.shutterflow-custom.rule=Host(`photos.${DOMAIN}`)"
+      - "traefik.http.routers.shutterflow-custom.priority=300"
+      - "traefik.http.routers.shutterflow-custom.entrypoints=websecure"
+      - "traefik.http.routers.shutterflow-custom.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.shutterflow-custom.middlewares=security-headers@file"
+      - "traefik.http.routers.shutterflow-custom.service=shutterflow"
+      - "traefik.http.routers.shutterflow-custom.observability.tracing=false"
+      - "traefik.http.routers.shutterflow-custom.observability.accesslogs=false"
       - "traefik.http.services.shutterflow.loadbalancer.server.port=4100"
       - "traefik.http.services.shutterflow.loadbalancer.healthcheck.path=/health"
       - "traefik.http.services.shutterflow.loadbalancer.healthcheck.interval=5s"
