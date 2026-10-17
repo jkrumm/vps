@@ -346,7 +346,8 @@ shutterflow-bootstrap-image: require-prod
 ## RollHook picks the container by image name, so the two services roll independently: this
 ## target pins BOTH running images so neither is rolled back to a stale :latest by the other.
 ## The stack also runs weatherorb-egress (CONNECT proxy for the forecast-alert webhooks, ADR 0023,
-## tailnet-only on :18443): a public python image with the script mounted from the repo, so no pin.
+## tailnet-only on :18443) and weatherorb-probe (external /v1 availability probe, ADR 0026):
+## public python images with the scripts mounted from the repo, so no pin.
 ## `docker ps -a` (not `docker ps`) — same fix as argo-up above:
 ## a stopped-but-present container must still be pinned, not mistaken for
 ## genesis and rolled back to a stale :latest.
@@ -410,7 +411,9 @@ gh-runner-sync:
 ## so RollHook's `docker compose up` resolves them without op) plus this host's tailscale peer
 ## list — the mini's tailnet IP and MagicDNS name are the two values the edge needs, and the
 ## VPS's own tailnet IP (the value Traefik binds, from the root .env) is the third, for the egress
-## proxy's port publish. None is a secret. Re-run after rotating a secret, a mini rename or a re-join.
+## proxy's port publish. None is a secret. A fourth, WEATHERORB_PROBE_KEY_FILE, names the host-local
+## key file of weatherorb-probe (/etc/vps/weatherorb-probe-key) and is written only when that file exists.
+## Re-run after rotating a secret, a mini rename or a re-join.
 weatherorb-env: require-prod
 	@# Both halves go to one temp file that replaces .env atomically, so a failed second half
 	@# can never leave an .env with the secrets but no DOMAIN/MINI_* keys.
@@ -418,6 +421,7 @@ weatherorb-env: require-prod
 	@$(OP_RUN) sh -c 'ip=$$(tailscale ip -4 mini) && \
 	  host=$$(tailscale status --json | jq -r ".Peer[] | select(.HostName==\"mini\") | .DNSName") && host=$${host%.} && \
 	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\nVPS_TAILSCALE_IP=%s\n" "$$DOMAIN" "$$ip" "$$host" "$${VPS_TAILSCALE_IP:?}" >> apps/weatherorb/.env.tmp && \
+	  if [ -f /etc/vps/weatherorb-probe-key ]; then printf "WEATHERORB_PROBE_KEY_FILE=/etc/vps/weatherorb-probe-key\n" >> apps/weatherorb/.env.tmp; fi && \
 	  chmod 644 apps/weatherorb/.env.tmp && mv -f apps/weatherorb/.env.tmp apps/weatherorb/.env && \
 	  echo "Wrote apps/weatherorb/.env (mini = $$host)"' || { rm -f apps/weatherorb/.env.tmp; exit 1; }
 

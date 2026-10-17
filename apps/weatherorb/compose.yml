@@ -1,4 +1,4 @@
-# Production compose for the VPS — weatherorb edge + account service + alert egress proxy.
+# Production compose for the VPS — weatherorb edge + account service + alert egress proxy + /v1 probe.
 # Mirrors apps/research-gateway.
 #
 # Public via the Cloudflare Tunnel (apex + www CNAMEs → the tunnel, orange cloud,
@@ -43,6 +43,17 @@
 # stays off it. It takes IP literals on port 443 only and refuses every non-public address as a
 # second layer behind the mini's guard. Its own bridge network shares no container with any other
 # service. Tests: `python3 -m unittest` in ./egress.
+#
+# weatherorb-probe is the external availability probe for the keyed /v1 API (weatherorb ADR 0026):
+# once a minute it GETs /v1/pointcast at a random point through the public edge with a real API key
+# and exports one OTLP span to ClickStack's internal receiver on monitoring-net. Same shape as the
+# egress proxy: python:3.13-alpine running ./probe/probe.py (mounted read-only), no image to build,
+# pin or roll, Watchtower off, no published port. The key is a host-local file (never in 1Password
+# templates or .env): mint it with the account CLI's `create-key`, put it at a path of your choice
+# (suggested /etc/vps/weatherorb-probe-key, owner 65534, mode 0400 — the container runs as 65534),
+# and `make weatherorb-env` writes WEATHERORB_PROBE_KEY_FILE=<that path> into .env when the file
+# exists. Unset, the mount falls back to /dev/null and the probe fails closed: it logs why, waits
+# 60 s and exits 2 (so the restart policy cannot hot-loop). Tests: `python3 -m unittest` in ./probe.
 #
 # The two RollHook services roll independently. RollHook selects the container by image name
 # (precedent: apps/fpp/compose.yml fpp-analytics-updater, apps/argo/compose.yml per-service
@@ -235,6 +246,52 @@ services:
       - "traefik.enable=false"
       - "com.centurylinklabs.watchtower.enable=false"
 
+  # ---------------------------------------------------------------------------
+  # weatherorb-probe — external availability probe for /v1 (ADR 0026).
+  # ---------------------------------------------------------------------------
+  weatherorb-probe:
+    image: python:3.13-alpine
+    restart: unless-stopped
+    command: python /app/probe.py
+    user: "65534:65534"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    environment:
+      PROBE_KEY_FILE: /run/secrets/probe_key
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./probe/probe.py:/app/probe.py:ro
+      # Host-local key file (see the header). /dev/null when unset keeps compose parseable for
+      # RollHook's re-runs without .env; the probe then fails closed instead of probing keyless.
+      - ${WEATHERORB_PROBE_KEY_FILE:-/dev/null}:/run/secrets/probe_key:ro
+    tmpfs:
+      - /tmp:size=1m
+    networks:
+      # monitoring-net reaches clickstack; the own bridge gives outbound internet to weatherorb.com.
+      - monitoring-net
+      - weatherorb-probe
+    healthcheck:
+      # The loop touches /tmp/probe-alive every iteration; stale for 3 periods means it is stuck.
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(0 if time.time() - os.stat('/tmp/probe-alive').st_mtime < 180 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=false"
+      - "com.centurylinklabs.watchtower.enable=false"
+
 networks:
   proxy:
     external: true
@@ -248,6 +305,8 @@ networks:
   # Shared with nobody: the egress proxy has outbound internet through the bridge and no route to
   # any other service's network.
   weatherorb-egress:
+  # Outbound internet for the probe; shared with nobody.
+  weatherorb-probe:
 
 volumes:
   weatherorb-edge-cache:
