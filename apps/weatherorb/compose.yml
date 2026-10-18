@@ -83,6 +83,11 @@ services:
       # key browser bundles ship). Empty → tracing off, nginx still starts.
       OTEL_EDGE_ENDPOINT: clickstack:4317
       OTEL_EDGE_AUTHORIZATION: ${WEATHERORB_EDGE_OTEL_AUTHORIZATION:-}
+      # weatherorb #143: whose CF-Connecting-IP the edge believes (the `proxy` network, Traefik) and who may
+      # POST :8090/alert/clickstack (`monitoring-net`, HyperDX). Written by `make weatherorb-env` from the
+      # live networks; empty means every private range (the edge's default).
+      EDGE_TRUSTED_PROXY_CIDRS: ${EDGE_TRUSTED_PROXY_CIDRS:-}
+      EDGE_ALERT_ALLOW_CIDRS: ${EDGE_ALERT_ALLOW_CIDRS:-}
     mem_limit: 256m
     security_opt:
       - no-new-privileges:true

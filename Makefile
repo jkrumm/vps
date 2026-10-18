@@ -446,6 +446,10 @@ weatherorb-env: require-prod
 	  host=$$(tailscale status --json | jq -r ".Peer[] | select(.HostName==\"mini\") | .DNSName") && host=$${host%.} && \
 	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\nVPS_TAILSCALE_IP=%s\n" "$$DOMAIN" "$$ip" "$$host" "$${VPS_TAILSCALE_IP:?}" >> apps/weatherorb/.env.tmp && \
 	  if [ -f /etc/vps/weatherorb-probe-key ]; then printf "WEATHERORB_PROBE_KEY_FILE=/etc/vps/weatherorb-probe-key\n" >> apps/weatherorb/.env.tmp; fi && \
+	  proxy=$$(docker network inspect proxy --format "{{range .IPAM.Config}}{{.Subnet}} {{end}}") && \
+	  monitoring=$$(docker network inspect monitoring-net --format "{{range .IPAM.Config}}{{.Subnet}} {{end}}") && \
+	  [ -n "$${proxy% }" ] && [ -n "$${monitoring% }" ] && \
+	  printf "EDGE_TRUSTED_PROXY_CIDRS=\"%s\"\nEDGE_ALERT_ALLOW_CIDRS=\"%s\"\n" "$${proxy% }" "$${monitoring% }" >> apps/weatherorb/.env.tmp && \
 	  chmod 640 apps/weatherorb/.env.tmp && sudo chgrp $(ROLLHOOK_GID) apps/weatherorb/.env.tmp && mv -f apps/weatherorb/.env.tmp apps/weatherorb/.env && \
 	  echo "Wrote apps/weatherorb/.env (mini = $$host)"' || { rm -f apps/weatherorb/.env.tmp; exit 1; }
 
