@@ -284,13 +284,14 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    # 4 workers decoding a 2048 px JPEG each, not a 26 MP master.
+    # 12 workers decoding a 2048 px JPEG each (~10 MB), not a 26 MP master: on a cold grid they
+    # block on the view download, so more workers, not CPU, cut the queue (P20-08).
     mem_limit: 512m
     environment:
       IMGPROXY_BIND: ":8080"
       # Served at cdn.shutterflow.app/small/… (router below); health moves to /small/health.
       IMGPROXY_PATH_PREFIX: /small
-      IMGPROXY_WORKERS: "4"
+      IMGPROXY_WORKERS: "12"
       # A cold view is a master render behind the CDN (up to ~22 s in a cold burst), so the
       # download needs the master leg's 30 s, not the default 5.
       IMGPROXY_TIMEOUT: "45"
