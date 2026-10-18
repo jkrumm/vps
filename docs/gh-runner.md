@@ -79,8 +79,8 @@ make gh-runner-sync
 Then switch the repo's workflows to `runs-on: [self-hosted, vps]` and give jobs a
 `timeout-minutes` (a hung job holds one of that repo's runners until it times out). The job steps must not assume
 the hosted image's preinstalled tools: install them per job (`oven-sh/setup-bun`,
-`astral-sh/setup-uv`, …). The host has `git`, `curl`, `unzip`, `docker` (rootless) — no
-rustup, Node or Python toolchains. Tool caches persist in `gh-runner`'s home between jobs, so
+`astral-sh/setup-uv`, …). The host has `git`, `curl`, `unzip`, `docker` (rootless) and `libatomic1` (the prebuilt Node binaries that
+pyright-python or `setup-node` fetch need it) — no rustup, Node or Python toolchains. Tool caches persist in `gh-runner`'s home between jobs, so
 `actions/cache`-backed options (`setup-uv`'s `enable-cache`, `setup-node`'s `cache`) only add an
 upload/download round trip here.
 

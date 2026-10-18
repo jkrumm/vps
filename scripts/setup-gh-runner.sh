@@ -155,7 +155,8 @@ ensure_user_and_docker() {
   # with live-restore every socket-proxy keeps a stale docker.sock mount (RollHook, Traefik's
   # Docker provider and Watchtower all go blind — 2026-10-14). Install only what is missing,
   # rootless-extras pinned to the docker-ce version already running.
-  local pkgs=(--no-upgrade uidmap slirp4netns)
+  # libatomic1: the prebuilt Node that tools fetch for themselves (pyright-python, setup-node) links against it.
+  local pkgs=(--no-upgrade uidmap slirp4netns libatomic1)
   if ! dpkg-query -W -f '${Status}' docker-ce-rootless-extras 2>/dev/null | grep -q 'install ok installed'; then
     pkgs+=("docker-ce-rootless-extras=$(dpkg-query -W -f '${Version}' docker-ce)")
   fi
