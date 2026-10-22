@@ -53,6 +53,9 @@ services:
       PORT: "4100"
       BETTER_AUTH_URL: https://shutterflow.app
       BETTER_AUTH_SECRET: ${SHUTTERFLOW_BETTER_AUTH_SECRET}
+      # Share-link token encryption (shutterflow 0056); required in production.
+      SHARE_TOKEN_KEY: ${SHUTTERFLOW_SHARE_TOKEN_KEY}
+      SHARE_TOKEN_KEY_ID: ${SHUTTERFLOW_SHARE_TOKEN_KEY_ID}
       # Shared VPS Postgres — own schema `shutterflow`, schema-scoped role. No `?schema=` here:
       # the postgres.js driver forwards unknown URL params as server startup parameters and
       # Postgres refuses `schema`. Every table is schema-qualified (pgSchema) and the migration

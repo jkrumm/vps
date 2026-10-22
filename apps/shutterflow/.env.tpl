@@ -14,6 +14,11 @@ DOMAIN=op://vps/config/DOMAIN
 
 SHUTTERFLOW_DB_PASSWORD=op://vps/shutterflow/DB_PASSWORD
 SHUTTERFLOW_BETTER_AUTH_SECRET=op://vps/shutterflow/BETTER_AUTH_SECRET
+# Share-link tokens are kept AES-GCM encrypted under this key so the album owner can copy a link
+# again (shutterflow 0056). The id names the key every row is sealed under; never change it once
+# links exist (rotation: shutterflow docs/engineering/deploy.md).
+SHUTTERFLOW_SHARE_TOKEN_KEY=op://vps/shutterflow/SHARE_TOKEN_KEY
+SHUTTERFLOW_SHARE_TOKEN_KEY_ID=op://vps/shutterflow/SHARE_TOKEN_KEY_ID
 # Bearer for the email gateway's POST /shutterflow (auth-code mails) — the gateway's own field.
 SHUTTERFLOW_EMAIL_GATEWAY_SECRET_KEY=op://vps/email-gateway/SHUTTERFLOW_SECRET_KEY
 SHUTTERFLOW_GOOGLE_CLIENT_ID=op://vps/shutterflow/GOOGLE_CLIENT_ID
