@@ -1,0 +1,26 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    },
+    {
+      "type": "webhook",
+      "webhook": "Warden ingest"
+    }
+  ],
+  "dashboard": "shutterflow",
+  "displayName": "shutterflow - 2. Master serving tripped (count \u2014 galleries offline until a manual clear; empty is healthy)",
+  "interval": "5m",
+  "message": null,
+  "name": "shutterflow master serving tripped >= 1 (5m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "shutterflow"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "2. Master serving tripped (count \u2014 galleries offline until a manual clear; empty is healthy)"
+}

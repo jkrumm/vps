@@ -42,6 +42,76 @@
       "w": 6,
       "x": 0,
       "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "alerts",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Trips",
+            "valueExpression": "",
+            "where": "ServiceName = 'shutterflow-share' AND Body IN ('master serving canary tripped', 'master serving stays off: a canary trip is not cleared')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "8fa6b8aca5664cac89d20641",
+      "name": "2. Master serving tripped (count \u2014 galleries offline until a manual clear; empty is healthy)",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "alerts",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Unreachable",
+            "valueExpression": "",
+            "where": "ServiceName = 'shutterflow-share' AND Body IN ('master serving canary cannot reach the images', 'master serving canary could not run; retrying soon')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "431e855da3291c8d00433bfb",
+      "name": "3. Master serving cannot reach the images (count \u2014 CDN/imgproxy/B2 unreachable; empty is healthy)",
+      "w": 6,
+      "x": 0,
+      "y": 3
     }
   ]
 }

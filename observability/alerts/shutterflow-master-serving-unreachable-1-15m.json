@@ -1,0 +1,26 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Slack #alerts"
+    },
+    {
+      "type": "webhook",
+      "webhook": "Warden ingest"
+    }
+  ],
+  "dashboard": "shutterflow",
+  "displayName": "shutterflow - 3. Master serving cannot reach the images (count \u2014 CDN/imgproxy/B2 unreachable; empty is healthy)",
+  "interval": "15m",
+  "message": null,
+  "name": "shutterflow master serving unreachable >= 1 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "shutterflow"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "3. Master serving cannot reach the images (count \u2014 CDN/imgproxy/B2 unreachable; empty is healthy)"
+}
