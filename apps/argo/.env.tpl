@@ -26,9 +26,10 @@ GOOGLE_CLIENT_SECRET=op://common/google-oauth/CLIENT_SECRET
 # attacks once the OAuth app is published to "In Production" status.
 GOOGLE_ALLOWED_EMAIL=op://vps/argo/GOOGLE_ALLOWED_EMAIL
 
-# Garmin: argo only needs the bearer to talk to homelab's garmin-collector.
-# Email/password stay in homelab vault — only the collector consumes them.
-GARMIN_COLLECTOR_TOKEN=op://common/garmin-collector/TOKEN
+# Garmin Connect Personal API key — argo exchanges it for a 24h bearer itself.
+# Expires at most yearly (Garmin emails a week before): rotate the 1Password field,
+# then `make argo-env` and redeploy.
+GARMIN_API_KEY=op://vps/argo/GARMIN_API_KEY
 # UK push URL — argo's garmin-sync cron pings after each successful pull.
 GARMIN_HEARTBEAT_URL=op://common/garmin-collector/PUSH_URL
 

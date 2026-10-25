@@ -8,7 +8,7 @@
 #
 # Both deployed via RollHook from jkrumm/argo (push to master). Dashboard rebuild
 # embeds VITE_API_URL=https://argo.jkrumm.com/api at build time. API queries homelab
-# services over Tailscale (garmin-collector, homelab's docker socket-proxy, uptime-kuma).
+# services over Tailscale (homelab's docker socket-proxy, uptime-kuma).
 #
 # Bootstrap order on a fresh server:
 #   1. make networking-up + monitoring-up        (Traefik cert + ClickStack for OTLP)
@@ -39,7 +39,7 @@ services:
   # argo-api — Bun + Elysia + Postgres. Reads VPS docker via socket-proxy-monitoring;
   # reads homelab docker via ${HOMELAB_TAILSCALE_IP}:2376 (socket-proxy-claude).
   # Reaches uptime-kuma via public https://uptime.jkrumm.com (socket.io).
-  # Reaches garmin-collector via https://garmin.jkrumm.com (Tailscale-only).
+  # Pulls Garmin data directly from Garmin's Personal API (personal.connectapi.garmin.com).
   # ---------------------------------------------------------------------------
   argo-api:
     # Per-service IMAGE var so `make argo-up` can pin both services to the
@@ -65,9 +65,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_ALLOWED_EMAIL: ${GOOGLE_ALLOWED_EMAIL}
-      # Garmin-collector lives on homelab (Tailscale-only public DNS).
-      GARMIN_COLLECTOR_URL: https://garmin.jkrumm.com
-      GARMIN_COLLECTOR_TOKEN: ${GARMIN_COLLECTOR_TOKEN}
+      GARMIN_API_KEY: ${GARMIN_API_KEY}
       GARMIN_HEARTBEAT_URL: ${GARMIN_HEARTBEAT_URL}
       # Atlassian (Jira) — IU work tenant, read-only basic auth.
       ATLASSIAN_BASE_URL: ${ATLASSIAN_BASE_URL}
