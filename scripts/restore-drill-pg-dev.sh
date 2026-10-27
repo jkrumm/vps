@@ -10,13 +10,17 @@
 # 3. Restores every <database>.dump into a scratch database
 #    `restore_drill_<ts>_<n>` with pg_restore --exit-on-error.
 # 4. Compares the restored table set, exact row counts and relation-kind counts
-#    to counts.tsv, which the backup recorded from the SOURCE right before and
-#    right after each dump: the restored count must lie inside that bracket.
-# 5. Drops the scratch databases it created (and only those) and exits non-zero
-#    on any mismatch or error.
+#    to counts.tsv, which the backup took from the SOURCE inside the very
+#    snapshot the dump read — so the comparison is plain equality.
+# 5. Drops the scratch databases it created and exits non-zero on any mismatch
+#    or error.
 #
-# Never drops a database it did not create in this run. Env: PG_DEV_BACKUP_DEST
-# as in backup-pg-dev.sh.
+# Housekeeping at the start: it drops leftovers of crashed drills — databases
+# named exactly restore_drill_<14 digits>_<n> whose timestamp is more than two
+# hours old (a live drill, e.g. the verify step of a backup, is younger) — and
+# sweeps pg-dev-drill.* / pg-dev-backup.* directories older than two hours from
+# TMPDIR. Nothing else is ever dropped. Env: PG_DEV_BACKUP_DEST as in
+# backup-pg-dev.sh.
 # =============================================================================
 set -euo pipefail
 umask 077
@@ -36,6 +40,19 @@ FAILED=0
 [[ "$(docker inspect -f '{{.State.Status}}' postgres 2>/dev/null)" == "running" ]] || {
   echo "ERROR: local 'postgres' container not running."; exit 1; }
 PGU=$(docker exec postgres printenv POSTGRES_USER)
+
+# --- housekeeping: leftovers of crashed runs --------------------------------
+find "${TMPDIR:-/tmp}" -maxdepth 1 -type d \( -name 'pg-dev-drill.*' -o -name 'pg-dev-backup.*' \) -mmin +120 \
+  -exec rm -rf {} + 2>/dev/null || true
+CUTOFF=$(date -v-2H +%Y%m%d%H%M%S 2>/dev/null || date -d '-2 hours' +%Y%m%d%H%M%S)
+STALE=$(docker exec postgres psql -U "${PGU}" -d postgres -At -c \
+  "SELECT datname FROM pg_database WHERE datname ~ '^restore_drill_[0-9]{14}_[0-9]+\$' ORDER BY 1")
+for old in ${STALE}; do
+  stamp=${old#restore_drill_}; stamp=${stamp%%_*}
+  if [[ "${stamp}" < "${CUTOFF}" ]]; then
+    docker exec postgres dropdb -U "${PGU}" --force "${old}" && log "dropped stale scratch database ${old}"
+  fi
+done
 
 NAME="${BACKUP:-}"
 if [[ -z "${NAME}" ]]; then
@@ -80,19 +97,17 @@ for dump in "${STAGE}"/*.dump; do
   fi
 
   "${HERE}/pg-counts.sh" "${scratch}" > "${STAGE}/restored.txt"
-  # counts.tsv rows for this db → key|before|after, joined to the restored key|rows;
-  # the full outer join makes a missing or surplus table show as a mismatch.
-  awk -F'|' -v db="${db}" '$1 == db { print $2 "|" $3 "|" $4 }' "${STAGE}/counts.tsv" | LC_ALL=C sort -t'|' -k1,1 > "${STAGE}/expected.txt"
-  report=$(LC_ALL=C join -t'|' -a1 -a2 -e MISSING -o 0,1.2,1.3,2.2 "${STAGE}/expected.txt" "${STAGE}/restored.txt" \
+  # counts.tsv rows for this db → key|rows, joined to the restored key|rows; the full outer
+  # join makes a missing or surplus table show as a mismatch. Exact equality.
+  awk -F'|' -v db="${db}" '$1 == db { print $2 "|" $3 }' "${STAGE}/counts.tsv" | LC_ALL=C sort -t'|' -k1,1 > "${STAGE}/expected.txt"
+  report=$(LC_ALL=C join -t'|' -a1 -a2 -e MISSING -o 0,1.2,2.2 "${STAGE}/expected.txt" "${STAGE}/restored.txt" \
     | awk -F'|' '
-        { key = $1; lo = $2; hi = $3; got = $4;
-          if (got == "MISSING" || lo == "MISSING") { printf "%s: expected %s..%s, restored %s\n", key, lo, hi, got; bad++; next }
-          if (lo > hi) { t = lo; lo = hi; hi = t }
-          if (got + 0 < lo + 0 || got + 0 > hi + 0) { printf "%s: expected %s..%s, restored %s\n", key, lo, hi, got; bad++ }
+        { key = $1; want = $2; got = $3;
+          if (want != got) { printf "%s: expected %s, restored %s\n", key, want, got; bad++; next }
           if (key !~ /^~/) { tables++; rows += got }
         }
         END { if (bad) exit 1; printf "%d tables, %d rows\n", tables, rows }') || {
-    fail "${db}: restored data differs from the source recorded at backup time:"
+    fail "${db}: restored data differs from the source counts recorded in the dump's snapshot:"
     printf '%s\n' "${report}" | sed 's/^/    /' >&2
     continue
   }

@@ -188,22 +188,26 @@ fi
 if [ -n "${AGENT_WORKFLOWS_DB_PASSWORD:-}" ]; then
 echo "--> agent_workflows"
 
-psql_main <<SQL
-DO \$\$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'agent_workflows') THEN
-    CREATE ROLE agent_workflows WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '${AGENT_WORKFLOWS_DB_PASSWORD}';
-  ELSE
-    ALTER ROLE agent_workflows WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '${AGENT_WORKFLOWS_DB_PASSWORD}';
-  END IF;
-END
-\$\$;
+# The password reaches psql through the container environment (-e NAME, value not in argv)
+# and `\set pw`, and is quoted by the server's format(%L) — never spliced into the script,
+# so no password character can break out of the statement.
+docker exec -i -e AGENT_WORKFLOWS_DB_PASSWORD postgres \
+  psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -v ON_ERROR_STOP=1 <<'SQL'
+\set pw `printenv AGENT_WORKFLOWS_DB_PASSWORD`
 
--- CREATE DATABASE cannot run inside a DO block, so the statement is generated and executed by gexec.
+-- The statements are generated with format() so the server quotes the password, then run by
+-- gexec (CREATE DATABASE cannot run inside a DO block either).
+SELECT format('%s ROLE agent_workflows WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD %L',
+              CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = 'agent_workflows') THEN 'ALTER' ELSE 'CREATE' END,
+              :'pw')
+\gexec
+
 SELECT 'CREATE DATABASE agent_workflows OWNER agent_workflows'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'agent_workflows')
 \gexec
 
+-- converge ownership if the database was created some other way
+ALTER DATABASE agent_workflows OWNER TO agent_workflows;
 REVOKE CONNECT ON DATABASE agent_workflows FROM PUBLIC;
 GRANT CONNECT ON DATABASE agent_workflows TO agent_workflows;
 SQL

@@ -45,7 +45,7 @@ that file). So each step must be done before the next:
 
 Daily 03:15 by `com.jkrumm.vps-pg-backup` (a LaunchAgent, like every other mini job; install with
 `make dev-pg-launchd` **from the main checkout** — the plist hard-codes the checkout path, the target
-refuses a worktree). It runs through `jobrun`, so a failed run or a missed night grades `failing` /
+refuses a linked worktree, detected with `git rev-parse --git-dir` vs `--git-common-dir`). It runs through `jobrun`, so a failed run or a missed night grades `failing` /
 `stale` in `jobs-grade` and reaches Slack #alerts via the devhost heartbeat; there is no log to watch.
 
 One backup is a directory `<UTC timestamp>/` under `homelab:/mnt/hdd/backups/vps-mini-postgres/`
@@ -64,19 +64,22 @@ definition); only the restore showed it. A failed verify fails the job, which `j
 No credential is involved: `pg_dump` runs inside the container over its unix socket and the upload
 is keyless Tailscale SSH.
 
-`counts.tsv` is the drill's reference: exact `COUNT(*)` per table taken right **before and after**
-each dump (`scripts/pg-counts.sh`), plus counts of tables/indexes/sequences/views, so an empty
-database is verifiable too.
+`counts.tsv` is the drill's reference: exact `COUNT(*)` per table plus counts of
+tables/indexes/sequences/views (so an empty database is verifiable too), taken **inside the snapshot
+the dump reads**. A background `psql` holds a `REPEATABLE READ` transaction open, exports its
+snapshot, runs `scripts/pg-counts.sql`, and stays open until `pg_dump --snapshot=<id>` finishes; the
+manifest therefore describes the dump exactly, whatever writes concurrently.
 
 ## Restore drill
 
 `make dev-pg-restore-drill` (`BACKUP=<name>` for an older one): fetch the newest complete backup,
 verify checksums, restore every dump into a scratch database `restore_drill_<ts>_<n>` with
 `pg_restore --exit-on-error`, require the restored table set, relation counts and every row count to
-match `counts.tsv` (inside the before/after bracket — exact on a quiet table, tolerant only of
-proven concurrent writes), drop the scratch databases, exit non-zero on any mismatch. It only
-drops databases it created in that run. Run it after any change to the backup script and at least
-monthly.
+match `counts.tsv` exactly, drop the scratch databases, exit non-zero on any mismatch. At the start
+it removes leftovers of crashed runs and nothing else: databases named exactly
+`restore_drill_<14 digits>_<n>` older than two hours (a drill that is running right now, e.g. the
+verify step of a backup, is younger), and `pg-dev-drill.*` / `pg-dev-backup.*` directories older than
+two hours in `TMPDIR`. Run it after any change to the backup script and at least monthly.
 
 ## Upgrades
 

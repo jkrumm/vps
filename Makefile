@@ -710,7 +710,8 @@ dev-pg-health: require-dev
 ## Dev (mini) — install the nightly backup LaunchAgent from THIS checkout (run from the
 ## main checkout, not a worktree: the plist hard-codes the path). Idempotent.
 dev-pg-launchd: require-dev
-	@case "$(CURDIR)" in */.claude/worktrees/*) echo "refusing: run from the main vps checkout, not a worktree ($(CURDIR))"; exit 1;; esac
+	@[ "$$(git rev-parse --path-format=absolute --git-dir)" = "$$(git rev-parse --path-format=absolute --git-common-dir)" ] \
+		|| { echo "refusing: run from the main vps checkout, not a linked worktree ($(CURDIR))"; exit 1; }
 	@mkdir -p "$(HOME)/Library/LaunchAgents" "$(HOME)/Library/Logs"
 	@sed -e 's#__HOME__#$(HOME)#g' -e 's#__VPS_DIR__#$(CURDIR)#g' launchd/com.jkrumm.vps-pg-backup.plist.template \
 		> "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-pg-backup.plist"
