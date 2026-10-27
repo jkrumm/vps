@@ -46,7 +46,6 @@ make fpp-cert-sync       # run once after networking-up; cron does it every 6h
 make hyperdx-agent-setup       # prod — idempotent agent user + accessKey setup, MCP smoke test
 make hyperdx-dev-bootstrap     # dev — idempotent local user + accessKey bootstrap, MCP smoke test
 make hyperdx-webhook-setup     # prod — idempotent Slack webhook ("Slack #alerts") setup
-make hyperdx-warden-webhook-setup  # prod — idempotent "Warden ingest" webhook (alerts notify warden next to Slack)
 make hyperdx-export ENV=dev    # export dashboards + alerts → observability/{dashboards,alerts}/*.json
 make hyperdx-apply ENV=dev     # validate + upsert (by name) dashboards, then alerts, from those directories
 make clickstack-up             # dev — start ClickStack on demand (profile `observability`; `make up` skips it, ~4 GB)
@@ -236,7 +235,6 @@ scripts/seed-cron-env.sh      Materializes cron/*.env.tpl → /etc/vps/*.env, ch
 scripts/hyperdx-agent-setup.sh  Prod — idempotent HyperDX agent user + accessKey setup, MCP smoke test (make hyperdx-agent-setup)
 scripts/hyperdx-dev-bootstrap.sh  Dev — idempotent local HyperDX user + accessKey bootstrap, MCP smoke test (make hyperdx-dev-bootstrap)
 scripts/hyperdx-webhook-setup.sh  Prod — idempotent Slack webhook ("Slack #alerts") setup from op://common/slack/VPS_WEBHOOK_ALERTS (make hyperdx-webhook-setup)
-scripts/hyperdx-warden-webhook-setup.sh  Prod — idempotent "Warden ingest" generic webhook -> warden /ingest/hyperdx, bearer from op://mini/warden-ingest/token (make hyperdx-warden-webhook-setup)
 scripts/hyperdx-sync.sh       Dashboards + alerts-as-code over REST v2 — export/apply (make hyperdx-export / hyperdx-apply)
 observability/dashboards/     Dashboard JSON source of truth — see observability/README.md
 observability/alerts/         Alert JSON source of truth — same export/apply loop (docs/observability.md)

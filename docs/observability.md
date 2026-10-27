@@ -383,18 +383,12 @@ HyperDX webhook named `Slack #alerts` (service `slack`) pointed at
 `op://common/slack/VPS_WEBHOOK_ALERTS`. Run it once before applying any alert
 that notifies over Slack — alerts reference this webhook by **name**, not id.
 
-### Alerts → warden
+### Alert channels
 
-Every alert lists two `channels` (HyperDX >= 2.36 takes 1–10; the singular
-`channel` is just `channels[0]`): `Slack #alerts` (the human mirror) and
-`Warden ingest`, a **generic** webhook that POSTs ALERT *and* OK to warden's
-`/ingest/hyperdx` (`https://warden-ingest.mini.jkrumm.com`, tailnet only). The
-body template renders warden's contract `{alert, state, message, url, value}`
-from `{{title}} {{state}} {{body}} {{link}} {{value}}`; the bearer sits in the
-webhook's write-only `headers`. `make hyperdx-warden-webhook-setup ENV=prod`
-creates/updates it (runs from the mini via `secrets-run`, or the VPS via `op`;
-token `op://mini/warden-ingest/token`). Rotating that token means re-running
-the target. weatherorb's four alerts are not in this directory: that repo
+Every alert lists one `channel` in `channels` (HyperDX >= 2.36 takes 1–10; the singular
+`channel` is just `channels[0]`): `Slack #alerts`. A generic `Warden ingest` webhook used to
+sit next to it until warden was switched off (2026-10-27); it was deleted from HyperDX and
+the alert files. weatherorb's four alerts are not in this directory: that repo
 applies them with its own `WeatherOrb ops.alert` webhook, and `export` skips
 the `weatherorb` tag. `apply` always sends `channels` (+ the `channel` mirror):
 a body with only `channel` would silently reduce an alert to one webhook.

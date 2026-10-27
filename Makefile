@@ -60,7 +60,7 @@ endif
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune prune-cron-install \
-        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-warden-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
+        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
         check deploy verify logs _deploy-affected
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
@@ -630,12 +630,6 @@ hyperdx-dev-bootstrap: require-dev
 ## exists/matches op://common/slack/VPS_WEBHOOK_ALERTS. Run before hyperdx-apply.
 hyperdx-webhook-setup: require-prod
 	./scripts/hyperdx-webhook-setup.sh
-
-## HyperDX → warden webhook — idempotent, prod-only, runs from the mini or the VPS.
-## Ensures the generic webhook "Warden ingest" (POSTs ALERT and OK to warden's
-## /ingest/hyperdx). Alerts list it in `channels` next to "Slack #alerts".
-hyperdx-warden-webhook-setup: require-prod
-	./scripts/hyperdx-warden-webhook-setup.sh
 
 ## Dashboards + alerts-as-code — export every dashboard and alert from ENV to
 ## observability/dashboards/*.json and observability/alerts/*.json.
