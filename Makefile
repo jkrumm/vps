@@ -901,9 +901,9 @@ else
 		echo "✓ $(APP): healthy"; \
 	else \
 		for s in $(APP_SERVICE_$(APP)); do \
-			id=$$(ssh vps "docker ps -q --filter label=com.docker.compose.service=$$s" | head -1); \
+			id=$$(docker ps -q --filter label=com.docker.compose.service=$$s | head -1); \
 			[ -n "$$id" ] || { echo "✗ $(APP): no running container for service $$s"; exit 1; }; \
-			st=$$(ssh vps "docker inspect -f '{{.State.Health.Status}}' $$id"); \
+			st=$$(docker inspect -f '{{.State.Health.Status}}' $$id); \
 			[ "$$st" = "healthy" ] || { echo "✗ $(APP): $$s is $$st"; exit 1; }; \
 			echo "✓ $$s: healthy"; \
 		done; \
@@ -912,10 +912,12 @@ endif
 endif
 
 ## Bounded 200-line tail of one app's production container, then exits (no -f): make logs APP=<name>.
+## On the VPS (ENV=prod) docker runs locally — the VPS cannot `ssh vps` to itself.
+VPS_SH := $(if $(filter prod,$(ENV)),sh -c,ssh vps)
 logs:
 	@[ -n "$(APP)" ] || { echo "usage: make logs APP=<app>"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
 	@[ "$(filter $(APP),$(KNOWN_APPS))" = "$(APP)" ] || { echo "ERROR: unknown app '$(APP)'"; echo "known apps: $(KNOWN_APPS)"; exit 1; }
 	@first=$(firstword $(APP_SERVICE_$(APP))); \
-	id=$$(ssh vps "docker ps -q --filter label=com.docker.compose.service=$$first" | head -1); \
+	id=$$($(VPS_SH) "docker ps -q --filter label=com.docker.compose.service=$$first" | head -1); \
 	[ -n "$$id" ] || { echo "no running container for service $$first"; exit 1; }; \
-	ssh vps "docker logs --tail=200 $$id"
+	$(VPS_SH) "docker logs --tail=200 $$id"
