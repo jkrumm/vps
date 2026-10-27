@@ -9,13 +9,15 @@
 | Operation | How | Guarded? |
 |-|-|-|
 | Backup prod → S3 | `make backup` / `make fpp-backup` (+ nightly cron) | no — safe |
-| Local ← prod (db→db) | `make sync-from-prod`, `make pg-sync-schema SCHEMA=…`, `make fpp-sync-from-prod` | dev-only, never touches prod |
+| Local ← prod (db→db) | `make pg-sync-schema SCHEMA=…`, `make fpp-sync-from-prod` | dev-only, never touches prod |
 | Local ← S3 | `make restore-local`, `make fpp-restore-local` | dev-only, never touches prod |
 | Verify counts | `make db-counts` | read-only, both envs |
 | **Prod ← S3 (restore)** | **scripts below — no make target** | **heavily gated** |
 
 Nothing else writes to prod. The dev syncs always replace the **whole schema**
-(or whole DB) — there is no partial/table-level operation to reason about.
+(Postgres, `pg-sync-schema`) or the whole MariaDB database — there is no partial/table-level
+operation to reason about. The whole-DB Postgres sync was retired: the mini's Postgres is a
+maintained instance (`docs/mini-postgres.md`).
 
 ## The guard on the prod-restore scripts
 

@@ -238,7 +238,7 @@ scripts/backup-pg-dev.sh      Mac mini Postgres → HomeLab nightly backup (glob
 scripts/restore-drill-pg-dev.sh  Restore drill of the newest mini backup into scratch DBs, counts vs source — make dev-pg-restore-drill
 scripts/upgrade-pg-dev.sh     Mini Postgres image upgrade, backup first, major bumps refused — make dev-pg-upgrade
 scripts/health-pg-dev.sh      Mini Postgres readiness probe for the devhost heartbeat — make dev-pg-health
-scripts/pg-counts.sh          Exact row counts + relation-kind counts of ONE database (backup manifest + drill)
+scripts/pg-counts.sh          Exact row counts + relation-kind counts of ONE database (drill); pg-counts.sql is the shared SQL the backup runs inside the dump's snapshot
 launchd/                      LaunchAgent template for the mini's nightly Postgres backup (make dev-pg-launchd)
 scripts/sync-pg-schema-from-vps.sh  Dev — generic per-schema sync (SCHEMA=argo); least-priv, app role only
 scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel

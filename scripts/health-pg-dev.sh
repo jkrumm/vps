@@ -29,8 +29,10 @@ docker exec postgres psql -U "${PGU}" -d postgres -Atc 'SELECT 1' >/dev/null 2>&
 nc -z -w 3 127.0.0.1 5432 >/dev/null 2>&1 || bad "127.0.0.1:5432 not accepting connections"
 
 for db in ${REQUIRE_DBS}; do
-  owner=$(docker exec postgres psql -U "${PGU}" -d postgres -Atc \
-    "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = '${db}'" 2>/dev/null) || bad "catalog query failed"
+  [[ "${db}" =~ ^[a-z_][a-z0-9_]*$ ]] || bad "PG_DEV_REQUIRE_DBS entry '${db}' is not a plain lower-case identifier"
+  # name goes in as a psql variable, quoted by psql — and on stdin, because -c does not interpolate
+  owner=$(printf '%s\n' "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = :'db'" \
+    | docker exec -i postgres psql -U "${PGU}" -d postgres -At -v "db=${db}" 2>/dev/null) || bad "catalog query failed"
   [[ -n "${owner}" ]] || bad "database '${db}' missing (run make postgres-setup ENV=dev)"
   [[ "${owner}" == "${db}" ]] || bad "database '${db}' owned by '${owner}', expected '${db}'"
 done

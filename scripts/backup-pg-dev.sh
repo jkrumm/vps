@@ -10,11 +10,12 @@
 # One backup = one directory <UTC timestamp>/ on the HomeLab holding
 #   globals.sql        roles + their password verifiers (pg_dumpall --globals-only)
 #   <database>.dump    pg_dump custom format, one per non-template database
-#   counts.tsv         db|schema.table|rows_before|rows_after — exact COUNT(*)
-#                      taken immediately BEFORE and AFTER each dump. The restore
-#                      drill checks the restored count lies inside that bracket
-#                      (exact when the table is quiet, tolerant only of proven
-#                      concurrent writes).
+#   counts.tsv         db|key|rows — exact COUNT(*) per table plus relation-kind
+#                      counts, taken INSIDE the same exported snapshot the dump
+#                      reads (a REPEATABLE READ transaction held open while
+#                      pg_dump --snapshot runs), so the manifest describes the
+#                      dump exactly and the restore drill compares equality, no
+#                      matter what writes concurrently.
 #   SHA256SUMS         verified on the HomeLab after upload
 # Uploaded to <name>.incomplete and renamed only after the checksum passes, so
 # "newest backup" can never be a half-written one.
@@ -64,16 +65,49 @@ DBS=$(docker exec postgres psql -U "${PGU}" -d postgres -At \
   -c "SELECT datname FROM pg_database WHERE NOT datistemplate ORDER BY 1")
 [[ -n "${DBS}" ]] || { echo "ERROR: no databases to back up"; exit 1; }
 
+# Dump one database and its exact counts from ONE snapshot. A background psql holds a
+# REPEATABLE READ transaction open (commands arrive on a FIFO), exports its snapshot id,
+# runs the count SQL, and stays open until pg_dump --snapshot=<id> is done.
+dump_with_counts() {
+  local db="$1" fifo="${STAGE}/hold.fifo" out="${STAGE}/holder.out" err="${STAGE}/holder.err" holder snap=""
+  : > "${out}"; : > "${err}"
+  mkfifo "${fifo}"
+  docker exec -i postgres psql -U "${PGU}" -d "${db}" -qAt -F'|' -v ON_ERROR_STOP=1 < "${fifo}" > "${out}" 2> "${err}" &
+  holder=$!
+  exec 3> "${fifo}"
+  {
+    echo "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;"
+    echo "SELECT 'SNAP|' || pg_export_snapshot();"
+    echo "\\echo COUNTS_BEGIN"
+    cat "${HERE}/pg-counts.sql"
+    echo "\\echo COUNTS_END"
+  } >&3
+  # wait for the counts to be complete (or the holder to die)
+  while ! grep -q '^COUNTS_END$' "${out}"; do
+    if ! kill -0 "${holder}" 2>/dev/null; then
+      exec 3>&-
+      echo "ERROR: snapshot holder for ${db} died: $(cat "${err}")"; return 1
+    fi
+    sleep 0.2
+  done
+  snap=$(sed -n 's/^SNAP|//p' "${out}")
+  [[ -n "${snap}" ]] || { exec 3>&-; echo "ERROR: no snapshot id exported for ${db}"; return 1; }
+
+  docker exec postgres pg_dump -U "${PGU}" -d "${db}" --snapshot="${snap}" --format=custom --compress=6 > "${STAGE}/${db}.dump" || {
+    exec 3>&-; wait "${holder}" 2>/dev/null || true; return 1; }
+
+  # end the holder's transaction (EOF on stdin) and collect its output
+  exec 3>&-
+  wait "${holder}" || { echo "ERROR: snapshot holder for ${db} failed: $(cat "${err}")"; return 1; }
+  sed -n '/^COUNTS_BEGIN$/,/^COUNTS_END$/p' "${out}" | { grep -v '^COUNTS_' || true; } \
+    | LC_ALL=C sort -t'|' -k1,1 | sed "s/^/${db}|/" >> "${STAGE}/counts.tsv"
+  rm -f "${fifo}" "${out}" "${err}"
+}
+
 : > "${STAGE}/counts.tsv"
 for db in ${DBS}; do
   log "database ${db}"
-  "${HERE}/pg-counts.sh" "${db}" > "${STAGE}/before.txt"
-  docker exec postgres pg_dump -U "${PGU}" -d "${db}" --format=custom --compress=6 > "${STAGE}/${db}.dump"
-  "${HERE}/pg-counts.sh" "${db}" > "${STAGE}/after.txt"
-  # full outer join on the key; a table seen in only one snapshot counts as 0 in the other
-  LC_ALL=C join -t'|' -a1 -a2 -e0 -o 0,1.2,2.2 "${STAGE}/before.txt" "${STAGE}/after.txt" \
-    | sed "s/^/${db}|/" >> "${STAGE}/counts.tsv"
-  rm -f "${STAGE}/before.txt" "${STAGE}/after.txt"
+  dump_with_counts "${db}"
 done
 
 ( cd "${STAGE}" && shasum -a 256 globals.sql counts.tsv ./*.dump | sed 's# \./# #' > SHA256SUMS )
