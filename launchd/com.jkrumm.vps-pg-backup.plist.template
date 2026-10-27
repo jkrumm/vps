@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.jkrumm.vps-pg-backup</string>
+  <!-- Nightly backup of the Mac mini's Postgres (compose.dev.yml) to the HomeLab:
+       scripts/backup-pg-dev.sh. Rendered and loaded by `make dev-pg-launchd` (launchd/ README
+       in docs/mini-postgres.md). Run through `jobrun`, which writes the run record that
+       `jobs-grade` grades: a failed run or a missed night reaches Slack #alerts. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>__HOME__/.local/bin/jobrun</string>
+    <string>com.jkrumm.vps-pg-backup</string>
+    <string>--owner</string><string>vps</string>
+    <string>--every</string><string>86400</string>
+    <string>--timeout</string><string>3600</string>
+    <string>--</string>
+    <string>__VPS_DIR__/scripts/backup-pg-dev.sh</string>
+  </array>
+  <!-- jobrun is a bun script and launchd hands agents a minimal PATH: bun's dir, Homebrew
+       (docker, shasum comes from /usr/bin) must be on it. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <!-- StartCalendarInterval, not StartInterval: a fire missed while the machine slept is
+       coalesced into one run on wake. 03:15 sits between hermes-backup (03:00) and
+       brain-backup (03:30). Not RunAtLoad: installing must not turn into a backup run. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>3</integer>
+    <key>Minute</key><integer>15</integer>
+  </dict>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/vps-pg-backup.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/vps-pg-backup.log</string>
+</dict>
+</plist>

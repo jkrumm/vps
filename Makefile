@@ -59,7 +59,7 @@ endif
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
-        postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local sync-from-prod pg-sync-schema firewall shell-postgres db-counts prune prune-cron-install \
+        postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-upgrade dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
         check deploy verify logs _deploy-affected
 
@@ -685,6 +685,44 @@ restore-local: require-dev
 ## healthchecks, because those use the unix socket. Only TCP connections fail.
 dev-db-passwords: require-dev
 	$(OP_RUN_DEV) ./scripts/dev-db-passwords.sh
+
+## Dev — back up the maintained Postgres on the mini to the HomeLab now (what the 03:15
+## LaunchAgent runs). Globals + every database + a row-count manifest, checksum-verified
+## after upload, newest 14 kept. No secret needed: dumps via the container's socket.
+dev-pg-backup: require-dev
+	./scripts/backup-pg-dev.sh
+
+## Dev — restore drill: newest HomeLab backup (or BACKUP=<name>) → scratch databases →
+## exact row counts vs the source recorded at backup time → scratch dropped. Exits non-zero
+## on any mismatch. Never touches a database it did not create.
+dev-pg-restore-drill: require-dev
+	./scripts/restore-drill-pg-dev.sh
+
+## Dev — Postgres image upgrade, backup first. Minor bumps (postgres:18 floats) pull and
+## recreate; a major bump is refused with a pointer to docs/mini-postgres.md.
+dev-pg-upgrade: require-dev
+	$(OP_RUN_DEV) ./scripts/upgrade-pg-dev.sh
+
+## Dev — readiness probe of the mini Postgres (one line, exit 0/1). Fed to the devhost heartbeat.
+dev-pg-health: require-dev
+	./scripts/health-pg-dev.sh
+
+## Dev (mini) — install the nightly backup LaunchAgent from THIS checkout (run from the
+## main checkout, not a worktree: the plist hard-codes the path). Idempotent.
+dev-pg-launchd: require-dev
+	@case "$(CURDIR)" in */.claude/worktrees/*) echo "refusing: run from the main vps checkout, not a worktree ($(CURDIR))"; exit 1;; esac
+	@mkdir -p "$(HOME)/Library/LaunchAgents" "$(HOME)/Library/Logs"
+	@sed -e 's#__HOME__#$(HOME)#g' -e 's#__VPS_DIR__#$(CURDIR)#g' launchd/com.jkrumm.vps-pg-backup.plist.template \
+		> "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-pg-backup.plist"
+	@plutil -lint "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-pg-backup.plist" >/dev/null
+	@launchctl bootout gui/$$(id -u)/com.jkrumm.vps-pg-backup 2>/dev/null || true
+	@launchctl bootstrap gui/$$(id -u) "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-pg-backup.plist"
+	@echo "  ✓ com.jkrumm.vps-pg-backup loaded — daily 03:15, log ~/Library/Logs/vps-pg-backup.log"
+
+dev-pg-launchd-remove: require-dev
+	@launchctl bootout gui/$$(id -u)/com.jkrumm.vps-pg-backup 2>/dev/null || true
+	@rm -f "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-pg-backup.plist" "$(HOME)/.local/state/jobs/com.jkrumm.vps-pg-backup.json"
+	@echo "  ✓ com.jkrumm.vps-pg-backup removed (plist and jobrun record)"
 
 ## Dev — DESTROY and re-initialize the local FPP MariaDB volume. Destructive.
 ## The only in-place way to change a root password whose volume predates the

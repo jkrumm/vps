@@ -25,16 +25,18 @@
 # --- Postgres / MariaDB identity -------------------------------------------
 # Names, not credentials — T1, safe to cache. They deliberately still resolve
 # from the SAME op items prod uses rather than being hard-coded here, because
-# sync-pg-from-vps.sh restores a prod dump into the local container: the dump
-# carries `OWNER TO <role>` and `CREATE DATABASE <name>`, so a local database or
-# superuser role named differently from prod makes the restore fail.
+# restore-pg-local.sh (the S3 DR drill, MacBook) restores a prod dump into the local
+# container: the dump carries `OWNER TO <role>` and `CREATE DATABASE <name>`, so a
+# local database or superuser role named differently from prod makes the restore fail.
 POSTGRES_DB=op://vps/config/POSTGRES_DB
 POSTGRES_USER=op://vps/config/POSTGRES_USER
 MARIADB_DB=op://vps/config/MARIADB_DB
 
 # --- Local superuser passwords (DEV-ONLY VALUES, not prod's) ----------------
-# These containers are created fresh from these values and their volumes are
-# throwaway; nothing requires them to match production. Prod's postgres
+# These containers are created from these values; nothing requires them to match
+# production. (The Postgres volume is no longer throwaway on the mini — it holds
+# agent_workflows, backed up nightly, docs/mini-postgres.md — but the password is
+# still dev-only.) Prod's postgres
 # superuser and mariadb root passwords are the two highest-value credentials in
 # op://vps, and since 2026-08-01 physical possession of the mini yields the
 # login password → sudo → the age key → every cached ref, so caching them there
@@ -60,10 +62,22 @@ ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD
 UMAMI_DB_PASSWORD=op://vps/umami/DB_PASSWORD
 BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
 
+# --- agent_workflows (dev-host-only database, no prod counterpart) ------------
+# Own database + own least-privilege role, provisioned by setup-postgres.sh. The
+# mini's Postgres is a maintained instance, not a mirror: agent-workflows keeps
+# its system of record in it. A dev-only credential in the mini vault, next to
+# the superuser passwords above, not a prod ref. Added 2026-10-27: the ref must
+# be sealed into the mini's cache (dotfiles-private/headless.refs, `make
+# secrets-seed`) BEFORE this line reaches a checkout that runs dev targets —
+# secrets-run fails closed on a ref it cannot resolve, and every dev target reads
+# this file.
+AGENT_WORKFLOWS_DB_PASSWORD=op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD
+
 # --- Deliberately ABSENT ----------------------------------------------------
 # AWS_* (S3 backup credential)
-#   Getting prod data onto the mini does NOT need one. `make sync-from-prod`
-#   (whole DB) and `make pg-sync-schema SCHEMA=x` (one schema) run pg_dump INSIDE
+#   Getting prod data onto the mini does NOT need one. `make pg-sync-schema
+#   SCHEMA=x` (one schema; the whole-DB sync-from-prod was retired because the mini's
+#   Postgres is a maintained instance now) runs pg_dump INSIDE
 #   the prod container against its local socket and stream the dump back over
 #   keyless Tailscale SSH — no credential crosses the wire in either direction,
 #   and the data is fresher than the nightly backup besides. `fpp-sync-from-prod`
@@ -74,7 +88,7 @@ BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
 #   belongs on a clean machine anyway. They keep the full .env.tpl and stay
 #   MacBook-only. Do not add an S3 credential here to make them run on the mini:
 #   the whole reason this file exists is to keep prod credentials off it, and
-#   `sync-from-prod` already covers the case you actually want.
+#   `pg-sync-schema` already covers the case you actually want.
 #
 # CLOUDFLARE_* .......... no dev container fronts anything; prod tunnel token
 # FPP_*, EMAIL_GATEWAY_* prod app secrets, prod-only compose files
