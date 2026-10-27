@@ -175,6 +175,43 @@ echo "--> weatherorb_accounts (skipped: WEATHERORB_ACCOUNT_DB_PASSWORD not set �
 fi
 
 # ---------------------------------------------------------------------------
+# agent-workflows — OWN DATABASE agent_workflows, owner/login role agent_workflows
+# (agent-workflows keeps its system of record — run records, journal — on the Mac mini's
+# maintained Postgres, docs/mini-postgres.md). A database rather than a schema: the app
+# is the only tenant, and `restore-local` / schema syncs of the shared database can
+# then never touch it. The role is least-privilege — LOGIN only, owns that one
+# database, no CREATEDB/CREATEROLE/SUPERUSER, no privileges on any schema of ${POSTGRES_DB}
+# (it can still CONNECT there through PUBLIC's default, as every role can, but sees nothing).
+# Guarded like weatherorb_accounts: prod has no AGENT_WORKFLOWS_DB_PASSWORD,
+# so this only provisions on the dev host.
+# ---------------------------------------------------------------------------
+if [ -n "${AGENT_WORKFLOWS_DB_PASSWORD:-}" ]; then
+echo "--> agent_workflows"
+
+psql_main <<SQL
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'agent_workflows') THEN
+    CREATE ROLE agent_workflows WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '${AGENT_WORKFLOWS_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE agent_workflows WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '${AGENT_WORKFLOWS_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+
+-- CREATE DATABASE cannot run inside a DO block, so the statement is generated and executed by gexec.
+SELECT 'CREATE DATABASE agent_workflows OWNER agent_workflows'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'agent_workflows')
+\gexec
+
+REVOKE CONNECT ON DATABASE agent_workflows FROM PUBLIC;
+GRANT CONNECT ON DATABASE agent_workflows TO agent_workflows;
+SQL
+else
+echo "--> agent_workflows (skipped: AGENT_WORKFLOWS_DB_PASSWORD not set — dev-host-only database)"
+fi
+
+# ---------------------------------------------------------------------------
 # Future apps: add blocks here following the same pattern.
 #
 # Migration journals: each drizzle-kit app must keep its journal in its OWN

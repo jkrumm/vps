@@ -24,6 +24,9 @@ services:
   postgres:
     image: postgres:18
     container_name: postgres
+    # A maintained instance on the mini (agent_workflows lives here): survive a Colima/host
+    # restart. Backups, restore drill, upgrades: docs/mini-postgres.md.
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
