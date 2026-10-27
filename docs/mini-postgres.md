@@ -130,3 +130,11 @@ The gate path means a machine without the backup LaunchAgent skips the probe.
   `sync-from-prod` was retired: it dropped the entire local database.
 - `make restore-local` (the S3 DR drill) stays MacBook-only and replaces `${POSTGRES_DB}` only.
 - The `postgres-dev-data` volume is never removed or recreated by any target here.
+- **weatherorb's Postgres.** Homebrew's `postgresql@18` on `127.0.0.1:5433` (databases `weatherorb`,
+  `weatherorb_dbos`, test DBs; PostGIS 3.6, `shared_buffers=4GB`, loopback `trust`) is owned by the
+  weatherorb repo and deliberately left alone: this instance is `postgres:18` without PostGIS, and
+  the workload is a 7 GB live write path. Decided 2026-10-27 to leave it as is. If it moves, it moves
+  as a weatherorb change, most likely into its own container (e.g. `postgres-weatherorb` on a
+  PostGIS image, same backup/drill/upgrade scripts parameterised by container) rather than by
+  swapping this instance's image. Do not `brew services stop postgresql@18` — weatherorb and
+  the Athena cluster's binaries depend on it.
