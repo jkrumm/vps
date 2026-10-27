@@ -43,10 +43,11 @@ line there — read that header before adding to it:
 
 - **Dev-only superuser passwords** (`op://mini/vps-dev/*`). Prod's postgres
   superuser and mariadb root passwords stay off the mini. Only the role
-  *name* has to match prod (`sync-pg-from-vps.sh` restores a dump carrying
+  *name* has to match prod (`restore-pg-local.sh` restores a dump carrying
   `OWNER TO <role>`); the password does not.
-- **No S3 credential, because none is needed.** `sync-from-prod` (whole DB)
-  and `pg-sync-schema SCHEMA=x` (one schema) run `pg_dump` *inside* the prod
+- **No S3 credential, because none is needed.** `pg-sync-schema SCHEMA=x`
+  (one schema; the whole-DB `sync-from-prod` was retired when the mini's
+  Postgres became a maintained instance) runs `pg_dump` *inside* the prod
   container against its local socket and stream the dump back over keyless
   Tailscale SSH — no credential crosses the wire either way, and the data is
   fresher than the nightly backup. `fpp-sync-from-prod` is the same shape for
@@ -56,4 +57,8 @@ line there — read that header before adding to it:
   MacBook-only.** They read S3, so they keep the full `.env.tpl`. They are not
   a data path — they are the DR drill that proves the backup chain replays,
   which belongs on a clean machine. Don't cache an S3 credential to make them
-  run on the mini; `sync-from-prod` already covers the case that motivates it.
+  run on the mini; `pg-sync-schema` already covers the case that motivates it.
+- **`AGENT_WORKFLOWS_DB_PASSWORD`** (`op://mini/vps-dev/*`) is a fourth,
+  dev-only credential: the login of the role that owns the `agent_workflows`
+  database (`docs/mini-postgres.md`). Like the superuser passwords it has no
+  prod counterpart.

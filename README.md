@@ -340,13 +340,13 @@ Manual triggers: `make backup` (Postgres), `make fpp-backup` (MariaDB).
 Restoring PROD from S3 has **no make target by design** — gated, human-only DR
 tools only (`scripts/restore-pg.sh`, `apps/fpp/scripts/restore-mariadb.sh`),
 full procedure in `docs/disaster-recovery.md`. Dev seeding/DR-drill targets
-(`restore-local`, `sync-from-prod`, `pg-sync-schema`, `fpp-restore-local`,
+(`restore-local`, `pg-sync-schema`, `fpp-restore-local`,
 `fpp-sync-from-prod`, `db-counts`): `AGENTS.md` → Quick Reference. App repos
 delegate to these rather than re-implementing — e.g. `free-planning-poker`
 calls `make -C ../vps fpp-sync-from-prod`.
 
 **Verifying a restore/sync is faithful.** `make db-counts` prints stable-sorted
-`schema|table|rows` for both DBs — diff a `sync-from-prod` capture against a
+`schema|table|rows` for both DBs — diff a `pg-sync-schema` capture against a
 `restore-local` capture: Postgres should match exactly, MariaDB only by a
 small positive delta on hot tables (live writes since the backup). Don't
 trust the sync/restore scripts' own summaries — only `db-counts` runs a real
@@ -365,6 +365,10 @@ Both targets name their services explicitly rather than recreating the whole
 file — load-bearing for MariaDB, since `apps/fpp/compose.yml` also holds the
 RollHook-managed `fpp-server` and `fpp-analytics`, and an unscoped `up -d`
 would recreate them off `:latest`, undoing the last deploy.
+
+The Mac mini's Postgres (`compose.dev.yml`) is a maintained instance with its
+own backup, restore drill and upgrade targets (`make dev-pg-upgrade`, backup
+first, major bumps refused): [docs/mini-postgres.md](docs/mini-postgres.md).
 
 **Postgres major upgrade (e.g., 18 → 19):** Dump with current version, update image tag in `compose.infra.yml`, restore into new container via the gated `scripts/restore-pg.sh` (see `docs/disaster-recovery.md`). Always backup first.
 

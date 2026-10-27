@@ -61,12 +61,18 @@ make backup              # manual pg_dump → S3 (prod only — guarded)
 make fpp-backup          # manual mariadb-dump → S3 (prod only — guarded)
 
 # Dev — local seeding / DR from prod (all dev-only, never touch prod)
-make sync-from-prod      # whole-DB ssh+docker exec pg_dump from VPS → local (fresh, no S3). Drops whole local DB.
 make restore-local       # pull latest (or BACKUP_FILE=) S3 pg backup → local. Drops whole local DB.
 make pg-sync-schema SCHEMA=argo  # one schema only (least-priv, leaves other schemas intact)
 make fpp-sync-from-prod  # direct ssh+docker exec mariadb-dump from VPS → local (fresh, no S3)
 make fpp-restore-local   # pull latest S3 backup into local mariadb (DR drill / seed)
 make firewall            # show UFW status and rules
+
+# Mac mini Postgres — a MAINTAINED instance (agent_workflows lives in it), dev-only, docs/mini-postgres.md
+make dev-pg-backup           # globals + every database + row-count manifest → HomeLab, checksum-verified; nightly via LaunchAgent
+make dev-pg-restore-drill    # newest backup → scratch DBs → exact counts vs the source at backup time → scratch dropped; non-zero on mismatch
+make dev-pg-upgrade          # backup first, then pull+recreate (minor); a major bump is refused
+make dev-pg-health           # readiness probe (one line, exit 0/1) for the devhost heartbeat
+make dev-pg-launchd          # install the 03:15 backup LaunchAgent (from the main checkout, not a worktree)
 make prune-cron-install  # prod — install the weekly Sunday 04:30 image + build-cache prune (cron/docker-prune); never volumes
 make gh-runner-setup REPO=jkrumm/<repo> [N=2]  # prod — self-hosted Actions runner (instance) for one private repo (token on stdin, docs/gh-runner.md); gh-runner-remove undoes it, gh-runner-reapply re-runs setup for all
 make gh-runner-sync      # mini/MacBook (needs gh) — register a VPS runner for every private repo with workflows; DRY_RUN=1 previews
@@ -228,7 +234,12 @@ scripts/gh-runner-sync.sh     Registers the runner(s) of every private repo with
 scripts/gh-runner-watchdog.sh Restarts runners stuck in reconnect back-off — installed by setup as a 5-min systemd timer
 scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
 scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
-scripts/sync-pg-from-vps.sh   Dev — ssh vps + docker exec pg_dump (whole DB) → local (fresh, no S3)
+scripts/backup-pg-dev.sh      Mac mini Postgres → HomeLab nightly backup (globals, per-DB dumps, counts.tsv, SHA256SUMS; keep 14) — make dev-pg-backup
+scripts/restore-drill-pg-dev.sh  Restore drill of the newest mini backup into scratch DBs, counts vs source — make dev-pg-restore-drill
+scripts/upgrade-pg-dev.sh     Mini Postgres image upgrade, backup first, major bumps refused — make dev-pg-upgrade
+scripts/health-pg-dev.sh      Mini Postgres readiness probe for the devhost heartbeat — make dev-pg-health
+scripts/pg-counts.sh          Exact row counts + relation-kind counts of ONE database (backup manifest + drill)
+launchd/                      LaunchAgent template for the mini's nightly Postgres backup (make dev-pg-launchd)
 scripts/sync-pg-schema-from-vps.sh  Dev — generic per-schema sync (SCHEMA=argo); least-priv, app role only
 scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel
 scripts/seed-cron-env.sh      Materializes cron/*.env.tpl → /etc/vps/*.env, chmod 600 — run via make cron-env-seed
@@ -340,8 +351,9 @@ role owns its journal — no extra grants needed here. Applied: argo
 app's own least-priv role. The convention is fixed: **role name == schema name**, and the
 password env var is **`UPPER(schema)_DB_PASSWORD`** (so `argo` → `ARGO_DB_PASSWORD`). App
 repos call `make -C ../vps pg-sync-schema SCHEMA=<app> ENV=dev` (argo's `bun db:sync` does
-exactly this). For a full local mirror of every schema, use `make sync-from-prod`
-(whole-DB) or `make restore-local` (whole-DB from S3, version-pickable).
+exactly this). There is no whole-DB sync: the mini's Postgres is a maintained instance
+(`agent_workflows` lives in it), so `sync-from-prod` was retired. `make restore-local`
+(MacBook-only S3 DR drill) replaces `${POSTGRES_DB}` only and leaves `agent_workflows` alone.
 
 Current schemas:
 
@@ -353,6 +365,9 @@ Current schemas:
 | argo | argo (api) | argo |
 | shutterflow | shutterflow-share | shutterflow |
 
+**Mac mini only — own database, not a schema:** `agent_workflows` (owner and login role
+`agent_workflows`, `AGENT_WORKFLOWS_DB_PASSWORD` from `op://mini/vps-dev/*`), provisioned by
+`make postgres-setup ENV=dev`. Prod has no such database. Operations: `docs/mini-postgres.md`.
 ---
 
 ## App Integration Pattern
