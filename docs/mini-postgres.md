@@ -41,6 +41,9 @@ that file). So each step must be done before the next:
    `.env.dev.tpl` (in the `agent_workflows` section) and merged.
 5. `make postgres-setup ENV=dev` on the mini: sets the role's password to the real value.
 
+Done on 2026-10-27: field created, ref sealed, line added, role converged to the real password
+(verified by a TCP login with the cached value).
+
 ## Backup
 
 Daily 03:15 by `com.jkrumm.vps-pg-backup` (a LaunchAgent, like every other mini job; install with
