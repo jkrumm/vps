@@ -7,9 +7,11 @@
 # other schema untouched. Least-privilege: dumps and restores as the schema's
 # own role (role name == schema name), never the superuser.
 #
-# Why per-schema (vs. sync-pg-from-vps.sh whole-DB)?
+# Why per-schema, and the only sync there is?
 #   Postgres here is one DB with many schemas (public, umami, argo,
-#   basalt_ui_playground). Seeding one app must not clobber the others.
+#   basalt_ui_playground) next to separate databases (agent_workflows). Seeding
+#   one app must not clobber the others; the old whole-DB sync-from-prod did,
+#   and was retired.
 #
 # Convention (matches scripts/setup-postgres.sh and .env.tpl):
 #   - role name      == schema name           (argo, umami, basalt_ui_playground)
