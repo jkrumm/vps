@@ -366,7 +366,7 @@ Current schemas:
 | shutterflow | shutterflow-share | shutterflow |
 
 **Mac mini only — own database, not a schema:** `agent_workflows` (owner and login role
-`agent_workflows`, `AGENT_WORKFLOWS_DB_PASSWORD` from `op://mini/vps-dev/*`), provisioned by
+`agent_workflows`, password `op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD`, see activation order in `docs/mini-postgres.md`), provisioned by
 `make postgres-setup ENV=dev`. Prod has no such database. Operations: `docs/mini-postgres.md`.
 ---
 

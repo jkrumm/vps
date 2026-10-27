@@ -23,10 +23,23 @@ A separate **database** (not a schema in `${POSTGRES_DB}`), owned by a login rol
 `restore-local` (which replaces `${POSTGRES_DB}`) and schema syncs can never touch it.
 
 Its password is `AGENT_WORKFLOWS_DB_PASSWORD` = `op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD`, a
-dev-only credential in `.env.dev.tpl`, cached on the mini through
-`dotfiles-private/headless.refs`. **Order matters:** the ref must be sealed into the mini's cache
-(`make secrets-seed` on the MacBook) before this checkout's `.env.dev.tpl` is used for dev targets —
-`secrets-run` fails closed on an unresolvable ref and every dev target reads that file.
+dev-only credential in the mini vault. Until the role is activated (below) `setup-postgres.sh`
+skips its block, and the database and role that already exist keep whatever password they have.
+
+### Activating the agent_workflows role
+
+Order matters: `secrets-seed` aborts the whole reseal on a ref it cannot resolve, and
+`secrets-run` fails closed on a `.env.dev.tpl` ref missing from the cache (every dev target reads
+that file). So each step must be done before the next:
+
+1. The 1Password field `op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD` exists (MacBook; generate a
+   random value).
+2. The ref is added to `dotfiles-private/headless.refs` and pushed.
+3. `make secrets-seed` (MacBook; seals the cache and delivers it to the mini). Check on the mini:
+   `secrets-run read op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD`.
+4. The line `AGENT_WORKFLOWS_DB_PASSWORD=op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD` is added to
+   `.env.dev.tpl` (in the `agent_workflows` section) and merged.
+5. `make postgres-setup ENV=dev` on the mini: sets the role's password to the real value.
 
 ## Backup
 
