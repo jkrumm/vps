@@ -58,7 +58,8 @@ line there — read that header before adding to it:
   a data path — they are the DR drill that proves the backup chain replays,
   which belongs on a clean machine. Don't cache an S3 credential to make them
   run on the mini; `pg-sync-schema` already covers the case that motivates it.
-- **`AGENT_WORKFLOWS_DB_PASSWORD`** (`op://mini/vps-dev/*`) is a fourth,
+- **`AGENT_WORKFLOWS_DB_PASSWORD`** (`op://mini/vps-dev/*`) will be a fourth,
   dev-only credential: the login of the role that owns the `agent_workflows`
-  database (`docs/mini-postgres.md`). Like the superuser passwords it has no
-  prod counterpart.
+  database. Like the superuser passwords it has no prod counterpart. It is not
+  in `.env.dev.tpl` until sealed into the cache — activation order in
+  `docs/mini-postgres.md`.

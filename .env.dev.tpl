@@ -63,15 +63,11 @@ UMAMI_DB_PASSWORD=op://vps/umami/DB_PASSWORD
 BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
 
 # --- agent_workflows (dev-host-only database, no prod counterpart) ------------
-# Own database + own least-privilege role, provisioned by setup-postgres.sh. The
-# mini's Postgres is a maintained instance, not a mirror: agent-workflows keeps
-# its system of record in it. A dev-only credential in the mini vault, next to
-# the superuser passwords above, not a prod ref. Added 2026-10-27: the ref must
-# be sealed into the mini's cache (dotfiles-private/headless.refs, `make
-# secrets-seed`) BEFORE this line reaches a checkout that runs dev targets —
-# secrets-run fails closed on a ref it cannot resolve, and every dev target reads
-# this file.
-AGENT_WORKFLOWS_DB_PASSWORD=op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD
+# Deliberately NOT listed yet: AGENT_WORKFLOWS_DB_PASSWORD=op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD
+# secrets-run fails closed on a ref missing from the mini's cache, so the line may only
+# be added AFTER the field exists and the cache is sealed. Until then setup-postgres.sh
+# skips the agent_workflows block. Exact order: docs/mini-postgres.md → "Activating the
+# agent_workflows role".
 
 # --- Deliberately ABSENT ----------------------------------------------------
 # AWS_* (S3 backup credential)
