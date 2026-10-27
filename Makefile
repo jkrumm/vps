@@ -674,7 +674,8 @@ backup: require-prod
 ## Dev — pull latest (or BACKUP_FILE=...) S3 pg backup → local. Validates DR chain. Drops whole local DB.
 ## MacBook-only: keeps the full .env.tpl because it needs the S3 backup credential,
 ## which is deliberately not cached on the mini. To get prod DATA onto the mini use
-## sync-from-prod (pg_dump over SSH, no credential) — this target is the DR drill.
+## pg-sync-schema (pg_dump over SSH, no credential) — this target is the DR drill.
+## Replaces only ${POSTGRES_DB}; the separate agent_workflows database is not touched.
 restore-local: require-dev
 	$(OP_RUN) ./scripts/restore-pg-local.sh
 ## Dev — converge the local superuser passwords onto .env.dev.tpl. Idempotent.
@@ -701,10 +702,9 @@ dev-mariadb-reset: require-dev
 	$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d mariadb
 	@echo "  ✓ mariadb re-initialized from .env.dev.tpl — now run 'make fpp-sync-from-prod'"
 
-## Dev — fresh whole-DB sync from prod Postgres over SSH (no S3). Drops whole local DB.
-sync-from-prod: require-dev
-	$(OP_RUN_DEV) ./scripts/sync-pg-from-vps.sh
 ## Dev — per-schema sync from prod (SCHEMA=argo). Least-priv, leaves other schemas intact.
+## The only way prod data reaches the mini: the local Postgres is a maintained instance
+## (agent_workflows lives in it), so there is deliberately no whole-DB sync.
 pg-sync-schema: require-dev
 	SCHEMA="$(SCHEMA)" $(OP_RUN_DEV) ./scripts/sync-pg-schema-from-vps.sh
 

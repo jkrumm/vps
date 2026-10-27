@@ -11,7 +11,10 @@
 # schema (public, umami, argo, basalt_ui_playground, …) is replaced. For a
 # single app's schema only, use sync-pg-schema-from-vps.sh instead.
 #
-# For fresh-from-prod data (no S3 round trip), use sync-pg-from-vps.sh.
+# For fresh-from-prod data (no S3 round trip), use sync-pg-schema-from-vps.sh
+# (`make pg-sync-schema SCHEMA=<app>`). The whole-DB sync was retired: the mini's
+# Postgres is a maintained instance. This script replaces ${POSTGRES_DB} only —
+# the separate agent_workflows database (and any other database) is untouched.
 # Prod restore (interactive, drops prod DB) is restore-pg.sh.
 #
 # Usage:  make restore-local
