@@ -828,7 +828,7 @@ check:
 ## Apply a merged vps-repo change on the VPS: make deploy [APP=<name>].
 deploy:
 ifneq ($(ENV),prod)
-	@# Off the VPS (warden on the mini runs plain `make deploy`): pull there and run it there —
+	@# Off the VPS (the mini runs plain `make deploy`): pull there and run it there —
 	@# every <app>-up is require-prod, and .deploy-sha/.deploy-apps live on the VPS checkout.
 	@ssh vps "cd ~/vps && git pull --ff-only -q && ENV=prod make --no-print-directory deploy$(if $(APP), APP=$(APP))"
 else
@@ -863,7 +863,7 @@ _deploy-affected:
 ## have no app health check) are skipped. Exits non-zero if any app is unhealthy.
 verify:
 ifneq ($(ENV),prod)
-	@# Off the VPS (warden on the mini runs plain `make verify`): pull there and run it there —
+	@# Off the VPS (the mini runs plain `make verify`): pull there and run it there —
 	@# every <app>-up is require-prod, and .deploy-sha/.deploy-apps live on the VPS checkout.
 	@ssh vps "cd ~/vps && git pull --ff-only -q && ENV=prod make --no-print-directory verify$(if $(APP), APP=$(APP))"
 else

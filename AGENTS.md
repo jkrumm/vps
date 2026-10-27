@@ -468,7 +468,7 @@ no `.sh` extension and are not syntax-checked by this target.
 
 ## Deploy
 
-Off the VPS (e.g. warden on the mini), `make deploy` / `make verify` forward to the VPS: `ssh vps` → `git pull --ff-only` → `ENV=prod make <target>` there, where the `.deploy-sha` / `.deploy-apps` state lives.
+Off the VPS (e.g. on the mini), `make deploy` / `make verify` forward to the VPS: `ssh vps` → `git pull --ff-only` → `ENV=prod make <target>` there, where the `.deploy-sha` / `.deploy-apps` state lives.
 
 This repo ships **compose/config and ops scripts**, not app code. Two layers:
 
