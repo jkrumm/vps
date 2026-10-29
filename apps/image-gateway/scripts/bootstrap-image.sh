@@ -31,8 +31,8 @@ echo "${ROLLHOOK_SECRET}" | docker login "${REGISTRY}" -u rollhook --password-st
 
 # NOTE: image-gateway is a bun MONOREPO — the gateway depends on the `shared/`
 # workspace package, so the build context is the REPO ROOT and the Dockerfile
-# path is gateway/Dockerfile. This differs from research-gateway (single
-# package, context == Dockerfile dir) and matches .github/workflows/deploy.yml,
+# path is gateway/Dockerfile. This differs from a single-package app
+# (context == Dockerfile dir) and matches .github/workflows/deploy.yml,
 # which passes context: . and dockerfile: gateway/Dockerfile. Building with the
 # gateway dir as context fails on the missing shared/ workspace.
 echo "[3/4] Build ${REGISTRY}/image-gateway:initial"

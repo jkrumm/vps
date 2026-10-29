@@ -14,7 +14,7 @@ DOMAIN=op://vps/config/DOMAIN
 # Gateway's own bearer
 API_SECRET=op://vps/image-gateway/API_SECRET
 
-# Upstream OpenAI-compatible endpoint (the unified IU endpoint, same item argo/research-gateway use)
+# Upstream OpenAI-compatible endpoint (the unified IU endpoint, same item argo uses)
 OPENAI_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 OPENAI_API_KEY=op://common/anthropic/API_KEY
 

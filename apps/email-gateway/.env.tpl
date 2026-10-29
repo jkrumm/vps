@@ -25,7 +25,7 @@ EMAIL_GATEWAY_SES_SNS_TOPIC_ARN=op://vps/email-gateway/SES_SNS_TOPIC_ARN
 EMAIL_GATEWAY_RECEIVER_EMAIL=op://vps/email-gateway/RECEIVER_EMAIL
 EMAIL_GATEWAY_SY_SERENDIPITY_RECEIVER_EMAIL=op://vps/email-gateway/SY_SERENDIPITY_RECEIVER_EMAIL
 
-# Spam filter — shared IU endpoint creds (same item research-gateway and argo use).
+# Spam filter — shared IU endpoint creds (same item argo uses).
 EMAIL_GATEWAY_LLM_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 EMAIL_GATEWAY_LLM_API_KEY=op://common/anthropic/API_KEY
 
