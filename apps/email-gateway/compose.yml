@@ -41,6 +41,10 @@ services:
       # POST /shutterflow: Shutterflow's auth codes, own bearer; shutterflow.app is a verified SES identity.
       SHUTTERFLOW_SECRET_KEY: ${EMAIL_GATEWAY_SHUTTERFLOW_SECRET_KEY}
       SHUTTERFLOW_FROM_EMAIL: "Shutterflow <noreply@shutterflow.app>"
+      # POST /athena: Athena's sign-in codes for IU staff, own bearer; sender on the verified jkrumm.com domain
+      # (never an @iu.org From: DMARC p=reject). ATHENA_REPLY_TO is not wired yet: it needs a 1Password field first.
+      ATHENA_SECRET_KEY: ${EMAIL_GATEWAY_ATHENA_SECRET_KEY}
+      ATHENA_FROM_EMAIL: "Athena <athena@jkrumm.com>"
       LLM_BASE_URL: ${EMAIL_GATEWAY_LLM_BASE_URL}
       LLM_API_KEY: ${EMAIL_GATEWAY_LLM_API_KEY}
       LLM_MODEL: gpt-6-luna

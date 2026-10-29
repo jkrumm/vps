@@ -53,6 +53,10 @@ EMAIL_GATEWAY_SY_SERENDIPITY_READ_KEY=op://vps/email-gateway/SY_SERENDIPITY_READ
 # the route 404s when unset. The same field feeds apps/shutterflow/.env.tpl.
 EMAIL_GATEWAY_SHUTTERFLOW_SECRET_KEY=op://vps/email-gateway/SHUTTERFLOW_SECRET_KEY
 
+# POST /athena bearer key — Athena's sign-in code mails (6-digit codes to @iu.org
+# only). Opens nothing else; the route 404s when unset.
+EMAIL_GATEWAY_ATHENA_SECRET_KEY=op://vps/email-gateway/ATHENA_SECRET_KEY
+
 # IMAP ingest of hello@ from Proton Mail Bridge on the homelab (read-only),
 # over the tailnet (ACL: tag:vps -> tag:homelab tcp:1143). Bridge's cert is
 # self-signed for 127.0.0.1; the path is WireGuard-encrypted and ACL-scoped,
