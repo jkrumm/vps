@@ -57,7 +57,6 @@ endif
         edge-cache-status edge-cache-apply \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
-        audio-gateway-up audio-gateway-down audio-gateway-env audio-gateway-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
         postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-upgrade dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
@@ -115,7 +114,6 @@ ifeq ($(ENV),prod)
 	$(MAKE) email-gateway-up
 	$(MAKE) photo-gallery-up
 	$(MAKE) imgproxy-up
-	$(MAKE) audio-gateway-up
 else
 	@if lsof -nP -iTCP:6379 -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "→ Detected existing Redis/Valkey on :6379 — skipping the dev valkey service"; \
@@ -128,7 +126,6 @@ endif
 
 down:
 ifeq ($(ENV),prod)
-	$(MAKE) audio-gateway-down
 	$(MAKE) imgproxy-down
 	$(MAKE) photo-gallery-down
 	$(MAKE) email-gateway-down
@@ -525,37 +522,6 @@ image-gateway-env: require-prod
 	chmod 644 apps/image-gateway/.env
 	@echo "Wrote apps/image-gateway/.env (chmod 644, gitignored)"
 
-## audio-gateway stack (Bun audio service, RollHook-managed) — apps/audio-gateway/compose.yml
-## Tailscale-only via DNS-only A record audio-gateway.jkrumm.com → ${VPS_TAILSCALE_IP}.
-## RollHook deploys on push to jkrumm/audio-gateway:master.
-## Recreate-with-config-change without rolling back to a stale :latest (same
-## foot-gun as argo-up): pin the running image SHA into IMAGE_TAG. New code still
-## deploys only through RollHook (push to audio-gateway master).
-## `docker ps -a` (not `docker ps`) so a stopped-but-present container still
-## resolves — same argo-up fix, same reason: `docker ps` alone made this abort
-## on exactly the exited container it exists to recover.
-audio-gateway-up: require-prod
-	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=audio-gateway' --format '{{.Names}}' | head -1); \
-	if [ -z "$$NAME" ]; then echo "  ✗ no audio-gateway container exists at all — bootstrap via 'make audio-gateway-bootstrap-image' then push to audio-gateway master"; exit 1; fi; \
-	IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
-	if [ -z "$$IMG" ]; then echo "  ✗ audio-gateway container '$$NAME' exists but its image could not be read — inspect it manually"; exit 1; fi; \
-	echo "  pinning audio-gateway → $$IMG"; \
-	$(OP_RUN) env IMAGE_TAG=$$IMG docker compose -f apps/audio-gateway/compose.yml up -d
-audio-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/audio-gateway/compose.yml down
-## Materialize apps/audio-gateway/.env from .env.tpl (via `op inject`). Required so
-## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
-## can resolve ${VAR} interpolations in apps/audio-gateway/compose.yml. Re-run after
-## rotating any audio-gateway secret. Resulting .env is chmod 644 and gitignored.
-audio-gateway-env: require-prod
-	op --account tkrumm inject -i apps/audio-gateway/.env.tpl -o apps/audio-gateway/.env -f
-	chmod 644 apps/audio-gateway/.env
-	@echo "Wrote apps/audio-gateway/.env (chmod 644, gitignored)"
-## One-shot bootstrap — clone audio-gateway repo, build, and push :initial to
-## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
-## deploys against. Re-runnable.
-audio-gateway-bootstrap-image: require-prod
-	$(OP_RUN) ./apps/audio-gateway/scripts/bootstrap-image.sh
-
 ## photo-gallery stack — static Astro gallery served by nginx from a host volume.
 ## Content lives at /home/jkrumm/photo-gallery-dist on the VPS; photo-flow CLI on the
 ## developer laptop rsyncs the built dist/ there. No registry, no RollHook — the
@@ -794,7 +760,7 @@ prune-cron-install: require-prod
 # Faces: AGENTS.md → Validate / Deploy / Verify & Monitor / Gotchas.
 
 # Known apps — the app directories under apps/. Both error paths list these.
-KNOWN_APPS := argo audio-gateway basalt-ui-marketing email-gateway fpp image-gateway imgproxy jkrumm-com photo-gallery rollhook-marketing shutterflow weatherorb
+KNOWN_APPS := argo basalt-ui-marketing email-gateway fpp image-gateway imgproxy jkrumm-com photo-gallery rollhook-marketing shutterflow weatherorb
 
 # Files changed since the last recorded deploy → the targets `make deploy` (no
 # APP) applies. `apps/<name>/**` maps to that app; the shared stacks map to their
@@ -812,7 +778,6 @@ DEPLOY_AFFECTED = $(shell old=$$(cat .deploy-sha 2>/dev/null) || exit 0; [ -n "$
 # container_name (the name is dynamic), so verify/logs resolve the running
 # container by this service label instead of a hard-coded name.
 APP_SERVICE_argo                := argo-api
-APP_SERVICE_audio-gateway       := audio-gateway
 APP_SERVICE_basalt-ui-marketing := basalt-ui-marketing
 APP_SERVICE_email-gateway       := email-gateway
 APP_SERVICE_fpp                 := fpp-server fpp-analytics
@@ -847,7 +812,7 @@ check:
 # push (CI), never here.
 #
 # Per-app mapping — decided from the Makefile + the RollHook section:
-#   argo → argo-up · audio-gateway → audio-gateway-up ·
+#   argo → argo-up ·
 #   basalt-ui-marketing → basalt-ui-marketing-up · email-gateway → email-gateway-up ·
 #   fpp → fpp-up · image-gateway → image-gateway-up · imgproxy → imgproxy-up ·
 #   jkrumm-com → jkrumm-com-up · photo-gallery → photo-gallery-up ·

@@ -198,7 +198,6 @@ compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no
 compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
 compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStack with ports exposed)
 apps/argo/compose.yml         argo-api + argo-dashboard — personal API/agent backbone, RollHook-managed
-apps/audio-gateway/compose.yml  STT/TTS only (PODCAST_ENABLED=false) — podcast wiring is mini-only
 apps/image-gateway/compose.yml  Backend for the /img skill, RollHook-managed
 apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, one tailnet-only worker router) — RollHook-managed, `make weatherorb-up` pins both images — + weatherorb-egress (stdlib CONNECT proxy for the alert webhooks, ADR 0023: tailnet-only :18443, own bridge network, public python image, no pin) + weatherorb-probe (stdlib external /v1 availability probe, ADR 0026: once a minute, OTLP span to ClickStack, key from the host-local file `WEATHERORB_PROBE_KEY_FILE` = `/etc/vps/weatherorb-probe-key` (owner 65534, mode 0400), fails closed without it; no published port, public python image, no pin)
 apps/weatherorb/egress/        proxy.py (the egress proxy; IP-literal :443 CONNECT only, refuses non-public targets) + test_proxy.py (`python3 -m unittest`, stdlib only)
@@ -535,7 +534,6 @@ unhealthy; infra entries (which have no app health check) are skipped.
 | App | Health URL | Kuma monitor | OTel `service.name` |
 |-|-|-|-|
 | argo | `https://argo.<your-domain>/api/health` | `Argo / API - HTTP` | `argo-api` |
-| audio-gateway | `https://audio-gateway.<your-domain>/health` | `Audio Gateway - HTTP` | none |
 | basalt-ui-marketing | `https://basalt-ui.com/` | — | none |
 | email-gateway | `https://email-gateway.<your-domain>/health` | `EmailGateway - HTTP` | none |
 | fpp | `https://server.free-planning-poker.com/health` · `https://analytics.free-planning-poker.com/health` | `FPP - Server - HTTP` · `FPP - Analytics - HTTP` | `fpp-server` · `fpp-analytics` |

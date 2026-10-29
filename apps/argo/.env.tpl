@@ -60,12 +60,6 @@ HARDCOVER_API_KEY=op://vps/argo/HARDCOVER_API_KEY
 DEEPSEEK_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 DEEPSEEK_API_KEY=op://common/anthropic/API_KEY
 
-# Audio (STT + TTS) — forwarded to the audio-gateway service (the single source of
-# truth for audio), reachable in-cluster on the shared `proxy` network. Non-secret
-# internal URL, so hardcoded rather than a 1Password ref. No depends_on across stacks;
-# if the gateway is down the audio routes 503 (Argo tolerates it).
-AUDIO_GATEWAY_URL=http://audio-gateway:7714
-
 # Chat upstream — Hermes agent (Mac Mini) OpenAI-compatible API over Tailscale
 # (port 8642). BASE_URL must include the /v1 prefix; the provider appends
 # /chat/completions. Stored as a 1Password ref so the Mac-Mini tailnet host stays

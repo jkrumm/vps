@@ -85,8 +85,6 @@ services:
       # pattern as PORT, left unset in this block).
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      # Audio gateway — STT + expressive TTS, forwarded over the shared proxy net.
-      AUDIO_GATEWAY_URL: ${AUDIO_GATEWAY_URL:-http://audio-gateway:7714}
       # Hermes chat upstream — Mac Mini OpenAI-compatible API over Tailscale (8642).
       HERMES_BASE_URL: ${HERMES_BASE_URL}
       HERMES_API_KEY: ${HERMES_API_KEY}
