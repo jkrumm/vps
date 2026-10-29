@@ -3,7 +3,7 @@
 # container to authorize OIDC deploys against. Run once per fresh server before the
 # first GitHub Actions deploy can succeed. Idempotent — re-running rebuilds and re-pushes.
 #
-# Unlike research-gateway this does NOT clone from GitHub: the build context is pushed
+# Unlike the other apps' bootstrap scripts this does NOT clone from GitHub: the build context is pushed
 # here from the mini by `make edge-bootstrap` in the weatherorb repo (map/ + deploy/edge/),
 # so a private repo needs no token on the server.
 #

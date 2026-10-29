@@ -1,5 +1,5 @@
 # Production compose for the VPS — weatherorb edge + account service + alert egress proxy + /v1 probe.
-# Mirrors apps/research-gateway.
+# Same RollHook/Traefik pattern as the other apps/*/compose.yml.
 #
 # Public via the Cloudflare Tunnel (apex + www CNAMEs → the tunnel, orange cloud,
 # each with a tunnel ingress hostname, like basalt-ui.com). The container is nginx: it
