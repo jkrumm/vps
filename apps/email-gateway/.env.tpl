@@ -56,6 +56,8 @@ EMAIL_GATEWAY_SHUTTERFLOW_SECRET_KEY=op://vps/email-gateway/SHUTTERFLOW_SECRET_K
 # POST /athena bearer key — Athena's sign-in code mails (6-digit codes to @iu.org
 # only). Opens nothing else; the route 404s when unset.
 EMAIL_GATEWAY_ATHENA_SECRET_KEY=op://vps/email-gateway/ATHENA_SECRET_KEY
+# Reply-To of those mails, so a reply reaches the owner (the From stays on the verified SES domain).
+EMAIL_GATEWAY_ATHENA_REPLY_TO=op://vps/email-gateway/ATHENA_REPLY_TO
 
 # IMAP ingest of hello@ from Proton Mail Bridge on the homelab (read-only),
 # over the tailnet (ACL: tag:vps -> tag:homelab tcp:1143). Bridge's cert is
