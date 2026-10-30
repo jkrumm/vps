@@ -50,7 +50,6 @@ endif
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
         fpp-backup fpp-mariadb-upgrade fpp-shell fpp-restore-local fpp-sync-from-prod \
         email-gateway-up email-gateway-down email-gateway-env email-gateway-bootstrap-image \
-        argo-up argo-down argo-env argo-bootstrap-image \
         photo-gallery-up photo-gallery-down \
         imgproxy-up imgproxy-down \
         edge-cache-status edge-cache-apply \
@@ -236,71 +235,6 @@ email-gateway-env: require-prod
 	chmod 644 apps/email-gateway/.env
 	@echo "Wrote apps/email-gateway/.env (chmod 644, gitignored)"
 
-## argo stack (api + dashboard, RollHook-managed) — apps/argo/compose.yml
-## Tailscale-only via DNS-only A record argo.jkrumm.com → ${VPS_TAILSCALE_IP}.
-## RollHook deploys on push to jkrumm/argo:master.
-##
-## argo-up: recreate containers WITHOUT pulling a new image. Reads the SHAs
-## of the currently-running-OR-STOPPED containers and pins IMAGE_TAG to each.
-## Use this when you change apps/argo/compose.yml (labels, mounts, env) and
-## need the changes applied without bumping the running code. To deploy new
-## code, use `make argo-redeploy` (triggers RollHook via empty-commit push).
-##
-## Why this dance: RollHook tags pushed images by git SHA only — it does NOT
-## update the :latest tag. So a naive `docker compose up -d` would resolve
-## `${IMAGE_TAG:-...:latest}` and roll the running containers back to a stale
-## :latest. Pinning to the running image avoids that regression.
-##
-## `docker ps` (no -a) only sees RUNNING containers — so an `exited` argo-api,
-## the exact incident this target exists to fix, made it resolve to nothing
-## and abort with "not running", refusing the one command that could recover
-## it. `docker ps -a` names the container in any state; `docker inspect` on
-## that name reads its pinned image whether it's up or down. The two failure
-## messages below are deliberately different: no container by that name at
-## all needs a bootstrap (there is no image to pin), a container that exists
-## but couldn't be inspected is a different, rarer fault worth a manual look.
-argo-up: require-prod
-	@API_NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=argo-api' --format '{{.Names}}' | head -1); \
-	WEB_NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=argo-dashboard' --format '{{.Names}}' | head -1); \
-	if [ -z "$$API_NAME" ] || [ -z "$$WEB_NAME" ]; then \
-	  echo "  ✗ no argo-api/argo-dashboard container exists at all — bootstrap via 'make argo-bootstrap-image' then push to argo master to trigger RollHook"; \
-	  exit 1; \
-	fi; \
-	API_IMG=$$(docker inspect --format '{{.Config.Image}}' "$$API_NAME" 2>/dev/null || echo ""); \
-	WEB_IMG=$$(docker inspect --format '{{.Config.Image}}' "$$WEB_NAME" 2>/dev/null || echo ""); \
-	if [ -z "$$API_IMG" ] || [ -z "$$WEB_IMG" ]; then \
-	  echo "  ✗ argo-api/argo-dashboard container exists ($$API_NAME/$$WEB_NAME, stopped or running) but its image could not be read — inspect it manually"; \
-	  exit 1; \
-	fi; \
-	echo "  pinning argo-api      → $$API_IMG"; \
-	echo "  pinning argo-dashboard → $$WEB_IMG"; \
-	$(OP_RUN) env ARGO_API_IMAGE=$$API_IMG ARGO_DASHBOARD_IMAGE=$$WEB_IMG docker compose -f apps/argo/compose.yml --env-file apps/argo/.env up -d
-argo-down: require-prod ; $(OP_RUN) docker compose -f apps/argo/compose.yml --env-file apps/argo/.env down
-
-## Trigger a fresh RollHook deploy by pushing an empty commit to argo's master.
-## RollHook detects the push, rebuilds both images at the new SHA, and rolling-
-## restarts the containers. Use this instead of `make argo-up` when you want
-## new code (or when you just want compose.yml changes safely applied via a
-## fresh build).
-argo-redeploy: require-dev
-	@if [ ! -d $$HOME/SourceRoot/argo ]; then echo "  ✗ argo repo not found at ~/SourceRoot/argo"; exit 1; fi
-	@cd $$HOME/SourceRoot/argo && \
-	  git commit --allow-empty -m "chore: redeploy (triggered via vps make argo-redeploy)" && \
-	  git push && \
-	  echo "  ✓ pushed — watch the build at https://github.com/jkrumm/argo/actions"
-## One-shot bootstrap — clone argo repo, build both images, push :initial to
-## rollhook.jkrumm.com so RollHook has running containers to authorize OIDC
-## deploys against. Re-runnable.
-argo-bootstrap-image: require-prod
-	$(OP_RUN) ./apps/argo/scripts/bootstrap-image.sh
-## Materialize apps/argo/.env from .env.tpl. Required so RollHook's
-## `docker compose up --scale` can resolve ${VAR} interpolations. Re-run after
-## rotating any argo secret. Resulting .env is chmod 644 and gitignored.
-argo-env: require-prod
-	op --account tkrumm inject -i apps/argo/.env.tpl -o apps/argo/.env -f
-	chmod 644 apps/argo/.env
-	@echo "Wrote apps/argo/.env (chmod 644, gitignored)"
-
 ## shutterflow stack (share server + signed imgproxy CDN, RollHook-managed) — apps/shutterflow/compose.yml
 ## shutterflow.app + cdn.shutterflow.app via the Cloudflare tunnel. RollHook deploys on push to
 ## jkrumm/shutterflow:master. shutterflow-up pins the running share image (never rolls back to a
@@ -363,9 +297,8 @@ shutterflow-key-broker-image: require-prod
 ## proxy.py does not change the compose config hash, so a plain `up -d` keeps the container running
 ## the old script: the last step force-recreates exactly those two services (also what applies a
 ## rotated probe key file).
-## `docker ps -a` (not `docker ps`) — same fix as argo-up above:
-## a stopped-but-present container must still be pinned, not mistaken for
-## genesis and rolled back to a stale :latest.
+## `docker ps -a` (not `docker ps`): a stopped-but-present container must
+## still be pinned, not mistaken for genesis and rolled back to a stale :latest.
 weatherorb-up: require-prod
 	@PINS=""; \
 	for PAIR in weatherorb-edge:WEATHERORB_EDGE_IMAGE weatherorb-account:WEATHERORB_ACCOUNT_IMAGE; do \
@@ -693,7 +626,7 @@ prune-cron-install: require-prod
 # Faces: AGENTS.md → Validate / Deploy / Verify & Monitor / Gotchas.
 
 # Known apps — the app directories under apps/. Both error paths list these.
-KNOWN_APPS := argo basalt-ui-marketing email-gateway fpp imgproxy jkrumm-com photo-gallery rollhook-marketing shutterflow weatherorb
+KNOWN_APPS := basalt-ui-marketing email-gateway fpp imgproxy jkrumm-com photo-gallery rollhook-marketing shutterflow weatherorb
 
 # Files changed since the last recorded deploy → the targets `make deploy` (no
 # APP) applies. `apps/<name>/**` maps to that app; the shared stacks map to their
@@ -710,7 +643,6 @@ DEPLOY_AFFECTED = $(shell old=$$(cat .deploy-sha 2>/dev/null) || exit 0; [ -n "$
 # app → primary compose service(s). RollHook-managed apps have no
 # container_name (the name is dynamic), so verify/logs resolve the running
 # container by this service label instead of a hard-coded name.
-APP_SERVICE_argo                := argo-api
 APP_SERVICE_basalt-ui-marketing := basalt-ui-marketing
 APP_SERVICE_email-gateway       := email-gateway
 APP_SERVICE_fpp                 := fpp-server fpp-analytics
@@ -744,14 +676,13 @@ check:
 # push (CI), never here.
 #
 # Per-app mapping — decided from the Makefile + the RollHook section:
-#   argo → argo-up ·
 #   basalt-ui-marketing → basalt-ui-marketing-up · email-gateway → email-gateway-up ·
 #   fpp → fpp-up · imgproxy → imgproxy-up ·
 #   jkrumm-com → jkrumm-com-up · photo-gallery → photo-gallery-up ·
 #   shutterflow → shutterflow-up · weatherorb → weatherorb-up
 #   rollhook-marketing has NO -up target: its image is built and rolled by CI
 #   (ghcr.io/jkrumm/rollhook-marketing), so deploy reports that and exits 0.
-# The dev-only -redeploy targets (argo/weatherorb) push an
+# The dev-only -redeploy targets (weatherorb) push an
 # empty commit to trigger RollHook from a local clone — a dev convenience, not a
 # routine prod deploy, so deploy deliberately does not use them.
 #
