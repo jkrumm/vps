@@ -146,8 +146,8 @@ services:
       # Add a second OTLP HTTP receiver on :4319 without auth, merged into the
       # base collector pipelines. Bound to the docker bridge only — never
       # published to host, never routed via Traefik. Trusted-internal services
-      # (traefik, argo-api, future homelab agents) hit this; browser SDK + any
-      # public ingress keep using authed :4318 via Traefik. See
+      # (traefik, future homelab agents) hit this; browser SDK, any public
+      # ingress and argo-api (now on the mini) use the authed tier. See
       # clickstack/otel-custom.yaml for the merged-config rationale.
       CUSTOM_OTELCOL_CONFIG_FILE: /etc/otelcol-contrib/custom.config.yaml
     volumes:

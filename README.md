@@ -97,7 +97,6 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | umami | ghcr.io/umami-software/umami | Self-hosted analytics at `umami.<DOMAIN>` — see Integrating Umami below | auto |
 | photo-gallery | nginx:alpine | Static Astro photo gallery — content rsynced from laptop via photo-flow CLI | auto |
 | imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Image CDN — on-the-fly resize/convert over a private B2 bucket. See [docs/image-cdn.md](docs/image-cdn.md) | auto (v4.x) |
-| argo-api, argo-dashboard | `rollhook.jkrumm.com/argo-*` | Personal API + dashboard, the agent backbone | RollHook |
 | shutterflow-share | `rollhook.jkrumm.com/shutterflow-share` | Shutterflow share server (accounts, albums, share links) at `shutterflow.app` | RollHook |
 | shutterflow-imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Shutterflow's **signed** derivative CDN at `cdn.shutterflow.app` over `shutterflow/prod/derivatives/` | auto (v4.x) |
 | weatherorb-edge | `.../weatherorb-edge` | Tailscale-serve edge for the weatherorb weather/wave service | RollHook |

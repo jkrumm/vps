@@ -58,7 +58,7 @@
 # then `make weatherorb-up`, which recreates the probe; revoke the old key with `revoke-key`.
 #
 # The two RollHook services roll independently. RollHook selects the container by image name
-# (precedent: apps/fpp/compose.yml fpp-analytics-updater, apps/argo/compose.yml per-service
+# (precedent: apps/fpp/compose.yml fpp-analytics-updater, per-service
 # ${<NAME>_IMAGE:-${IMAGE_TAG:-…}}), so a roll of one service cannot redeploy the other. Both
 # images must therefore be bootstrap-seeded, and `make weatherorb-up` pins BOTH running images
 # (WEATHERORB_EDGE_IMAGE, WEATHERORB_ACCOUNT_IMAGE) so neither is rolled back to a stale :latest

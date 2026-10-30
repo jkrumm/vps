@@ -5,7 +5,7 @@
 #   - The base config enforces bearertokenauth on the :4318 (HTTP) and :4317
 #     (gRPC) OTLP receivers, and the base is locked (OpAMP-managed — no env
 #     to disable, no override).
-#   - Internal services on monitoring-net (traefik, argo-api, etc.) need to
+#   - Internal services on monitoring-net (traefik, etc.) need to
 #     export OTLP, but Traefik 3.x cannot reliably inject env-var values into
 #     its static-YAML auth headers (traefik-helm-chart#1361, unfixed).
 #   - Solution: add a SECOND receiver instance on :4319 without auth, wire it
@@ -13,9 +13,9 @@
 #     — never published to host or exposed via Traefik — so the trust boundary
 #     is the docker network, not the receiver.
 #
-# Browser SDK ingress (argo.DOMAIN/v1/traces → Traefik → clickstack:4318) still
-# goes through the authenticated path, since the browser embeds the ingestion
-# key anyway.
+# Browser SDK ingress (via Traefik → clickstack:4318) still goes through the
+# authenticated path, since the browser embeds the ingestion key anyway. Argo
+# (argo-api, now on the mini) also exports over the authed tier, not :4319.
 
 receivers:
   otlp/internal:

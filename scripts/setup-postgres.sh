@@ -81,6 +81,7 @@ SQL
 
 # ---------------------------------------------------------------------------
 # argo — schema: argo, user: argo
+# Retired: Argo runs on the mini now; the schema and role are kept here pending the owner's drop decision.
 # ---------------------------------------------------------------------------
 echo "--> argo"
 

@@ -22,8 +22,8 @@ MongoDB) at `clickstack`, exposed publicly only via Traefik on `hyperdx.${DOMAIN
                                          │           pipelines             │
                                          │                ▲                │
    Traefik (own request spans)           │                │                │
-   argo-api (drizzle + tracedFetch)      │   ┌────────────┴────────────┐   │
-   future internal services              │   │ otlp/internal receiver  │   │
+   VPS-internal services                 │   ┌────────────┴────────────┐   │
+   (docker monitoring-net only)          │   │ otlp/internal receiver  │   │
    ────────────────────────────────►     │   │   :4319 http  NO AUTH   │   │
    clickstack:4319                       │   │   (docker bridge only)  │   │
                                          │   └─────────────────────────┘   │
@@ -34,8 +34,8 @@ MongoDB) at `clickstack`, exposed publicly only via Traefik on `hyperdx.${DOMAIN
 
 | Tier | Port | Auth | Trust boundary | Used by |
 |-|-|-|-|-|
-| Public | `:4318` (http) / `:4317` (grpc) | `bearertokenauth` | Public ingress via Traefik + ingestion key | Browser SDKs (any frontend), the Mac mini's services (weatherorb workers, tileserver, watchdog, agent-workflows) via `otel.<domain>`, weatherorb-edge on `:4317` over `monitoring-net` (ngx_otel is gRPC-only, so it cannot use `:4319`) |
-| Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, argo-api, imgproxy, weatherorb-account, fpp-server, fpp-analytics, rollhook |
+| Public | `:4318` (http) / `:4317` (grpc) | `bearertokenauth` | Public ingress via Traefik + ingestion key | Browser SDKs (any frontend), the Mac mini's services (argo-api, weatherorb workers, tileserver, watchdog, agent-workflows) via `otel.<domain>`, weatherorb-edge on `:4317` over `monitoring-net` (ngx_otel is gRPC-only, so it cannot use `:4319`) |
+| Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, imgproxy, weatherorb-account, fpp-server, fpp-analytics, rollhook |
 
 The `:4319` port has no host binding and no Traefik label — it's reachable only
 from other containers on `monitoring-net`. The trust boundary is the docker
@@ -152,13 +152,13 @@ Traefik must be on `monitoring-net` (already wired). One trace per inbound
 request hitting any router. Request-duration metrics per router/entrypoint/service
 land in `default.otel_metrics_*` tables for HyperDX.
 
-### Backend services (argo-api as canonical example)
+### Backend services (email-gateway as canonical example)
 
 ```yaml
-# apps/argo/compose.yml
+# apps/email-gateway/compose.yml
 environment:
   OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
-  OTEL_SERVICE_NAME: argo-api
+  OTEL_SERVICE_NAME: email-gateway
 ```
 
 No `OTEL_EXPORTER_OTLP_HEADERS`. The SDK in the app (typically
@@ -190,7 +190,7 @@ startup line rather than assuming**, then confirm rows actually land:
 msg="OpenTelemetry monitoring" enabled=true logs=true metrics=true
 ```
 
-### Browser-side SPAs (argo-dashboard as canonical example)
+### Browser-side SPAs
 
 Browser SDKs cannot reach `:4319` (no public route). They go through Traefik's
 public path to `:4318`:
@@ -200,10 +200,11 @@ Browser → <app>.${DOMAIN}/v1/traces → Traefik → clickstack-otel@docker →
                                                                           (authed)
 ```
 
-Routing labels on the app's frontend container:
+Routing labels on the app's frontend container (no SPA on this VPS uses them
+today; Argo's dashboard, the former example, now runs on the mini and relays
+browser OTLP to the authed tier itself):
 
 ```yaml
-# apps/argo/compose.yml — argo-dashboard service labels
 - "traefik.http.routers.<app>-otel-traces.rule=Host(`<app>.${DOMAIN}`) && Path(`/v1/traces`)"
 - "traefik.http.routers.<app>-otel-traces.service=clickstack-otel@docker"
 - "traefik.http.routers.<app>-otel-logs.rule=Host(`<app>.${DOMAIN}`) && Path(`/v1/logs`)"
@@ -285,15 +286,15 @@ docker exec <container> sh -lc \
 ## Key rotation
 
 The HyperDX ingestion key (`op://vps/argo/HYPERDX_API_KEY_PROD`) is used by:
-- Any frontend SPA whose build embeds it (currently: argo-dashboard)
+- Any frontend SPA whose build embeds it (currently: Argo's dashboard on the mini, built by `make deploy` in the argo repo)
 - Any cross-host service that sends OTLP to the public ingress (currently: none on VPS)
 
 To rotate:
 
 ```bash
 op item edit "argo" "HYPERDX_API_KEY_PROD=<new-value>" --account tkrumm
-cd ~/SourceRoot/argo && git commit --allow-empty -m "chore: redeploy after HyperDX key rotation" && git push
-# Repeat the empty-commit-push for any other frontend that embeds the key.
+cd ~/SourceRoot/argo && make deploy   # on the mini: rebuilds the dashboard with the new key
+# Repeat the rebuild for any other frontend that embeds the key.
 ```
 
 Internal services on `:4319` don't need rotation — they don't use the key.
@@ -446,17 +447,15 @@ A stale `newest` (weeks/months old) confirms an orphan — drop it with
 
 ## Deploy regression to know about
 
-**`make argo-up` was a foot-gun** — `${IMAGE_TAG:-...:latest}` fell back to
-`:latest`, and RollHook never updates `:latest` (it tags by git SHA only). So a
-naive `up -d` would roll the running containers back to whatever was at `:latest`
-when the registry was first seeded.
+**The `make <app>-up` targets pin the running image.** `${IMAGE_TAG:-...:latest}`
+falls back to `:latest`, and RollHook never updates `:latest` (it tags by git SHA
+only). A naive `up -d` would roll the running containers back to whatever was at
+`:latest` when the registry was first seeded. So each RollHook app's `-up` target
+reads the *currently running* image SHA out of docker and pins it, which makes
+recreate-with-config-change work without pulling.
 
-Current state: `make argo-up` reads the *currently running* image SHAs out of
-docker and pins them via `ARGO_API_IMAGE` / `ARGO_DASHBOARD_IMAGE`, so compose
-recreate-with-config-change works without pulling.
-
-To deploy new code, always go through RollHook: push to argo's master, or use
-`make argo-redeploy` on the dev box (empty commit + push). RollHook builds the
+To deploy new code, always go through RollHook: push to the app's master (or use
+the dev-only `make <app>-redeploy` where one exists). RollHook builds the
 SHA-tagged image, pushes, and rolling-restarts the containers.
 
 ## References
