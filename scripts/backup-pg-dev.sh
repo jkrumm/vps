@@ -25,6 +25,9 @@
 # successful run. No client credential: the dump runs inside the container over
 # its unix socket and the upload is keyless Tailscale SSH.
 #
+# On a fully green run it pushes an Uptime Kuma heartbeat (URL from the chmod-600 file
+# ~/.config/uptime-kuma/pg-backup-push-url; absent = logged and skipped, never a failure).
+#
 # Env (all optional):
 #   PG_DEV_BACKUP_DEST  <ssh-host>:<absolute path>  (default homelab:/mnt/hdd/backups/vps-mini-postgres)
 #   PG_DEV_BACKUP_KEEP  backups to keep (default 14)
@@ -136,3 +139,26 @@ fi
   && find . -maxdepth 1 -name '*.incomplete' -mmin +1440 -exec rm -rf -- {} +"
 log "retention: newest ${KEEP} kept"
 log "Backup ${NAME} complete."
+
+# Success heartbeat — only reached when the whole run is green (set -e: a failed upload, drill or
+# retention never gets here), so a missed push in Uptime Kuma means a failed OR a missed night.
+# The push URL lives in a chmod-600 file, not the secrets cache (same rule as the devhost/drift
+# heartbeats, dotfiles/scripts/lib/kuma-push.sh). No file yet = no monitor yet: log and carry on.
+KUMA_LIB="${HERE}/../../dotfiles/scripts/lib/kuma-push.sh"
+[[ -r "${KUMA_LIB}" ]] || KUMA_LIB="${HOME}/SourceRoot/dotfiles/scripts/lib/kuma-push.sh"
+PUSH_URL_FILE="${HOME}/.config/uptime-kuma/pg-backup-push-url"
+if [[ ! -r "${PUSH_URL_FILE}" ]]; then
+  log "kuma: ${PUSH_URL_FILE} not found — no heartbeat pushed"
+elif [[ ! -r "${KUMA_LIB}" ]]; then
+  log "kuma: kuma-push.sh not found — no heartbeat pushed"
+else
+  # shellcheck source=/dev/null
+  source "${KUMA_LIB}"
+  # A heartbeat problem must never fail a backup that is already verified and uploaded.
+  if push_url=$(kuma_resolve_push_url "" "${PUSH_URL_FILE}") \
+    && kuma_push "${push_url}" up "backup ${NAME} ok, $(echo "${DBS}" | wc -w | tr -d ' ') databases"; then
+    log "kuma: heartbeat pushed"
+  else
+    log "kuma: heartbeat push failed (backup itself is fine)"
+  fi
+fi
