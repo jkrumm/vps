@@ -69,6 +69,13 @@ BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
 # docs/mini-postgres.md → "Activating the agent_workflows role".
 AGENT_WORKFLOWS_DB_PASSWORD=op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD
 
+# --- shared database + read-only agent_workflows role (scripts/setup-shared-db.sh) ---
+# One login role per writer in the `shared` database; ARGO_DB_PASSWORD above is reused for its argo
+# role. Dev-only credentials in the mini vault, sealed in the cache before these lines were added
+# (activation order: docs/mini-postgres.md). A new writer adds its line here.
+SHARED_USAGE_DB_PASSWORD=op://mini/vps-dev/SHARED_USAGE_DB_PASSWORD
+ARGO_AGW_RO_DB_PASSWORD=op://mini/vps-dev/ARGO_AGW_RO_DB_PASSWORD
+
 # --- Deliberately ABSENT ----------------------------------------------------
 # AWS_* (S3 backup credential)
 #   Getting prod data onto the mini does NOT need one. `make pg-sync-schema

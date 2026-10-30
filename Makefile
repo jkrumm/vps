@@ -58,7 +58,7 @@ endif
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
-        postgres-setup dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-upgrade dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
+        postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-upgrade dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
         check deploy verify logs _deploy-affected
 
@@ -575,6 +575,12 @@ jkrumm-com-bootstrap-image: require-prod
 ## Postgres schema/user provisioning — idempotent, works for both envs
 postgres-setup:
 	$(OP_RUN_ENV) ./scripts/setup-postgres.sh
+
+## Dev (mini) — the `shared` database (one role + schema + connection limit per writer) and the
+## read-only argo_agw_ro role on agent_workflows. Idempotent; ends with login/privilege assertions
+## and fails on any miss. Writers are a table at the top of the script (docs/mini-postgres.md).
+db-shared: require-dev
+	$(OP_RUN_DEV) ./scripts/setup-shared-db.sh
 
 ## Materialize /etc/vps/*.env for cron jobs from cron/*.env.tpl (via op inject).
 ## Re-run after rotating a referenced secret.

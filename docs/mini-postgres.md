@@ -9,6 +9,7 @@ Dev only: none of this runs on the VPS, which has its own cron backups (`scripts
 | Concern | Target / file |
 |-|-|
 | Roles, schemas, `agent_workflows` DB | `make postgres-setup ENV=dev` → `scripts/setup-postgres.sh` |
+| `shared` database, writer roles, `argo_agw_ro` | `make db-shared` → `scripts/setup-shared-db.sh` |
 | Nightly backup | `launchd/com.jkrumm.vps-pg-backup.plist.template` → `scripts/backup-pg-dev.sh` (`make dev-pg-backup`) |
 | Restore drill | `make dev-pg-restore-drill` → `scripts/restore-drill-pg-dev.sh` |
 | Upgrade | `make dev-pg-upgrade` → `scripts/upgrade-pg-dev.sh` |
@@ -44,6 +45,57 @@ that file). So each step must be done before the next:
 Done on 2026-10-27: field created, ref sealed, line added, role converged to the real password
 (verified by a TCP login with the cached value).
 
+## `shared`
+
+A second **database** next to `agent_workflows` (which stays its own database): one login role per
+writer, each **owning its own schema** (role name = schema name) and every object it creates there,
+each with its **own connection limit**. Provisioned by `make db-shared` (`scripts/setup-shared-db.sh`,
+idempotent, ends with assertions that fail the run on any miss).
+
+| Role / schema | Limit | Password env | Source |
+|-|-|-|-|
+| `usage` | 10 | `SHARED_USAGE_DB_PASSWORD` | `op://mini/vps-dev/SHARED_USAGE_DB_PASSWORD` |
+| `argo` | 20 | `ARGO_DB_PASSWORD` | `op://vps/argo/DB_PASSWORD` (the existing argo role, reused; `setup-postgres.sh` created it for the main database) |
+
+- The database is owned by the superuser; `CONNECT` is revoked from `PUBLIC` and granted to the
+  writers only, and `PUBLIC` has no privileges on schema `public`. Roles are `LOGIN NOSUPERUSER
+  NOCREATEDB NOCREATEROLE`, each with `search_path` set to its own schema, and cannot see each other's
+  schemas.
+- A connection limit is **per role, cluster-wide**: `argo` also connects to the main database, so its
+  20 are shared between that and `shared`.
+- **Read grants (the only cross-schema access):** `argo` reads `usage` (`USAGE` on the schema, `SELECT`
+  on all tables, plus default privileges for tables `usage` creates later). Argo is the reader of usage
+  data, not a write API.
+- **Adding a writer** (e.g. `factory`): one row in `WRITERS` at the top of `setup-shared-db.sh`
+  (`role|limit|password env`), a `SHARED_READS` row if it needs to read another schema, the password
+  line in `.env.dev.tpl` (after the activation order below), then `make db-shared`. A row whose
+  password env is unset is skipped with a message, so a machine without it never fails.
+- **Activation order** for each new secret is exactly the one under "Activating the agent_workflows
+  role" (1Password field, `headless.refs`, `make secrets-seed`, check with `secrets-run read`, only
+  then the `.env.dev.tpl` line, then `make db-shared`). Adding the template line first makes every dev
+  target fail closed.
+- The nightly backup already covers `shared` (it dumps every non-template database, with counts and the
+  in-run restore drill). While `shared` has no relations at all, `counts.tsv` has no `shared` rows
+  (`pg-counts.sql` emits per-kind counts only for kinds that exist) and the drill compares 0 = 0; the
+  rows appear with the first table.
+
+### `argo_agw_ro`
+
+Read-only role for Argo on the `agent_workflows` database (`ARGO_AGW_RO_DB_PASSWORD` =
+`op://mini/vps-dev/ARGO_AGW_RO_DB_PASSWORD`, connection limit 5): `CONNECT` on that database,
+`USAGE` on every non-system schema, `SELECT` on all tables and sequences, plus `ALTER DEFAULT
+PRIVILEGES FOR ROLE <database owner>` (looked up, currently `agent_workflows`) for schemas, tables and
+sequences, so what the app creates later (it creates and drops schemas at runtime) stays readable
+without re-running the target. Deliberately **not** `pg_read_all_data` (cluster-wide). It cannot write,
+create tables or schemas, or connect to `shared`.
+
+### How the assertions log in
+
+Over TCP `127.0.0.1:5432` from the **host** `psql` with `PGPASSWORD` in the process environment, never
+argv. A login from inside the container would match the image's loopback `trust` rule in `pg_hba.conf`
+and never check the password; the host connection arrives from the Docker gateway and takes the
+`scram-sha-256` rule.
+
 ## Backup
 
 Daily 03:15 by `com.jkrumm.vps-pg-backup` (a LaunchAgent, like every other mini job; install with
@@ -66,6 +118,12 @@ definition); only the restore showed it. A failed verify fails the job, which `j
 
 No credential is involved: `pg_dump` runs inside the container over its unix socket and the upload
 is keyless Tailscale SSH.
+
+On a fully green run (upload, drill and retention) the script ends with an Uptime Kuma push (`up`, backup
+name + database count) via `dotfiles/scripts/lib/kuma-push.sh`. The push URL is read from the chmod-600
+file `~/.config/uptime-kuma/pg-backup-push-url`, deliberately not from the secrets cache (same rule as
+the devhost and drift heartbeats). Without the file the script logs one line and skips the push; a
+failing push never fails the backup. The `jobrun` record stays the primary failure signal.
 
 `counts.tsv` is the drill's reference: exact `COUNT(*)` per table plus counts of
 tables/indexes/sequences/views (so an empty database is verifiable too), taken **inside the snapshot

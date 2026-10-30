@@ -71,6 +71,7 @@ make firewall            # show UFW status and rules
 make dev-pg-backup           # globals + every database + row-count manifest → HomeLab, checksum-verified; nightly via LaunchAgent
 make dev-pg-restore-drill    # newest backup → scratch DBs → exact counts vs the source at backup time → scratch dropped; non-zero on mismatch
 make dev-pg-upgrade          # backup first, then pull+recreate (minor); a major bump is refused
+make db-shared               # the `shared` database (role + schema + connection limit per writer) and read-only argo_agw_ro on agent_workflows; idempotent, ends with login/privilege assertions
 make dev-pg-health           # readiness probe (one line, exit 0/1) for the devhost heartbeat
 make dev-pg-launchd          # install the 03:15 backup LaunchAgent (from the main checkout, not a worktree)
 make prune-cron-install  # prod — install the weekly Sunday 04:30 image + build-cache prune (cron/docker-prune); never volumes
