@@ -36,6 +36,9 @@ SHARED_READS=(
   "argo|usage"
 )
 SHARED_DB=shared
+# Writers whose migrator runs `CREATE SCHEMA IF NOT EXISTS <own schema>` (drizzle does): Postgres checks
+# CREATE on the database before it looks at IF NOT EXISTS, so the role needs it although the schema exists.
+DB_CREATE_WRITERS=(argo)
 # Read-only role on the agent_workflows database (not a writer: owns nothing).
 RO_ROLE=argo_agw_ro
 RO_DB=agent_workflows
@@ -130,6 +133,15 @@ ALTER SCHEMA :"role" OWNER TO :"role";
 REVOKE ALL ON SCHEMA :"role" FROM PUBLIC;
 ALTER ROLE :"role" IN DATABASE :"db" SET search_path = :"role";
 SQL
+done
+
+for role in "${DB_CREATE_WRITERS[@]}"; do
+  if su_q "${SHARED_DB}" "SELECT 1 FROM pg_roles WHERE rolname = '${role}'" | grep -q 1; then
+    echo "--> ${role} may CREATE SCHEMA in ${SHARED_DB} (migrator)"
+    psql_su "${SHARED_DB}" -v role="${role}" -v db="${SHARED_DB}" <<'SQL'
+GRANT CREATE ON DATABASE :"db" TO :"role";
+SQL
+  fi
 done
 
 # ---------------------------------------------------------------------------
@@ -267,6 +279,10 @@ for row in "${WRITERS[@]}"; do
   expect_eq "${role}: owns its schema" "${role}" su_q "${SHARED_DB}" \
     "SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = '${role}'"
   expect_ok "${role}: can CREATE TABLE in schema ${role}" pg_as "${role}" "${SHARED_DB}" "${pwvar}" "CREATE TABLE ${SCRATCH} (id int); DROP TABLE ${SCRATCH}"
+
+  if [[ " ${DB_CREATE_WRITERS[*]} " == *" ${role} "* ]]; then
+    expect_ok "${role}: CREATE SCHEMA IF NOT EXISTS ${role} passes (migrator)" pg_as "${role}" "${SHARED_DB}" "${pwvar}" "CREATE SCHEMA IF NOT EXISTS \"${role}\""
+  fi
 
   for other in "${WRITERS[@]}"; do
     other_role=$(row_field "${other}" 1)

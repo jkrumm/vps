@@ -66,6 +66,9 @@ idempotent, ends with assertions that fail the run on any miss).
 - **Read grants (the only cross-schema access):** `argo` reads `usage` (`USAGE` on the schema, `SELECT`
   on all tables, plus default privileges for tables `usage` creates later). Argo is the reader of usage
   data, not a write API.
+- **CREATE on the database:** the roles in `DB_CREATE_WRITERS` (`argo`) hold `CREATE` on `shared`. Their migrator
+  (drizzle) runs `CREATE SCHEMA IF NOT EXISTS <own schema>`, which Postgres checks against the database
+  privilege before it looks at `IF NOT EXISTS`. The script asserts the statement passes.
 - **Adding a writer** (e.g. `factory`): one row in `WRITERS` at the top of `setup-shared-db.sh`
   (`role|limit|password env`), a `SHARED_READS` row if it needs to read another schema, the password
   line in `.env.dev.tpl` (after the activation order below), then `make db-shared`. A row whose
