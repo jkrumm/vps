@@ -24,11 +24,6 @@ networks:
     external: true
   monitoring-net:
     external: true
-  # Shared with compose.infra.yml — argo-api uses Valkey for durable/resumable
-  # Hermes chat streaming (resumable-stream pub/sub + sentinel) so a dropped
-  # client connection can resume an in-flight assistant turn.
-  valkey-net:
-    external: true
   socket-proxy-monitoring-net:
     external: true
     name: vps_socket-proxy-monitoring-net
@@ -78,24 +73,18 @@ services:
       # Hardcover — book taste layer. Reading vertical's hardcover-sync cron +
       # /reading/sync pull the shelf. Backend-only GraphQL bearer (bare JWT).
       HARDCOVER_API_KEY: ${HARDCOVER_API_KEY}
-      # Hermes Chat AI gateway — deepseek-v4.1-flash thread titling, called
+      # AI gateway — deepseek-v4.1-flash verdict sentences, called
       # directly on the IU unified endpoint (public HTTPS, EU/GDPR). Same creds
       # local + prod. Model id + reasoning effort are NOT passed here — omitted
       # so apps/api/src/env.ts's own default is the single source of truth (same
       # pattern as PORT, left unset in this block).
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      # Hermes chat upstream — Mac Mini OpenAI-compatible API over Tailscale (8642).
-      HERMES_BASE_URL: ${HERMES_BASE_URL}
-      HERMES_API_KEY: ${HERMES_API_KEY}
       # Docker socket proxies — VPS local + homelab over Tailscale.
       DOCKER_VPS_URL: http://socket-proxy-monitoring:2375
       DOCKER_HOMELAB_URL: http://${HOMELAB_TAILSCALE_IP}:2376
       # Shared VPS Postgres — own schema `argo`, schema-scoped user.
       DATABASE_URL: postgresql://argo:${ARGO_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=argo
-      # Valkey (container `redis` on valkey-net) — durable/resumable Hermes chat
-      # streaming. Empty would disable durability; set so a dropped connection resumes.
-      REDIS_URL: redis://redis:6379
       # OpenTelemetry — sends traces to ClickStack via the unauthed :4319 port
       # (see clickstack/otel-custom.yaml). Bound to the docker bridge only;
       # never published to host or routed via Traefik. The :4318 port stays
@@ -129,7 +118,6 @@ services:
       - proxy
       - postgres-net
       - monitoring-net
-      - valkey-net
       - socket-proxy-monitoring-net
     logging:
       driver: json-file

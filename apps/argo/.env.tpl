@@ -51,8 +51,8 @@ GITLAB_TOKEN=op://vps/argo/GITLAB_TOKEN
 # JWT, 60 req/min). Without it the cron is skipped and sync returns errors.
 HARDCOVER_API_KEY=op://vps/argo/HARDCOVER_API_KEY
 
-# --- Hermes Chat AI gateway ---
-# deepseek-v4.1-flash (thread titling) on the IU unified endpoint's OpenAI
+# --- AI gateway ---
+# deepseek-v4.1-flash (verdict sentences) on the IU unified endpoint's OpenAI
 # transport — public HTTPS, EU/GDPR (Azure Spain), reachable identically from
 # local dev and the prod VPS. Reuses the shared IU creds in the common/anthropic item.
 # Model id + reasoning effort are NOT set here — apps/api/src/env.ts's default
@@ -60,13 +60,6 @@ HARDCOVER_API_KEY=op://vps/argo/HARDCOVER_API_KEY
 DEEPSEEK_BASE_URL=op://common/anthropic/OPENAI_BASE_URL
 DEEPSEEK_API_KEY=op://common/anthropic/API_KEY
 
-# Chat upstream — Hermes agent (Mac Mini) OpenAI-compatible API over Tailscale
-# (port 8642). BASE_URL must include the /v1 prefix; the provider appends
-# /chat/completions. Stored as a 1Password ref so the Mac-Mini tailnet host stays
-# out of git. Reachable only with the tag:vps → tag:mac :8642 ACL grant AND
-# Hermes bound to the tailnet interface (not 127.0.0.1). Unset → chat 503s.
-HERMES_BASE_URL=op://vps/argo/HERMES_BASE_URL
-HERMES_API_KEY=op://vps/argo/HERMES_API_KEY
 
 # --- Postgres (shared VPS postgres, schema `argo`) ---
 POSTGRES_DB=op://vps/config/POSTGRES_DB
