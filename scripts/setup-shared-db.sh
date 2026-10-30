@@ -28,6 +28,7 @@ set -euo pipefail
 # role (= schema) | connection limit | password env var
 WRITERS=(
   "usage|10|SHARED_USAGE_DB_PASSWORD"
+  "factory|10|SHARED_FACTORY_DB_PASSWORD"
   "argo|20|ARGO_DB_PASSWORD"
 )
 # reader|owner — reader gets USAGE + SELECT (now and for future tables) on owner's schema

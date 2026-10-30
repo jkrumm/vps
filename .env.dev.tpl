@@ -74,6 +74,7 @@ AGENT_WORKFLOWS_DB_PASSWORD=op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD
 # role. Dev-only credentials in the mini vault, sealed in the cache before these lines were added
 # (activation order: docs/mini-postgres.md). A new writer adds its line here.
 SHARED_USAGE_DB_PASSWORD=op://mini/vps-dev/SHARED_USAGE_DB_PASSWORD
+SHARED_FACTORY_DB_PASSWORD=op://mini/vps-dev/SHARED_FACTORY_DB_PASSWORD
 ARGO_AGW_RO_DB_PASSWORD=op://mini/vps-dev/ARGO_AGW_RO_DB_PASSWORD
 
 # --- Deliberately ABSENT ----------------------------------------------------
