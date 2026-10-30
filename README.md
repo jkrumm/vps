@@ -100,7 +100,6 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | argo-api, argo-dashboard | `rollhook.jkrumm.com/argo-*` | Personal API + dashboard, the agent backbone | RollHook |
 | shutterflow-share | `rollhook.jkrumm.com/shutterflow-share` | Shutterflow share server (accounts, albums, share links) at `shutterflow.app` | RollHook |
 | shutterflow-imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Shutterflow's **signed** derivative CDN at `cdn.shutterflow.app` over `shutterflow/prod/derivatives/` | auto (v4.x) |
-| image-gateway | `.../image-gateway` | Image generation behind the `/img` skill | RollHook |
 | weatherorb-edge | `.../weatherorb-edge` | Tailscale-serve edge for the weatherorb weather/wave service | RollHook |
 | weatherorb-account | `.../weatherorb-account` | Bun + Better Auth account service (own database `weatherorb_accounts`), reached only by the edge — its one Traefik router is the tailnet-only alert-worker door | RollHook |
 | weatherorb-egress | `python:3.13-alpine` + `apps/weatherorb/egress/proxy.py` | CONNECT-only egress proxy for the forecast-alert webhooks (weatherorb ADR 0023): tailnet-only `:18443`, IP-literal `:443` targets, non-public refused | `make weatherorb-up` (no pin, Watchtower off) |

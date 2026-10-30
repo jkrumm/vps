@@ -51,7 +51,6 @@ endif
         fpp-backup fpp-mariadb-upgrade fpp-shell fpp-restore-local fpp-sync-from-prod \
         email-gateway-up email-gateway-down email-gateway-env email-gateway-bootstrap-image \
         argo-up argo-down argo-env argo-bootstrap-image \
-        image-gateway-up image-gateway-down image-gateway-env image-gateway-redeploy image-gateway-bootstrap-image image-gateway-cutover \
         photo-gallery-up photo-gallery-down \
         imgproxy-up imgproxy-down \
         edge-cache-status edge-cache-apply \
@@ -450,78 +449,6 @@ weatherorb-env: require-prod
 	  chmod 640 apps/weatherorb/.env.tmp && sudo chgrp $(ROLLHOOK_GID) apps/weatherorb/.env.tmp && mv -f apps/weatherorb/.env.tmp apps/weatherorb/.env && \
 	  echo "Wrote apps/weatherorb/.env (mini = $$host)"' || { rm -f apps/weatherorb/.env.tmp; exit 1; }
 
-## image-gateway stack (Bun image API, RollHook-managed) — apps/image-gateway/compose.yml
-## Deploys to image-gateway.<domain> (Tailscale-only, grey-cloud A record — NOT the cloudflared
-## tunnel). RollHook deploys on push to jkrumm/image-gateway:master touching gateway/** or shared/**.
-##
-## Same image-pinning dance as argo-up above, for the same reason: RollHook
-## tags by git SHA and never moves :latest, so a naive `up -d` would roll the container
-## back to a stale :latest. `docker ps -a` (not `docker ps`), same fix as argo-up:
-## a stopped-but-present container must be pinned, not mistaken for genesis.
-image-gateway-up: require-prod
-	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=image-gateway' --format '{{.Names}}' | head -1); \
-	if [ -z "$$NAME" ]; then \
-	  echo "  no image-gateway container exists — genesis start from :latest (bootstrap-seeded)"; \
-	  $(OP_RUN) docker compose -f apps/image-gateway/compose.yml --env-file apps/image-gateway/.env up -d; \
-	else \
-	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
-	  if [ -z "$$IMG" ]; then \
-	    echo "  ✗ image-gateway container '$$NAME' exists but its image could not be read — inspect it manually"; \
-	    exit 1; \
-	  fi; \
-	  echo "  pinning image-gateway → $$IMG"; \
-	  $(OP_RUN) env IMAGE_GATEWAY_IMAGE=$$IMG docker compose -f apps/image-gateway/compose.yml --env-file apps/image-gateway/.env up -d; \
-	fi
-image-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/image-gateway/compose.yml --env-file apps/image-gateway/.env down
-
-## Trigger a fresh RollHook deploy of image-gateway via workflow_dispatch.
-## NOT the empty-commit trick the other -redeploy targets use: image-gateway's deploy.yml is
-## path-filtered (gateway/**, shared/**, the workflow itself), so an empty commit touches
-## none of those paths and would silently do nothing.
-image-gateway-redeploy: require-dev
-	@if [ ! -d $$HOME/SourceRoot/image-gateway ]; then echo "  ✗ image-gateway repo not found at ~/SourceRoot/image-gateway"; exit 1; fi
-	@gh workflow run deploy.yml --repo jkrumm/image-gateway --ref master && \
-	  echo "  ✓ dispatched — watch the build at https://github.com/jkrumm/image-gateway/actions"
-## ONE-SHOT for the 2026-10 image-gen → image-gateway rename (safe to delete afterwards).
-## Adopts the running old container's image under the new name so the renamed stack comes up
-## on the exact same build without a registry round-trip (RollHook has no image-gateway image
-## yet): tag it as rollhook.jkrumm.com/image-gateway:{latest,<sha>}, stop + remove ONLY the old
-## container (old compose project `image-gen-gateway` = its directory name; the old compose file
-## no longer exists after `git pull`, so the container is addressed directly), then start the
-## new stack pinned to the adopted tag. All preconditions are checked BEFORE anything is
-## stopped. Run order: git pull → make image-gateway-env → make image-gateway-cutover.
-image-gateway-cutover: require-prod
-	@OLD=$$(docker ps -a --filter 'label=com.docker.compose.service=image-gen-gateway' --format '{{.Names}}' | head -1); \
-	if [ -z "$$OLD" ]; then echo "  ✗ no image-gen-gateway container found — nothing to cut over (fresh host? use image-gateway-bootstrap-image)"; exit 1; fi; \
-	OLD_IMG=$$(docker inspect --format '{{.Config.Image}}' "$$OLD" 2>/dev/null || echo ""); \
-	if [ -z "$$OLD_IMG" ]; then echo "  ✗ image-gen-gateway container '$$OLD' exists but its image could not be read — inspect it manually"; exit 1; fi; \
-	TAG=$${OLD_IMG##*:}; \
-	case "$$OLD_IMG" in *:*) ;; *) TAG=latest ;; esac; \
-	case "$$TAG" in */*) TAG=latest ;; esac; \
-	if [ ! -f apps/image-gateway/.env ]; then echo "  ✗ apps/image-gateway/.env missing — run: make image-gateway-env"; exit 1; fi; \
-	NEW_IMG=rollhook.jkrumm.com/image-gateway:$$TAG; \
-	echo "  old container: $$OLD ($$OLD_IMG)"; \
-	echo "  tagging → rollhook.jkrumm.com/image-gateway:latest + $$NEW_IMG"; \
-	docker tag "$$OLD_IMG" rollhook.jkrumm.com/image-gateway:latest || exit 1; \
-	docker tag "$$OLD_IMG" "$$NEW_IMG" || exit 1; \
-	echo "  stopping + removing $$OLD"; \
-	docker stop "$$OLD" && docker rm "$$OLD" || exit 1; \
-	echo "  starting image-gateway → $$NEW_IMG"; \
-	$(OP_RUN) env IMAGE_GATEWAY_IMAGE=$$NEW_IMG docker compose -f apps/image-gateway/compose.yml --env-file apps/image-gateway/.env up -d || exit 1; \
-	echo "  ✓ cut over — verify: make verify APP=image-gateway"
-## One-shot bootstrap — clone image-gateway repo, build image, push :initial to
-## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
-## deploys against. Re-runnable. Builds from the REPO ROOT (bun monorepo).
-image-gateway-bootstrap-image: require-prod
-	$(OP_RUN) ./apps/image-gateway/scripts/bootstrap-image.sh
-## Materialize apps/image-gateway/.env from .env.tpl. Required so RollHook's
-## `docker compose up --scale` can resolve ${VAR} interpolations. Re-run after
-## rotating any image-gateway secret. Resulting .env is chmod 644 and gitignored.
-image-gateway-env: require-prod
-	op --account tkrumm inject -i apps/image-gateway/.env.tpl -o apps/image-gateway/.env -f
-	chmod 644 apps/image-gateway/.env
-	@echo "Wrote apps/image-gateway/.env (chmod 644, gitignored)"
-
 ## photo-gallery stack — static Astro gallery served by nginx from a host volume.
 ## Content lives at /home/jkrumm/photo-gallery-dist on the VPS; photo-flow CLI on the
 ## developer laptop rsyncs the built dist/ there. No registry, no RollHook — the
@@ -766,7 +693,7 @@ prune-cron-install: require-prod
 # Faces: AGENTS.md → Validate / Deploy / Verify & Monitor / Gotchas.
 
 # Known apps — the app directories under apps/. Both error paths list these.
-KNOWN_APPS := argo basalt-ui-marketing email-gateway fpp image-gateway imgproxy jkrumm-com photo-gallery rollhook-marketing shutterflow weatherorb
+KNOWN_APPS := argo basalt-ui-marketing email-gateway fpp imgproxy jkrumm-com photo-gallery rollhook-marketing shutterflow weatherorb
 
 # Files changed since the last recorded deploy → the targets `make deploy` (no
 # APP) applies. `apps/<name>/**` maps to that app; the shared stacks map to their
@@ -787,7 +714,6 @@ APP_SERVICE_argo                := argo-api
 APP_SERVICE_basalt-ui-marketing := basalt-ui-marketing
 APP_SERVICE_email-gateway       := email-gateway
 APP_SERVICE_fpp                 := fpp-server fpp-analytics
-APP_SERVICE_image-gateway       := image-gateway
 APP_SERVICE_imgproxy            := imgproxy
 APP_SERVICE_jkrumm-com          := jkrumm-com
 APP_SERVICE_photo-gallery       := photo-gallery
@@ -820,12 +746,12 @@ check:
 # Per-app mapping — decided from the Makefile + the RollHook section:
 #   argo → argo-up ·
 #   basalt-ui-marketing → basalt-ui-marketing-up · email-gateway → email-gateway-up ·
-#   fpp → fpp-up · image-gateway → image-gateway-up · imgproxy → imgproxy-up ·
+#   fpp → fpp-up · imgproxy → imgproxy-up ·
 #   jkrumm-com → jkrumm-com-up · photo-gallery → photo-gallery-up ·
 #   shutterflow → shutterflow-up · weatherorb → weatherorb-up
 #   rollhook-marketing has NO -up target: its image is built and rolled by CI
 #   (ghcr.io/jkrumm/rollhook-marketing), so deploy reports that and exits 0.
-# The dev-only -redeploy targets (argo/weatherorb/image-gateway) push an
+# The dev-only -redeploy targets (argo/weatherorb) push an
 # empty commit to trigger RollHook from a local clone — a dev convenience, not a
 # routine prod deploy, so deploy deliberately does not use them.
 #

@@ -199,7 +199,6 @@ compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no
 compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
 compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStack with ports exposed)
 apps/argo/compose.yml         argo-api + argo-dashboard — personal API/agent backbone, RollHook-managed
-apps/image-gateway/compose.yml  Backend for the /img skill, RollHook-managed
 apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, one tailnet-only worker router) — RollHook-managed, `make weatherorb-up` pins both images — + weatherorb-egress (stdlib CONNECT proxy for the alert webhooks, ADR 0023: tailnet-only :18443, own bridge network, public python image, no pin) + weatherorb-probe (stdlib external /v1 availability probe, ADR 0026: once a minute, OTLP span to ClickStack, key from the host-local file `WEATHERORB_PROBE_KEY_FILE` = `/etc/vps/weatherorb-probe-key` (owner 65534, mode 0400), fails closed without it; no published port, public python image, no pin)
 apps/weatherorb/egress/        proxy.py (the egress proxy; IP-literal :443 CONNECT only, refuses non-public targets) + test_proxy.py (`python3 -m unittest`, stdlib only)
 apps/weatherorb/probe/         probe.py (the /v1 availability probe) + test_probe.py (`python3 -m unittest`, stdlib only)
@@ -503,7 +502,7 @@ which recreates it from `apps/<name>/compose.yml` while **pinning the currently
 running image** — so a config change can never roll a RollHook app back to a stale
 `:latest` (see `## RollHook`). `rollhook-marketing` has no `-up` target and is
 CI-only: `make deploy APP=rollhook-marketing` prints `deployed by CI on push` and
-exits 0. The dev-only `-redeploy` targets (argo, weatherorb, image-gateway)
+exits 0. The dev-only `-redeploy` targets (argo, weatherorb)
 push an empty commit to trigger RollHook from a local clone; they are a dev
 convenience, not routine prod deploys, so `deploy` does not use them.
 
@@ -538,7 +537,6 @@ unhealthy; infra entries (which have no app health check) are skipped.
 | basalt-ui-marketing | `https://basalt-ui.com/` | — | none |
 | email-gateway | `https://email-gateway.<your-domain>/health` | `EmailGateway - HTTP` | none |
 | fpp | `https://server.free-planning-poker.com/health` · `https://analytics.free-planning-poker.com/health` | `FPP - Server - HTTP` · `FPP - Analytics - HTTP` | `fpp-server` · `fpp-analytics` |
-| image-gateway | `https://image-gateway.<your-domain>/health` | `Image Gen Gateway - HTTP` | none |
 | imgproxy | `https://img.<your-domain>/rs:fit:100/misc/monitor-probe.jpg` | `ImageCDN - HTTP` · `ImageCDN Origin - HTTP` | `imgproxy` |
 | jkrumm-com | `https://jkrumm.com/` | — | none |
 | photo-gallery | `https://photos.<your-domain>/` | `Photos - HTTP` | none |
