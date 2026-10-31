@@ -65,6 +65,7 @@ chmod 644 "${CERTS_DIR}/cert.pem"
 if [[ "$(stat -c %g "${CERTS_DIR}/key.pem")" == "999" ]] || sudo -n chgrp 999 "${CERTS_DIR}/key.pem" 2>/dev/null; then
   chmod 640 "${CERTS_DIR}/key.pem"
 else
+  chmod 644 "${CERTS_DIR}/key.pem"
   echo "WARNING: key.pem left world-readable — run: sudo chgrp 999 ${CERTS_DIR}/key.pem && chmod 640 ${CERTS_DIR}/key.pem" >&2
 fi
 
