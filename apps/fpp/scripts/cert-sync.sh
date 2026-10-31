@@ -57,10 +57,11 @@ printf '%s\n' "${new_cert}" > "${CERTS_DIR}/cert.pem"
 printf '%s\n' "${new_key}"  > "${CERTS_DIR}/key.pem"
 # The mariadb container's mysql user (uid/gid 999) must read both via the bind mount.
 # key.pem goes to 0640 owner:999 (the weatherorb .env pattern) — the host has other
-# local users (gh-runner, wo-backup). The redirects above rewrite in place, so once
+# local service accounts. The redirects above rewrite in place, so once
 # tightened the mode/group survive every renewal and cron (no sudo) never touches them.
 # Without non-interactive sudo, a key that is not yet group 999 stays 0644 (readable,
 # as before) and a warning says how to tighten it.
+chmod 644 "${CERTS_DIR}/cert.pem"
 if [[ "$(stat -c %g "${CERTS_DIR}/key.pem")" == "999" ]] || sudo -n chgrp 999 "${CERTS_DIR}/key.pem" 2>/dev/null; then
   chmod 640 "${CERTS_DIR}/key.pem"
 else

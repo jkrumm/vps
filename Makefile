@@ -183,7 +183,7 @@ fpp-bootstrap-images: require-prod
 ## RollHook re-runs compose as uid/gid 999 and must read it; nobody else may.
 fpp-env: require-prod
 	op --account tkrumm inject -i apps/fpp/.env.tpl -o apps/fpp/.env -f
-	chmod 640 apps/fpp/.env && sudo chgrp $(ROLLHOOK_GID) apps/fpp/.env
+	sudo chgrp $(ROLLHOOK_GID) apps/fpp/.env && chmod 640 apps/fpp/.env
 	@echo "Wrote apps/fpp/.env (0640 owner:$(ROLLHOOK_GID), gitignored)"
 ## FPP MariaDB → S3 backup (cron 03:30 in prod; manual via this target).
 fpp-backup: require-prod
@@ -230,7 +230,7 @@ email-gateway-bootstrap-image: require-prod
 ## after rotating email-gateway secrets. Resulting .env is 0640 owner:ROLLHOOK_GID and gitignored.
 email-gateway-env: require-prod
 	op --account tkrumm inject -i apps/email-gateway/.env.tpl -o apps/email-gateway/.env -f
-	chmod 640 apps/email-gateway/.env && sudo chgrp $(ROLLHOOK_GID) apps/email-gateway/.env
+	sudo chgrp $(ROLLHOOK_GID) apps/email-gateway/.env && chmod 640 apps/email-gateway/.env
 	@echo "Wrote apps/email-gateway/.env (0640 owner:$(ROLLHOOK_GID), gitignored)"
 
 ## shutterflow stack (share server + signed imgproxy CDN, RollHook-managed) — apps/shutterflow/compose.yml
@@ -263,7 +263,7 @@ shutterflow-env: require-prod
 	@CIDR=$$(docker network inspect proxy --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'); \
 	[ -n "$$CIDR" ] || { echo "  ✗ could not read the proxy network subnet"; exit 1; }; \
 	echo "SHUTTERFLOW_TRUSTED_PROXIES=$$CIDR" >> apps/shutterflow/.env
-	chmod 640 apps/shutterflow/.env && sudo chgrp $(ROLLHOOK_GID) apps/shutterflow/.env
+	sudo chgrp $(ROLLHOOK_GID) apps/shutterflow/.env && chmod 640 apps/shutterflow/.env
 	@echo "Wrote apps/shutterflow/.env (0640 owner:$(ROLLHOOK_GID), gitignored)"
 	op --account tkrumm inject -i apps/shutterflow/key-broker.env.tpl -o apps/shutterflow/key-broker.tmp.env -f
 	@chmod 640 apps/shutterflow/key-broker.tmp.env && sudo chgrp $(ROLLHOOK_GID) apps/shutterflow/key-broker.tmp.env && \
