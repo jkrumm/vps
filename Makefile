@@ -179,14 +179,12 @@ fpp-bootstrap-images: require-prod
 ## Materialize apps/fpp/.env from apps/fpp/.env.tpl (via `op inject`). Required so
 ## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
 ## can resolve ${VAR} interpolations in apps/fpp/compose.yml. Re-run after secret
-## rotation. The resulting .env is chmod 600, gitignored, and stays on VPS.
+## rotation. The resulting .env is 0640 owner:ROLLHOOK_GID (like weatherorb's .env):
+## RollHook re-runs compose as uid/gid 999 and must read it; nobody else may.
 fpp-env: require-prod
 	op --account tkrumm inject -i apps/fpp/.env.tpl -o apps/fpp/.env -f
-	chmod 644 apps/fpp/.env
-	@echo "Wrote apps/fpp/.env (chmod 644, gitignored)"
-	@echo "Note: 644 is required because the RollHook container runs as a"
-	@echo "non-root user whose uid doesn't match the host's jkrumm uid."
-	@echo "VPS has no other shell users so the local-readability risk is bounded."
+	chmod 640 apps/fpp/.env && sudo chgrp $(ROLLHOOK_GID) apps/fpp/.env
+	@echo "Wrote apps/fpp/.env (0640 owner:$(ROLLHOOK_GID), gitignored)"
 ## FPP MariaDB → S3 backup (cron 03:30 in prod; manual via this target).
 fpp-backup: require-prod
 	$(OP_RUN) ./apps/fpp/scripts/backup-mariadb.sh
@@ -229,11 +227,11 @@ email-gateway-bootstrap-image: require-prod
 ## Materialize apps/email-gateway/.env from .env.tpl (via `op inject`). Required so
 ## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
 ## can resolve ${VAR} interpolations in apps/email-gateway/compose.yml. Re-run
-## after rotating email-gateway secrets. Resulting .env is chmod 644 and gitignored.
+## after rotating email-gateway secrets. Resulting .env is 0640 owner:ROLLHOOK_GID and gitignored.
 email-gateway-env: require-prod
 	op --account tkrumm inject -i apps/email-gateway/.env.tpl -o apps/email-gateway/.env -f
-	chmod 644 apps/email-gateway/.env
-	@echo "Wrote apps/email-gateway/.env (chmod 644, gitignored)"
+	chmod 640 apps/email-gateway/.env && sudo chgrp $(ROLLHOOK_GID) apps/email-gateway/.env
+	@echo "Wrote apps/email-gateway/.env (0640 owner:$(ROLLHOOK_GID), gitignored)"
 
 ## shutterflow stack (share server + signed imgproxy CDN, RollHook-managed) — apps/shutterflow/compose.yml
 ## shutterflow.app + cdn.shutterflow.app via the Cloudflare tunnel. RollHook deploys on push to
@@ -265,8 +263,8 @@ shutterflow-env: require-prod
 	@CIDR=$$(docker network inspect proxy --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'); \
 	[ -n "$$CIDR" ] || { echo "  ✗ could not read the proxy network subnet"; exit 1; }; \
 	echo "SHUTTERFLOW_TRUSTED_PROXIES=$$CIDR" >> apps/shutterflow/.env
-	chmod 644 apps/shutterflow/.env
-	@echo "Wrote apps/shutterflow/.env (chmod 644, gitignored)"
+	chmod 640 apps/shutterflow/.env && sudo chgrp $(ROLLHOOK_GID) apps/shutterflow/.env
+	@echo "Wrote apps/shutterflow/.env (0640 owner:$(ROLLHOOK_GID), gitignored)"
 	op --account tkrumm inject -i apps/shutterflow/key-broker.env.tpl -o apps/shutterflow/key-broker.tmp.env -f
 	@chmod 640 apps/shutterflow/key-broker.tmp.env && sudo chgrp $(ROLLHOOK_GID) apps/shutterflow/key-broker.tmp.env && \
 	  mv -f apps/shutterflow/key-broker.tmp.env apps/shutterflow/key-broker.env || { rm -f apps/shutterflow/key-broker.tmp.env; exit 1; }
