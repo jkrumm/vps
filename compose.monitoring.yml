@@ -163,7 +163,7 @@ services:
     # browser SDKs reach otel.DOMAIN via Cloudflare → Traefik.
     # Health check exposed on Tailscale for Uptime Kuma monitoring.
     ports:
-      - "${VPS_TAILSCALE_IP}:13133:13133"   # OTel health check — Tailscale only
+      - "${VPS_TAILSCALE_IP:?VPS_TAILSCALE_IP must be set}:13133:13133"   # OTel health check — Tailscale only
     labels:
       # HyperDX UI — Tailscale-only via DNS (A record → Tailscale IP, DNS-only/grey cloud).
       # Docker NAT rewrites source IPs, so ipAllowList is ineffective here.
@@ -203,7 +203,7 @@ services:
       DOCKER_HOST: tcp://socket-proxy-monitoring:2375
       # Agent listens on :45876 (Beszel default), accessible via Tailscale only
     ports:
-      - "${VPS_TAILSCALE_IP}:45876:45876"   # Tailscale only
+      - "${VPS_TAILSCALE_IP:?VPS_TAILSCALE_IP must be set}:45876:45876"   # Tailscale only
     networks:
       - monitoring-net
       - socket-proxy-monitoring-net
@@ -232,7 +232,7 @@ services:
       - monitoring-net
       - socket-proxy-monitoring-net
     ports:
-      - "${VPS_TAILSCALE_IP}:7007:7007"   # Tailscale only
+      - "${VPS_TAILSCALE_IP:?VPS_TAILSCALE_IP must be set}:7007:7007"   # Tailscale only
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }

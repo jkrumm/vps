@@ -89,7 +89,7 @@ services:
     ports:
       # Bind websecure entrypoint to Tailscale interface only — dashboard access without Cloudflare.
       # Public apps are still routed via cloudflared (no internet exposure here).
-      - "${VPS_TAILSCALE_IP}:443:443"
+      - "${VPS_TAILSCALE_IP:?VPS_TAILSCALE_IP must be set}:443:443"
     environment:
       CF_DNS_API_TOKEN: ${CLOUDFLARE_API_TOKEN}  # lego expects CF_DNS_API_TOKEN for Cloudflare DNS-01
       # ACME email: passed as env var because traefik.yml doesn't support ${VAR} substitution
