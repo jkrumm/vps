@@ -4,13 +4,19 @@
 http:
   middlewares:
 
-    # Rate limiting — per source IP.
+    # Rate limiting — per client, keyed on Cf-Connecting-Ip.
     # Built-in Traefik middleware, no external dependency.
+    # Not the source IP: all public traffic arrives from the one cloudflared container,
+    # so a per-IP bucket would be a single global bucket shared by every client.
+    # Cloudflare overwrites Cf-Connecting-Ip at the edge; requests without it (tailnet)
+    # share one bucket.
     rate-limit:
       rateLimit:
         average: 100
         burst: 200
         period: 1s
+        sourceCriterion:
+          requestHeaderName: Cf-Connecting-Ip
 
     # Security headers — HSTS + browser security hardening.
     security-headers:
