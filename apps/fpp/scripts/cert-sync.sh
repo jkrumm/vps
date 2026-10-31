@@ -55,10 +55,17 @@ echo "Certificate changed — writing cert.pem and key.pem..."
 umask 022
 printf '%s\n' "${new_cert}" > "${CERTS_DIR}/cert.pem"
 printf '%s\n' "${new_key}"  > "${CERTS_DIR}/key.pem"
-# 644 on both: host filesystem is single-user; mariadb container's mysql user (uid 999)
-# must be able to read these via the bind mount. Threat model is network attackers,
-# not local users (jkrumm has root via sudo anyway).
-chmod 644 "${CERTS_DIR}/cert.pem" "${CERTS_DIR}/key.pem"
+# The mariadb container's mysql user (uid/gid 999) must read both via the bind mount.
+# key.pem goes to 0640 owner:999 (the weatherorb .env pattern) — the host has other
+# local users (gh-runner, wo-backup). The redirects above rewrite in place, so once
+# tightened the mode/group survive every renewal and cron (no sudo) never touches them.
+# Without non-interactive sudo, a key that is not yet group 999 stays 0644 (readable,
+# as before) and a warning says how to tighten it.
+if [[ "$(stat -c %g "${CERTS_DIR}/key.pem")" == "999" ]] || sudo -n chgrp 999 "${CERTS_DIR}/key.pem" 2>/dev/null; then
+  chmod 640 "${CERTS_DIR}/key.pem"
+else
+  echo "WARNING: key.pem left world-readable — run: sudo chgrp 999 ${CERTS_DIR}/key.pem && chmod 640 ${CERTS_DIR}/key.pem" >&2
+fi
 
 if docker ps --format '{{.Names}}' | grep -q '^mariadb$'; then
   echo "Reloading TLS in running mariadb container (FLUSH SSL)..."
