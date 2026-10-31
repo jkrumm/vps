@@ -135,6 +135,8 @@ services:
       - "traefik.http.middlewares.weatherorb-ratelimit.ratelimit.average=300"
       - "traefik.http.middlewares.weatherorb-ratelimit.ratelimit.burst=1500"
       - "traefik.http.middlewares.weatherorb-ratelimit.ratelimit.period=1s"
+      # Per client, not per source IP (every request arrives from cloudflared) — see rate-limit@file.
+      - "traefik.http.middlewares.weatherorb-ratelimit.ratelimit.sourcecriterion.requestheadername=Cf-Connecting-Ip"
       - "traefik.http.routers.weatherorb.middlewares=weatherorb-ratelimit@docker,security-headers@file"
       - "traefik.http.services.weatherorb.loadbalancer.server.port=8080"
       - "traefik.http.services.weatherorb.loadbalancer.healthcheck.path=/health"
