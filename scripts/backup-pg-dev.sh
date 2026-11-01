@@ -71,6 +71,21 @@ DBS=$(docker exec postgres psql -U "${PGU}" -d postgres -At \
 # Dump one database and its exact counts from ONE snapshot. A background psql holds a
 # REPEATABLE READ transaction open (commands arrive on a FIFO), exports its snapshot id,
 # runs the count SQL, and stays open until pg_dump --snapshot=<id> is done.
+# The holder's transaction locks every table and index it counts, so a database with many
+# per-tenant schemas can exhaust the shared lock table (max_locks_per_transaction × (max_connections
+# + max_prepared_transactions)). Turn that bare psql error into one that names the setting.
+lock_exhaustion_hint() {
+  local db="$1" rels settings
+  rels=$(docker exec postgres psql -U "${PGU}" -d "${db}" -At \
+    -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind IN ('r','i','p') AND n.nspname NOT IN ('pg_catalog','information_schema','pg_toast')" 2>/dev/null) || rels="?"
+  settings=$(docker exec postgres psql -U "${PGU}" -d postgres -At -F'=' \
+    -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_locks_per_transaction','max_connections','max_prepared_transactions') ORDER BY name" 2>/dev/null | paste -sd' ' -) || settings="?"
+  echo "ERROR: ${db} has ${rels} tables+indexes, more than the Postgres lock table holds (${settings};" \
+    "slots = max_locks_per_transaction × (max_connections + max_prepared_transactions)). The snapshot holder and" \
+    "pg_dump each lock every relation at once. Raise max_locks_per_transaction on the postgres service in compose.dev.yml" \
+    "(sizing: docs/mini-postgres.md#lock-table-sizing), then restart the postgres container."
+}
+
 dump_with_counts() {
   local db="$1" fifo="${STAGE}/hold.fifo" out="${STAGE}/holder.out" err="${STAGE}/holder.err" holder snap=""
   : > "${out}"; : > "${err}"
@@ -89,6 +104,7 @@ dump_with_counts() {
   while ! grep -q '^COUNTS_END$' "${out}"; do
     if ! kill -0 "${holder}" 2>/dev/null; then
       exec 3>&-
+      if grep -q 'max_locks_per_transaction' "${err}"; then lock_exhaustion_hint "${db}"; fi
       echo "ERROR: snapshot holder for ${db} died: $(cat "${err}")"; return 1
     fi
     sleep 0.2

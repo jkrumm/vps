@@ -134,6 +134,33 @@ the dump reads**. A background `psql` holds a `REPEATABLE READ` transaction open
 snapshot, runs `scripts/pg-counts.sql`, and stays open until `pg_dump --snapshot=<id>` finishes; the
 manifest therefore describes the dump exactly, whatever writes concurrently.
 
+### Lock-table sizing
+
+`max_locks_per_transaction` is `1024` (compose `command:`; the Postgres default of 64 gave 64 × 100 =
+6 400 slots). It is a postmaster setting, so it applies only after the postgres container is recreated.
+
+Why: the backup's snapshot holder runs the exact-`COUNT(*)` SQL for every table in one `REPEATABLE READ`
+transaction, and `count(*)` also locks each table's indexes while planning, so it holds a lock on
+(nearly) every table and index of the database until the dump finishes. `pg_dump` then locks every
+table too. `agent_workflows` has one `agw_t_*` schema per tenant (8 tables, ~35 indexes each) and grows
+daily; the plain default failed the nightly backup with `out of shared memory` / `HINT: You might need to
+increase "max_locks_per_transaction"` from 2026-10-31.
+
+Sizing (2026-11-01, `agent_workflows`: 422 tenant schemas, 3 346 tables, 14 528 indexes ≈ 17.9k
+slots for the holder + 3.4k for `pg_dump` ≈ 21.3k): 1024 × 100 = 102 400 slots, ~4.8× headroom for a
+few MB of shared memory. Re-measure (run `make sql-postgres` and paste):
+
+```sql
+\c agent_workflows
+SELECT relkind, count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE relkind IN ('r', 'i') AND nspname NOT IN ('pg_catalog', 'information_schema') GROUP BY 1;
+```
+
+Keep `tables + indexes + tables` under half of `max_locks_per_transaction × max_connections`.
+
+If it recurs, the script fails with the database's relation count and the current settings and names this
+setting, instead of the bare psql error.
+
 ## Restore drill
 
 `make dev-pg-restore-drill` (`BACKUP=<name>` for an older one): fetch the newest complete backup,
