@@ -27,6 +27,11 @@ services:
     # A maintained instance on the mini (agent_workflows lives here): survive a Colima/host
     # restart. Backups, restore drill, upgrades: docs/mini-postgres.md.
     restart: unless-stopped
+    # max_locks_per_transaction is a postmaster setting (restart-only). The nightly backup holds
+    # one REPEATABLE READ transaction that touches every table and index of a database, and
+    # agent_workflows has one agw_t_* schema per tenant. Why 1024 and how to resize:
+    # docs/mini-postgres.md#lock-table-sizing.
+    command: ["postgres", "-c", "max_locks_per_transaction=1024"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
