@@ -156,6 +156,10 @@ services:
       - clickstack-ch-logs:/var/log/clickhouse-server
       - ./clickstack/otel-custom.yaml:/etc/otelcol-contrib/custom.config.yaml:ro
       - ./clickstack/system-log-ttl.xml:/etc/clickhouse-server/config.d/system-log-ttl.xml:ro
+    # The factory door on the mini: this host does not resolve the mini's MagicDNS name, so the name is mapped here, and the
+    # HyperDX webhook's TLS still validates against it. Both values live in the untracked ~/vps/.env, same as weatherorb's.
+    extra_hosts:
+      - "${MINI_TAILNET_HOST:-mini.invalid}:${MINI_TAILSCALE_IP:-192.0.2.1}"
     networks:
       - monitoring-net
       - proxy
