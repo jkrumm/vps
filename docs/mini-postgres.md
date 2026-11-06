@@ -226,3 +226,11 @@ The gate path means a machine without the backup LaunchAgent skips the probe.
   PostGIS image, same backup/drill/upgrade scripts parameterised by container) rather than by
   swapping this instance's image. Do not `brew services stop postgresql@18` — weatherorb and
   the Athena cluster's binaries depend on it.
+
+## Shared memory
+
+Parallel query workers allocate their segments in the container's `/dev/shm`. Docker's default of 64 MB is too small for a
+dashboard's burst of aggregates: queries fail with `could not resize shared memory segment ... No space left on device`.
+`shm_size: 1g` in `compose.dev.yml` sets it when the container is created, so it needs a recreate (`make dev-pg-upgrade`); a
+plain restart keeps the old size, and a live `mount -o remount` is refused. tmpfs only uses what is allocated. Check it with
+`docker inspect postgres --format '{{.HostConfig.ShmSize}}'`.
