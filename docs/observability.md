@@ -382,8 +382,9 @@ same-named dashboard exists in the target env, else `POST`).
 `make hyperdx-webhook-setup` (prod-only, idempotent) creates or updates a
 HyperDX webhook named `ntfy alerts` (service `generic`) that POSTs to
 `https://ntfy.<DOMAIN>/alerts` with `Authorization: Bearer` from
-`op://common/ntfy/TOKEN` and a body template (`{{title}}`/`{{body}}`/link as the
-message, `Title`/`Priority`/`Tags` headers). Headers are write-only in HyperDX, so
+`op://common/ntfy/TOKEN` and a body template (alert name, state, value vs
+threshold, window, link; static `Title`/`Priority`/`Tags` headers — HyperDX does not template
+headers, and `{{body}}` carries escaped `\n`). Headers are write-only in HyperDX, so
 every run PUTs. Run it once before applying any alert that notifies over ntfy —
 alerts reference this webhook by **name**, not id. Watchtower and RollHook post to
 the topic `updates` with the same token (`NTFY_TOKEN` in `.env.tpl`).

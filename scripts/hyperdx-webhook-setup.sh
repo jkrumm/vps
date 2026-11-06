@@ -5,7 +5,9 @@
 # Ensures a HyperDX webhook named "ntfy alerts" (service `generic`) exists: it
 # POSTs to https://ntfy.<DOMAIN>/alerts with `Authorization: Bearer <token>`
 # (token from op://common/ntfy/TOKEN) and a body template that becomes the
-# ntfy message. Create-or-update by NAME: a PUT re-applies URL, headers and
+# ntfy message. HyperDX templates only the body, not header values (a `{{title}}`
+# header arrives literally) and `{{body}}` holds escaped `\n` sequences, so the
+# Title is static and the body is built from the plain fields. Create-or-update by NAME: a PUT re-applies URL, headers and
 # body (headers are write-only in HyperDX, so there is nothing to diff — every
 # run PUTs). Run this before `make hyperdx-apply` — alerts-as-code
 # (scripts/hyperdx-sync.sh) resolves a `channels[].webhook` reference against
@@ -52,11 +54,11 @@ print(json.dumps({
     'description': 'ntfy topic alerts; token header is write-only here, value in op://common/ntfy/TOKEN (make hyperdx-webhook-setup).',
     'headers': {
         'Authorization': 'Bearer ' + os.environ['NTFY_TOKEN'],
-        'Title': 'HyperDX: {{title}}',
+        'Title': 'HyperDX alert',
         'Priority': 'high',
         'Tags': 'rotating_light',
     },
-    'body': '{{state}}\n{{body}}\n{{link}}',
+    'body': '{{title}}\n{{state}}: {{value}} vs threshold {{threshold}}\n{{startTimeISO}} to {{endTimeISO}}\n{{link}}',
 }))
 ")
 
