@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # =============================================================================
 # HyperDX ntfy webhook setup — idempotent, prod-only.
 #
