@@ -377,17 +377,21 @@ stripped so files are env-portable), `apply` validates
 (`POST /dashboards/validate`) then upserts **by dashboard name** (`PUT` if a
 same-named dashboard exists in the target env, else `POST`).
 
-### Alerts → Slack
+### Alerts → ntfy
 
 `make hyperdx-webhook-setup` (prod-only, idempotent) creates or updates a
-HyperDX webhook named `Slack #alerts` (service `slack`) pointed at
-`op://common/slack/VPS_WEBHOOK_ALERTS`. Run it once before applying any alert
-that notifies over Slack — alerts reference this webhook by **name**, not id.
+HyperDX webhook named `ntfy alerts` (service `generic`) that POSTs to
+`https://ntfy.<DOMAIN>/alerts` with `Authorization: Bearer` from
+`op://common/ntfy/TOKEN` and a body template (`{{title}}`/`{{body}}`/link as the
+message, `Title`/`Priority`/`Tags` headers). Headers are write-only in HyperDX, so
+every run PUTs. Run it once before applying any alert that notifies over ntfy —
+alerts reference this webhook by **name**, not id. Watchtower and RollHook post to
+the topic `updates` with the same token (`NTFY_TOKEN` in `.env.tpl`).
 
 ### Alert channels
 
 Every alert lists one `channel` in `channels` (HyperDX >= 2.36 takes 1–10; the singular
-`channel` is just `channels[0]`): `Slack #alerts`. A generic `Warden ingest` webhook used to
+`channel` is just `channels[0]`): `ntfy alerts`; ten of them (email-gateway, shutterflow, otel-ingest) also list `Factory door`. A generic `Warden ingest` webhook used to
 sit next to it until warden was switched off (2026-10-27); it was deleted from HyperDX and
 the alert files. weatherorb's four alerts are not in this directory: that repo
 applies them with its own `WeatherOrb ops.alert` webhook, and `export` skips

@@ -2,7 +2,7 @@
   "channels": [
     {
       "type": "webhook",
-      "webhook": "Slack #alerts"
+      "webhook": "ntfy alerts"
     }
   ],
   "dashboard": "VPS \u2014 Overview",

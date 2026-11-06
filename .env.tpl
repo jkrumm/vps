@@ -61,11 +61,9 @@ IMGPROXY_B2_ENDPOINT=op://common/backblaze-s3/ENDPOINT
 IMGPROXY_B2_REGION=op://common/backblaze-s3/REGION
 
 # --- Notifications ---
-# WATCHTOWER_URL is the shoutrrr-format (slack://...) for Watchtower's notifier.
-# WEBHOOK_UPDATES is the plain https webhook for the same #updates channel — used
-# by services (e.g. rollhook) that POST raw JSON to a webhook URL directly.
-SLACK_WATCHTOWER_URL=op://common/slack/WATCHTOWER_URL
-SLACK_WEBHOOK_UPDATES=op://common/slack/WEBHOOK_UPDATES
+# ntfy access token — one token for every publisher. Watchtower and RollHook post to
+# topic `updates`; the HyperDX webhook (scripts/hyperdx-webhook-setup.sh) to `alerts`.
+NTFY_TOKEN=op://common/ntfy/TOKEN
 
 # --- Backups ---
 AWS_ACCESS_KEY_ID=op://common/backblaze-s3/ACCESS_KEY_ID

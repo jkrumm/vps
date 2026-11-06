@@ -22,7 +22,7 @@ networks:
     driver: bridge
     internal: true
   watchtower-egress:
-    driver: bridge  # Internet access for Slack webhook notifications
+    driver: bridge  # Outbound access for the ntfy notifications
 
 services:
 
@@ -65,7 +65,7 @@ services:
       options: { max-size: "5m", max-file: "2" }
 
   # ---------------------------------------------------------------------------
-  # Watchtower — auto-updates containers and sends Slack notifications.
+  # Watchtower — auto-updates containers and sends ntfy notifications.
   # Connects to Docker via socket proxy (TCP). Postgres and Valkey excluded.
   # Notifications only at warn level (failures, not every successful update).
   # ---------------------------------------------------------------------------
@@ -85,8 +85,10 @@ services:
       # Connect to Docker via proxy (no direct docker.sock mount needed)
       DOCKER_HOST: tcp://socket-proxy-watchtower:2375
       DOCKER_API_VERSION: "1.44"
-      # Slack via shoutrrr — webhook URL from 1Password common/slack
-      WATCHTOWER_NOTIFICATION_URL: "${SLACK_WATCHTOWER_URL}"
+      # ntfy topic `updates` via shoutrrr. Empty user + access token = Basic auth, which
+      # ntfy accepts. Host is ntfy.${DOMAIN} (tailnet-resolving), token from 1Password
+      # common/ntfy/TOKEN.
+      WATCHTOWER_NOTIFICATION_URL: "ntfy://:${NTFY_TOKEN}@ntfy.${DOMAIN}/updates?scheme=https&title=Watchtower&tags=whale"
       WATCHTOWER_NOTIFICATIONS_LEVEL: warn
       WATCHTOWER_NO_STARTUP_MESSAGE: "true"
       WATCHTOWER_WARN_ON_HEAD_FAILURE: never

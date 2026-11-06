@@ -45,7 +45,7 @@ make fpp-cert-sync       # run once after networking-up; cron does it every 6h
 # HyperDX agent access + dashboards/alerts-as-code (see docs/observability.md → "Agent access")
 make hyperdx-agent-setup       # prod — idempotent agent user + accessKey setup, MCP smoke test
 make hyperdx-dev-bootstrap     # dev — idempotent local user + accessKey bootstrap, MCP smoke test
-make hyperdx-webhook-setup     # prod — idempotent Slack webhook ("Slack #alerts") setup
+make hyperdx-webhook-setup     # prod — idempotent ntfy webhook ("ntfy alerts") setup
 make hyperdx-export ENV=dev    # export dashboards + alerts → observability/{dashboards,alerts}/*.json
 make hyperdx-apply ENV=dev     # validate + upsert (by name) dashboards, then alerts, from those directories
 make clickstack-up             # dev — start ClickStack on demand (profile `observability`; `make up` skips it, ~4 GB)
@@ -243,11 +243,10 @@ scripts/firewall.sh           UFW status — provider-level firewall configured 
 scripts/seed-cron-env.sh      Materializes cron/*.env.tpl → /etc/vps/*.env, chmod 600 — run via make cron-env-seed
 scripts/hyperdx-agent-setup.sh  Prod — idempotent HyperDX agent user + accessKey setup, MCP smoke test (make hyperdx-agent-setup)
 scripts/hyperdx-dev-bootstrap.sh  Dev — idempotent local HyperDX user + accessKey bootstrap, MCP smoke test (make hyperdx-dev-bootstrap)
-scripts/hyperdx-webhook-setup.sh  Prod — idempotent Slack webhook ("Slack #alerts") setup from op://common/slack/VPS_WEBHOOK_ALERTS (make hyperdx-webhook-setup)
+scripts/hyperdx-webhook-setup.sh  Prod — idempotent ntfy webhook ("ntfy alerts", topic `alerts`) setup, token from op://common/ntfy/TOKEN (make hyperdx-webhook-setup)
 scripts/hyperdx-sync.sh       Dashboards + alerts-as-code over REST v2 — export/apply (make hyperdx-export / hyperdx-apply)
 observability/dashboards/     Dashboard JSON source of truth — see observability/README.md
 observability/alerts/         Alert JSON source of truth — same export/apply loop (docs/observability.md)
-slack/                        One-time 12h config-token procedure for the VPS Slack app (slack/README.md)
 cron/pg-backup                Postgres backup, daily 03:00
 cron/pg-health                Postgres liveness heartbeat, every minute — sources /etc/vps/pg-health.env (no op run — rate limits)
 cron/pg-health.env.tpl        op template for the seeded pg-health cron env (materialized via make cron-env-seed)
@@ -269,7 +268,7 @@ Makefile                      Operational shortcuts
 
 **Valkey** — `container_name: redis` so apps reference it as `redis:6379`. Persistence enabled (`--save 60 1`). Major version pinned — update manually.
 
-**Watchtower** — connects via `socket-proxy-watchtower` (`POST=1`, isolated network). Auto-updates everything except Postgres/Valkey/MariaDB (`com.centurylinklabs.watchtower.enable=false`). Slack #updates via shoutrrr, warn level only, daily at 04:00.
+**Watchtower** — connects via `socket-proxy-watchtower` (`POST=1`, isolated network). Auto-updates everything except Postgres/Valkey/MariaDB (`com.centurylinklabs.watchtower.enable=false`). ntfy topic `updates` via shoutrrr, warn level only, daily at 04:00.
 
 **ClickStack** — all-in-one observability container (ClickHouse + OTel Collector + HyperDX UI + MongoDB). Two OTLP receivers: `:4318` authed (browser SDKs, cross-host ingest, reached via `otel.DOMAIN` / per-app same-origin routes) and `:4319` unauthed, docker-bridge-only (Traefik + every internal `monitoring-net` service; trust boundary is the network, not the token) — two tiers exist because Traefik 3.x has unfixed env-var substitution bugs in OTLP headers, see `docs/observability.md`.
 

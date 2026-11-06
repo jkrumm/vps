@@ -93,7 +93,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | dozzle | amir20/dozzle | Log streaming agent | auto |
 | socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | auto |
 | socket-proxy-watchtower | tecnativa/docker-socket-proxy | Write Docker API for Watchtower | auto |
-| watchtower | containrrr/watchtower | Auto-updates containers, Slack notification on failure | auto |
+| watchtower | containrrr/watchtower | Auto-updates containers, ntfy notification on failure | auto |
 | umami | ghcr.io/umami-software/umami | Self-hosted analytics at `umami.<DOMAIN>` — see Integrating Umami below | auto |
 | photo-gallery | nginx:alpine | Static Astro photo gallery — content rsynced from laptop via photo-flow CLI | auto |
 | imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Image CDN — on-the-fly resize/convert over a private B2 bucket. See [docs/image-cdn.md](docs/image-cdn.md) | auto (v4.x) |
@@ -115,7 +115,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 - **Cloudflare Tunnel, zero inbound ports.** cloudflared is outbound-only to the edge. DNS-01 ACME still issues the wildcard cert so cloudflared can verify Traefik's TLS handshake internally.
 - **Four socket proxies, no docker.sock mounts.** Traefik and Dozzle/Beszel each get a dedicated read-only proxy; RollHook and Watchtower each get a dedicated `POST=1` proxy on an isolated network — write access never shared.
 - **SSH via Tailscale only, enforced by UFW**, not sshd's bind address — see `AGENTS.md` → Quick Reference for the boot-order reason sshd is never rebound.
-- **Watchtower over WUD.** Auto-updates everything except Postgres/Valkey/MariaDB (major version bumps need a deliberate backup first). Slack, warn level only.
+- **Watchtower over WUD.** Auto-updates everything except Postgres/Valkey/MariaDB (major version bumps need a deliberate backup first). ntfy topic `updates`, warn level only.
 - **`container_name: redis` for Valkey** — every app references `redis:6379` unmodified.
 - **1Password for secrets**, zero in the repo (`.env.tpl` is `op://` refs only). Deploy: `op run --env-file=.env.tpl -- docker compose up -d` (or `make up`). Why two runners/templates exist: `docs/secrets-injection.md`.
 - **No Terraform.** Single-server setup doesn't justify state management; UFW is the only firewall layer.
@@ -251,7 +251,7 @@ it after rotating any referenced secret.
 
 | Variable | Value | How to get |
 |-|-|-|
-| `SLACK_WATCHTOWER_URL` | `slack://hook:...@webhook` | `op read "op://common/slack/WATCHTOWER_URL" --account tkrumm` |
+| `NTFY_TOKEN` | `tk_...` | `op read "op://common/ntfy/TOKEN" --account tkrumm` — one token for every ntfy publisher: Watchtower and RollHook (topic `updates`), the HyperDX webhook (topic `alerts`). |
 | `BESZEL_AGENT_KEY` | `ssh-ed25519 AAAA...` | Beszel hub UI → Add System → address `<tailscale-ip>:45876` → copy SSH public key shown |
 | `EXPRESS_SESSION_SECRET` | `<generated>` | Generate: `openssl rand -hex 32` — HyperDX session encryption |
 | `HYPERDX_API_KEY` | `<ingestion-key>` | HyperDX UI → Team Settings → API Keys → Ingestion API Key. No longer required by Traefik — browser SDKs still embed it (`op://vps/argo/HYPERDX_API_KEY_PROD`). See `docs/observability.md`. |
@@ -261,7 +261,7 @@ it after rotating any referenced secret.
 | Variable | Value | How to get |
 |-|-|-|
 | `ROLLHOOK_SECRET` | `<generated>` | `vps/rollhook/SECRET`. Doubles as the registry password (`docker login rollhook.jkrumm.com -u rollhook`) — no separate registry secret. |
-| `SLACK_WEBHOOK_URL` | reuses `SLACK_WATCHTOWER_URL` | Deploy success/failure to Slack `#updates`. |
+| `NOTIFICATION_WEBHOOK_URL` | `https://:${NTFY_TOKEN}@ntfy.${DOMAIN}/updates` | Deploy success/failure (raw job JSON) to ntfy topic `updates`. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://clickstack:4319` | Unauthed OTLP HTTP on the docker bridge — RollHook is on `monitoring-net`. |
 | `DEPLOY_ENVIRONMENT` | `prod` | Tag attached to deploy logs/markers. |
 
@@ -393,8 +393,8 @@ All dashboards are Tailscale-only — no public routes.
 | Beszel | homelab Beszel hub | CPU, RAM, disk, network per container |
 | Dozzle | homelab Dozzle hub | Live container logs |
 | HyperDX (ClickStack) | `https://hyperdx.<DOMAIN>` (tailscale-only) | Traces, metrics, logs |
-| Watchtower | Slack `#updates` (warn level) | Container update failures |
-| RollHook | Slack `#updates` | Deploy success/failure (reuses Watchtower webhook) |
+| Watchtower | ntfy `updates` (warn level) | Container update failures |
+| RollHook | ntfy `updates` | Deploy success/failure |
 | RollHook | HyperDX (ClickStack) | OTLP deploy markers, `service.name=rollhook` |
 | Traefik | `https://traefik.<DOMAIN>` | Router/service map, cert status |
 

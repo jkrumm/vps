@@ -1,23 +1,26 @@
-#!/usr/bin/env bash
 # =============================================================================
-# HyperDX Slack webhook setup — idempotent, prod-only.
+# HyperDX ntfy webhook setup — idempotent, prod-only.
 #
-# Ensures a HyperDX webhook named "Slack #alerts" (service `slack`) exists,
-# pointed at the incoming-webhook URL from op://common/slack/VPS_WEBHOOK_ALERTS.
-# Create-or-update by NAME: a PUT rotates the URL if it already differs. Run
-# this before `make hyperdx-apply` — alerts-as-code (scripts/hyperdx-sync.sh)
-# resolves a `channel.webhook` reference against this webhook by name.
+# Ensures a HyperDX webhook named "ntfy alerts" (service `generic`) exists: it
+# POSTs to https://ntfy.<DOMAIN>/alerts with `Authorization: Bearer <token>`
+# (token from op://common/ntfy/TOKEN) and a body template that becomes the
+# ntfy message. Create-or-update by NAME: a PUT re-applies URL, headers and
+# body (headers are write-only in HyperDX, so there is nothing to diff — every
+# run PUTs). Run this before `make hyperdx-apply` — alerts-as-code
+# (scripts/hyperdx-sync.sh) resolves a `channels[].webhook` reference against
+# this webhook by name.
 #
 # Access key: $HYPERDX_PROD_ACCESS_KEY if set, else `op read
 # op://vps/clickstack/AGENT_ACCESS_KEY` (same user provisioned by
 # hyperdx-agent-setup.sh). Base URL: https://hyperdx.<DOMAIN> from
-# op://vps/config/DOMAIN. Never prints the webhook URL or the access key.
+# op://vps/config/DOMAIN. Never prints the ntfy token or the access key; the
+# base URL of ntfy is derived from DOMAIN, never written into the repo.
 #
 # Usage: make hyperdx-webhook-setup   (ENV=prod, runs on the VPS host)
 # =============================================================================
 set -euo pipefail
 
-WEBHOOK_NAME="Slack #alerts"
+WEBHOOK_NAME="ntfy alerts"
 
 read_secret() {
   local ref="$1" hint="$2" val
@@ -37,14 +40,22 @@ fi
 DOMAIN=$(read_secret "op://vps/config/DOMAIN" "check the vps vault's 'config' item.")
 BASE="https://hyperdx.${DOMAIN}"
 
-SLACK_URL=$(read_secret "op://common/slack/VPS_WEBHOOK_ALERTS" "create this field in 1Password first (common vault, item 'slack').")
+NTFY_TOKEN=$(read_secret "op://common/ntfy/TOKEN" "check the common vault's 'ntfy' item.")
 
-BODY=$(WEBHOOK_NAME="$WEBHOOK_NAME" SLACK_URL="$SLACK_URL" python3 -c "
+BODY=$(WEBHOOK_NAME="$WEBHOOK_NAME" NTFY_URL="https://ntfy.${DOMAIN}/alerts" NTFY_TOKEN="$NTFY_TOKEN" python3 -c "
 import json, os
 print(json.dumps({
     'name': os.environ['WEBHOOK_NAME'],
-    'service': 'slack',
-    'url': os.environ['SLACK_URL'],
+    'service': 'generic',
+    'url': os.environ['NTFY_URL'],
+    'description': 'ntfy topic alerts; token header is write-only here, value in op://common/ntfy/TOKEN (make hyperdx-webhook-setup).',
+    'headers': {
+        'Authorization': 'Bearer ' + os.environ['NTFY_TOKEN'],
+        'Title': 'HyperDX: {{title}}',
+        'Priority': 'high',
+        'Tags': 'rotating_light',
+    },
+    'body': '{{state}}\n{{body}}\n{{link}}',
 }))
 ")
 

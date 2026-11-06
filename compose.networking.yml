@@ -177,10 +177,11 @@ services:
       ROLLHOOK_URL: https://rollhook.jkrumm.com
       PORT: "7700"
       DOCKER_HOST: tcp://socket-proxy-rollhook:2375
-      # Deploy notifications — posts to the same #updates channel Watchtower uses,
-      # but via the plain https webhook (WEBHOOK_UPDATES), not Watchtower's
-      # shoutrrr slack:// URL. RollHook POSTs raw JSON. See rollhook#15.
-      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_UPDATES}
+      # Deploy notifications — posts the job result JSON to the ntfy topic `updates`
+      # (same topic as Watchtower). Empty user + access token in the URL = Basic auth,
+      # which ntfy accepts. RollHook has no ntfy-native formatter yet, so the message
+      # body is the raw job JSON.
+      NOTIFICATION_WEBHOOK_URL: https://:${NTFY_TOKEN}@ntfy.${DOMAIN}/updates
       # OTLP logs export to ClickStack via the unauthed :4319 receiver bound
       # to the docker bridge (see clickstack/otel-custom.yaml + the Traefik
       # precedent above). Surfaces deploys as queryable markers in HyperDX
