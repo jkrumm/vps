@@ -719,7 +719,8 @@ _deploy-affected:
 	@for a in $(APPS); do \
 	  case "$$a" in \
 	    networking|infra|monitoring) $(MAKE) --no-print-directory $$a-up || exit 1 ;; \
-	    *) $(MAKE) --no-print-directory deploy APP=$$a || exit 1 ;; \
+	    *) case " $(KNOWN_APPS) " in *" $$a "*) ;; *) echo "  · skip $$a (no longer in this repo)"; continue ;; esac; \
+	       $(MAKE) --no-print-directory deploy APP=$$a || exit 1 ;; \
 	  esac; \
 	done
 
