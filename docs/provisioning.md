@@ -23,7 +23,13 @@ Creates user `jkrumm`, hardens SSH, applies sysctl, sets up UFW, installs Docker
 ```bash
 sudo tailscale up --ssh --advertise-tags=tag:vps   # complete auth in browser
 tailscale ip -4                                     # note the assigned Tailscale IP (100.x.x.x)
+sudo tailscale set --snat-subnet-routes=false       # keep tailnet source IPs on forwarded traffic
 ```
+
+The last line is load-bearing: with SNAT on (the default; tailscale 1.104.5 applied it on 2026-11-06),
+tailnet traffic DNAT-ed into a container reaches it as the Docker bridge gateway (`172.x.0.1`), so the
+weatherorb worker door's Traefik `ipAllowList` (`100.64.0.0/10`) answers a bare 403 and the mini's alert
+delivery stops. The VPS advertises no subnet routes, so nothing needs the SNAT.
 
 Do **not** bind sshd to the Tailscale IP — see `AGENTS.md` → Quick Reference for why. Verify instead:
 ```bash
