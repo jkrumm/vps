@@ -1,0 +1,12 @@
+# How the factory ships this project (software-factory docs/design.md §9).
+apiVersion: factory/v2
+name: vps
+deploy:
+  mode: make # `make deploy` pulls this repo on the VPS and applies the affected apps/stacks; `make verify` probes them
+  targets:
+    - { name: vps, host: vps, verify: make verify }
+  hold: 5m
+  migrations: []
+ship:
+  - { paths: ["**"], via: push }
+leads: 1

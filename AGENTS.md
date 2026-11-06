@@ -528,7 +528,13 @@ Tailscale (or behind auth) are checked by their container healthcheck over SSH â
 no secrets or DNS lookup needed. `make logs APP=<name>` prints a bounded 200-line
 tail and exits (no `-f`). With no `APP`, `make verify` re-verifies every app
 recorded in `.deploy-apps` by the last `make deploy` and exits non-zero if any is
-unhealthy; infra entries (which have no app health check) are skipped.
+unhealthy; infra entries (which have no app health check) are skipped. When no
+deploy is recorded (`.deploy-apps` missing or empty, e.g. the last deploy touched
+no app), it verifies every known app's live state instead of exiting 0.
+
+`make version` prints the VPS checkout's `HEAD` (one line, read-only); the factory
+compares it with a shipped commit. `project.yaml` declares the factory manifest:
+`deploy.mode make`, target `vps` verified by `make verify`, ships by push.
 
 | App | Health URL | Kuma monitor | OTel `service.name` |
 |-|-|-|-|

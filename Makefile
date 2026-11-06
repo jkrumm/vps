@@ -58,7 +58,7 @@ endif
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
         postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-upgrade dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
-        check deploy verify logs _deploy-affected
+        check deploy verify version logs _deploy-affected
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -734,8 +734,8 @@ ifneq ($(ENV),prod)
 else
 ifeq ($(APP),)
 	@apps="$$(cat .deploy-apps 2>/dev/null)"; \
-	if [ -z "$$apps" ]; then echo "no recorded deploys to verify — run 'make deploy' first"; exit 0; fi; \
-	echo "→ verifying last deployed: $$apps"; \
+	if [ -z "$$apps" ]; then apps="$(KNOWN_APPS)"; echo "→ no recorded deploy — verifying the live state of every known app"; \
+	else echo "→ verifying last deployed: $$apps"; fi; \
 	failed=0; \
 	for a in $$apps; do \
 	  case "$$a" in \
@@ -768,6 +768,14 @@ else
 		done; \
 	fi
 endif
+endif
+
+## Print the deployed commit sha (one line, read-only): the VPS checkout's HEAD, which `make deploy` pulls and applies.
+version:
+ifneq ($(ENV),prod)
+	@ssh vps "cd ~/vps && git rev-parse HEAD"
+else
+	@git rev-parse HEAD
 endif
 
 ## Bounded 200-line tail of one app's production container, then exits (no -f): make logs APP=<name>.
