@@ -391,8 +391,10 @@ the topic `updates` with the same token (`NTFY_TOKEN` in `.env.tpl`).
 
 ### Alert channels
 
-Every alert lists one `channel` in `channels` (HyperDX >= 2.36 takes 1–10; the singular
-`channel` is just `channels[0]`): `ntfy alerts`; ten of them (email-gateway, shutterflow, otel-ingest) also list `Factory door`. A generic `Warden ingest` webhook used to
+Every alert in this directory lists exactly one `channel` in `channels` (HyperDX >= 2.36 takes 1–10; the singular
+`channel` is just `channels[0]`): `Factory door`, the factory's alert door, which files an Issue in the repo its route names
+(`factory door route`, kept in the factory's database, matched on the quoted name in HyperDX's alert title) and forwards an unsolved one after 30 minutes. The `ntfy alerts` webhook still exists
+(`make hyperdx-webhook-setup`) but no alert uses it; add it back to an alert's `channels` for a direct push. A generic `Warden ingest` webhook used to
 sit next to it until warden was switched off (2026-10-27); it was deleted from HyperDX and
 the alert files. weatherorb's four alerts are not in this directory: that repo
 applies them with its own `WeatherOrb ops.alert` webhook, and `export` skips

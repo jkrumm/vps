@@ -2,7 +2,7 @@
   "channels": [
     {
       "type": "webhook",
-      "webhook": "ntfy alerts"
+      "webhook": "Factory door"
     }
   ],
   "dashboard": "VPS \u2014 Overview",

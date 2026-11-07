@@ -2,10 +2,6 @@
   "channels": [
     {
       "type": "webhook",
-      "webhook": "ntfy alerts"
-    },
-    {
-      "type": "webhook",
       "webhook": "Factory door"
     }
   ],
