@@ -1,0 +1,31 @@
+#!/bin/sh
+# Login shell of the `wo-backup` system user (installed by scripts/setup-weatherorb-backup-user.sh).
+# Tailscale SSH ignores authorized_keys, so a forced command cannot live there; this shell is the
+# forced command instead: whatever the client asks for, the only thing that runs is a read-only
+# rsync server confined to the dump directory. An interactive login, any other command and any
+# `;`/`|`/`&`/`$`/backtick in the request are refused. rrsync reads the request from
+# SSH_ORIGINAL_COMMAND, re-validates every rsync option and path, and -ro forbids writes and deletes.
+# rrsync roots every path at DIR, so the homelab's `wo-backup@vps:/var/backups/weatherorb-accounts/`
+# is rewritten to `/` here and the pull needs no change.
+DIR=/var/backups/weatherorb-accounts
+
+refuse() { echo "wo-backup: rsync only" >&2; exit 1; }
+
+[ "$#" -eq 2 ] && [ "$1" = "-c" ] || refuse
+cmd=$2
+case "$cmd" in
+  "rsync --server --sender "*) ;;
+  *) refuse ;;
+esac
+case "$cmd" in
+  *[';|&$`<>()\\']* | *'
+'*) refuse ;;
+esac
+case "$cmd" in
+  *" $DIR/") cmd="${cmd%"$DIR"/}/" ;;
+  *" $DIR") cmd="${cmd%"$DIR"}/" ;;
+esac
+
+SSH_ORIGINAL_COMMAND=$cmd
+export SSH_ORIGINAL_COMMAND
+exec /usr/bin/rrsync -ro "$DIR"
