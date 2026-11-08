@@ -198,7 +198,7 @@ compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-pro
 compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no exposed ports
 compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
 compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStack with ports exposed)
-apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, one tailnet-only worker router) — RollHook-managed, `make weatherorb-up` pins both images — + weatherorb-egress (stdlib CONNECT proxy for the alert webhooks, ADR 0023: tailnet-only :18443, own bridge network, public python image, no pin) + weatherorb-probe (stdlib external /v1 availability probe, ADR 0026: once a minute, OTLP span to ClickStack, key from the host-local file `WEATHERORB_PROBE_KEY_FILE` = `/etc/vps/weatherorb-probe-key` (owner 65534, mode 0400), fails closed without it; no published port, public python image, no pin)
+apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, one tailnet-only worker router) — RollHook-managed, `make weatherorb-up` pins both images — + weatherorb-egress (stdlib CONNECT proxy for the alert webhooks, ADR 0023: tailnet-only :18443, own bridge network, python image on a patch tag, bumped by hand) + weatherorb-probe (stdlib external /v1 availability probe, ADR 0026: once a minute, OTLP span to ClickStack, key from the host-local file `WEATHERORB_PROBE_KEY_FILE` = `/etc/vps/weatherorb-probe-key` (owner 65534, mode 0400), fails closed without it; no published port, public python image, no pin)
 apps/weatherorb/egress/        proxy.py (the egress proxy; IP-literal :443 CONNECT only, refuses non-public targets) + test_proxy.py (`python3 -m unittest`, stdlib only)
 apps/weatherorb/probe/         probe.py (the /v1 availability probe) + test_probe.py (`python3 -m unittest`, stdlib only)
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
@@ -226,7 +226,8 @@ scripts/backup-pg.sh          pg_dump → S3 + Uptime Kuma push ping
 scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liveness)
 scripts/db-counts.sh          Exact per-table COUNT(*) (Postgres + MariaDB) — read-only, diff-friendly verification (make db-counts)
 scripts/dump-weatherorb-accounts.sh  Hourly pg_dump of weatherorb_accounts → /var/backups/weatherorb-accounts (48 kept, homelab pulls as wo-backup)
-scripts/setup-weatherorb-backup-user.sh  Idempotent wo-backup user + backup dir — run via make weatherorb-backup-user
+scripts/setup-weatherorb-backup-user.sh  Idempotent wo-backup user + backup dir + forced-command shell — run via make weatherorb-backup-user
+scripts/wo-backup-shell  wo-backup login shell (installed to /usr/local/bin): only a read-only rsync (rrsync -ro) on the dump dir; Tailscale SSH ignores authorized_keys, so the shell is the forced command
 scripts/setup-gh-runner.sh    Idempotent per-repo Actions runner for private repos — gh-runner user, rootless Docker, systemd unit (make gh-runner-setup / gh-runner-remove REPO=…, docs/gh-runner.md)
 scripts/gh-runner-sync.sh     Registers the runner(s) of every private repo with workflows, per-repo count in instances() (make gh-runner-sync, runs where gh is authenticated)
 scripts/gh-runner-watchdog.sh Restarts runners stuck in reconnect back-off — installed by setup as a 5-min systemd timer

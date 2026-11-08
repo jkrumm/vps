@@ -38,8 +38,8 @@
 # worker POSTs to URLs strangers typed, and every delivery leaves through this CONNECT proxy
 # (mini -> tailnet -> this proxy -> the receiver) so the receiver sees the VPS's public IP, never
 # the home IP. Tailnet only: the port is published on ${VPS_TAILSCALE_IP} alone, and the tailnet
-# ACL grants only the mini's tag tcp:18443. Plain python:3.13-alpine running the stdlib script in
-# ./egress/proxy.py (mounted read-only), so there is no image to build, pin or roll; Watchtower
+# ACL grants only the mini's tag tcp:18443. Plain python image (a patch tag, bumped by hand with the probe's) running the stdlib script in
+# ./egress/proxy.py (mounted read-only), so there is no image to build or roll; Watchtower
 # stays off it. It takes IP literals on port 443 only and refuses every non-public address as a
 # second layer behind the mini's guard. Its own bridge network shares no container with any other
 # service. Tests: `python3 -m unittest` in ./egress.
@@ -47,8 +47,8 @@
 # weatherorb-probe is the external availability probe for the keyed /v1 API (weatherorb ADR 0026):
 # once a minute it GETs /v1/pointcast at a random point through the public edge with a real API key
 # and exports one OTLP span to ClickStack's internal receiver on monitoring-net. Same shape as the
-# egress proxy: python:3.13-alpine running ./probe/probe.py (mounted read-only), no image to build,
-# pin or roll, Watchtower off, no published port. The key is a host-local file (never in 1Password
+# egress proxy: python (same patch tag) running ./probe/probe.py (mounted read-only), no image to build
+# or roll, Watchtower off, no published port. The key is a host-local file (never in 1Password
 # templates or .env): mint it with the account CLI's `create-key`, put it at a path of your choice
 # (suggested /etc/vps/weatherorb-probe-key, owner 65534, mode 0400 — the container runs as 65534),
 # and `make weatherorb-env` writes WEATHERORB_PROBE_KEY_FILE=<that path> into .env when the file
@@ -89,6 +89,29 @@ services:
       EDGE_TRUSTED_PROXY_CIDRS: ${EDGE_TRUSTED_PROXY_CIDRS:-}
       EDGE_ALERT_ALLOW_CIDRS: ${EDGE_ALERT_ALLOW_CIDRS:-}
     mem_limit: 256m
+    # 1024 against a measured 231 peak (12 workers + njs/otel threads); a fork bomb stops at the cap.
+    pids_limit: 1024
+    # Default caps minus everything the official entrypoint and master do not use. Kept: CHOWN +
+    # DAC_OVERRIDE + FOWNER for 25-edge-log-dir.sh on the volumes (chown/chmod/prune of nginx-owned
+    # files), SETUID + SETGID for the master dropping workers to `nginx`, KILL for the master
+    # signalling those workers on reload and quit. Port 8080 needs no NET_BIND_SERVICE. Verified
+    # with a throwaway container on the VPS: starts, serves /health, `nginx -s reload` and `quit`
+    # work, and a restart on existing volumes passes (without FOWNER it exits on the chmod).
+    # NOT read_only yet: the entrypoint (17-otel-env.envsh) writes edge-trusted-proxies.conf and
+    # edge-alert-allow.conf into /etc/nginx at every start, and that directory cannot be a tmpfs
+    # without hiding nginx.conf. Once the weatherorb image writes them under /etc/nginx/conf.d,
+    # add `read_only: true` and `tmpfs: [/tmp, /run, /etc/nginx/conf.d]` here (/run holds the pid
+    # file). /var/cache/nginx and the usage log are volumes; /var/log/nginx/* are symlinks to the
+    # container's stdout/stderr.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+      - KILL
     security_opt:
       - no-new-privileges:true
     volumes:
@@ -151,6 +174,15 @@ services:
     image: ${WEATHERORB_ACCOUNT_IMAGE:-${IMAGE_TAG:-rollhook.jkrumm.com/weatherorb-account:latest}}
     restart: unless-stopped
     mem_limit: 256m
+    # Runs as the image's `bun` user and listens on 4200, so it needs no capability at all and
+    # writes nothing outside /tmp (verified read-only with a throwaway container on the VPS).
+    # Measured peak 33 pids; 256 leaves room for bun's GC and worker threads.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    pids_limit: 256
     security_opt:
       - no-new-privileges:true
     environment:
@@ -215,7 +247,7 @@ services:
   # weatherorb-egress — CONNECT-only egress proxy for the alert webhooks (ADR 0023).
   # ---------------------------------------------------------------------------
   weatherorb-egress:
-    image: python:3.13-alpine
+    image: python:3.13.16-alpine3.24
     restart: unless-stopped
     command: python /app/proxy.py
     user: "65534:65534"
@@ -264,7 +296,7 @@ services:
   # weatherorb-probe — external availability probe for /v1 (ADR 0026).
   # ---------------------------------------------------------------------------
   weatherorb-probe:
-    image: python:3.13-alpine
+    image: python:3.13.16-alpine3.24
     restart: unless-stopped
     command: python /app/probe.py
     user: "65534:65534"
