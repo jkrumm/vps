@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Apps \u2014 Errors",
+  "displayName": "Apps \u2014 Errors - iris iOS and macOS app errors (error logs; count)",
+  "interval": "1h",
+  "message": null,
+  "name": "iris app errors >= 3 (1h)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "iris"
+  ],
+  "threshold": 3,
+  "thresholdType": "above",
+  "tile": "iris iOS and macOS app errors (error logs; count)"
+}

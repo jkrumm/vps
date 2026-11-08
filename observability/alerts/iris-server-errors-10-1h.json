@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Apps \u2014 Errors",
+  "displayName": "Apps \u2014 Errors - iris-server errors (error spans; count)",
+  "interval": "1h",
+  "message": null,
+  "name": "iris-server errors >= 10 (1h)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "iris"
+  ],
+  "threshold": 10,
+  "thresholdType": "above",
+  "tile": "iris-server errors (error spans; count)"
+}

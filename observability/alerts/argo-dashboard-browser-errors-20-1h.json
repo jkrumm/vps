@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Apps \u2014 Errors",
+  "displayName": "Apps \u2014 Errors - argo-dashboard browser errors (error spans, console.error; count)",
+  "interval": "1h",
+  "message": null,
+  "name": "argo-dashboard browser errors >= 20 (1h)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "argo"
+  ],
+  "threshold": 20,
+  "thresholdType": "above",
+  "tile": "argo-dashboard browser errors (error spans, console.error; count)"
+}

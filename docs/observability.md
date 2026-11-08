@@ -401,6 +401,37 @@ applies them with its own `WeatherOrb ops.alert` webhook, and `export` skips
 the `weatherorb` tag. `apply` always sends `channels` (+ the `channel` mirror):
 a body with only `channel` would silently reduce an alert to one webhook.
 
+### Per-app error alerts → factory Issues
+
+Every app that sends telemetry has an error alert (or several) on the `Factory door` webhook, so an app's errors become an
+Issue in its own repo. The door's `hyperdx` source (one token, held in the `Factory door` webhook's headers) takes every alert;
+the **repo comes from a door route**, not from the alert: with an alert's `name` set, HyperDX uses it verbatim as the
+notification title, the door's monitor is that name, and `factory door route-set --source hyperdx --monitor "<name>" --repo
+<repo>` (owner-only, kept in the factory database) sends it to a repo. The threshold is part of the name, so a threshold
+change is a new monitor and needs a new route — rename and re-route together.
+
+Tiles live on `Apps — Errors` (`observability/dashboards/apps-errors.json`), except `fpp browser errors`, which reuses the
+`Browser errors` tile of the Free Planning Poker dashboard. Each counts error spans (or error logs) over the alert window;
+4xx are left out on purpose (imgproxy dead sources, bad signatures, scanners).
+
+| Alert name (= door monitor) | Repo | Counts |
+|-|-|-|
+| `fpp server errors >= 3 (15m)` | free-planning-poker | fpp-server / fpp-analytics 5xx or error spans |
+| `fpp browser errors >= 20 (1h)` | free-planning-poker | browser SDK error spans and `console.error` |
+| `argo-api server errors >= 5 (15m)` | argo | argo-api HTTP 5xx |
+| `argo-dashboard browser errors >= 20 (1h)` | argo | argo-dashboard error spans and `console.error` |
+| `iris-server errors >= 10 (1h)` | iris | iris-server error spans |
+| `iris app errors >= 3 (1h)` | iris | iris-ios / iris-macos error logs |
+| `imgproxy 5xx >= 3 (15m)` | vps | imgproxy HTTP 5xx |
+| `shutterflow imgproxy 5xx >= 3 (15m)` | shutterflow | shutterflow-imgproxy(-small) HTTP 5xx |
+| `shutterflow-share server errors >= 3 (15m)` | shutterflow | shutterflow-share 5xx or error spans |
+| `email-gateway errors >= 3 (15m)` | email-gateway | email-gateway error spans |
+| `rollhook error logs >= 1 (15m)` | rollhook | rollhook error logs |
+
+The older hand-written alerts (email-gateway ops, shutterflow ops, VPS edge/error logs, OTel ingest) keep their routes.
+weatherorb's alerts live in its own repo. Not covered: `agw`, `agw-gateway`, `opencode` (tooling; their error spans carry no HTTP status and
+sit at 5–6 % steady state) and `traefik` (the `VPS edge` alerts).
+
 Alerts themselves are code too: the same `hyperdx-export`/`hyperdx-apply`
 targets also cover `observability/alerts/*.json`, using the REST v2 `/alerts`
 endpoint (source: `saved_search` or `tile`; threshold + thresholdType +

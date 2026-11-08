@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Apps \u2014 Errors",
+  "displayName": "Apps \u2014 Errors - email-gateway errors (error spans; count)",
+  "interval": "15m",
+  "message": null,
+  "name": "email-gateway errors >= 3 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "email-gateway"
+  ],
+  "threshold": 3,
+  "thresholdType": "above",
+  "tile": "email-gateway errors (error spans; count)"
+}

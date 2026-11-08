@@ -1,0 +1,362 @@
+{
+  "filters": [],
+  "name": "Apps \u2014 Errors",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "apps"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 3
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName IN ('fpp-server', 'fpp-analytics') AND (SpanKind = 'Server' OR startsWith(SpanName, 'ws.')) AND (StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '500' OR SpanAttributes['http.status_code'] >= '500')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "h": 3,
+      "id": "8ce482125547ea5b95516546",
+      "name": "fpp server errors (5xx or error spans; count)",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 5
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-api' AND SpanKind = 'Server' AND (SpanAttributes['http.response.status_code'] >= '500' OR SpanAttributes['http.status_code'] >= '500')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "h": 3,
+      "id": "e653ac128cea9307d0fe0e44",
+      "name": "argo-api server errors (HTTP 5xx; count)",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 20
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'argo-dashboard' AND (StatusCode = 'Error' OR SpanName = 'console.error')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "h": 3,
+      "id": "6ab35ef90456fc41e255a586",
+      "name": "argo-dashboard browser errors (error spans, console.error; count)",
+      "w": 6,
+      "x": 0,
+      "y": 3
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 10
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'iris-server' AND StatusCode = 'Error'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "h": 3,
+      "id": "edd59359f11815ee55f3e011",
+      "name": "iris-server errors (error spans; count)",
+      "w": 6,
+      "x": 6,
+      "y": 3
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 3
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName IN ('iris-ios', 'iris-macos') AND SeverityNumber >= 17",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "2e8064ff75a9431bbbfb9217",
+      "name": "iris iOS and macOS app errors (error logs; count)",
+      "w": 6,
+      "x": 0,
+      "y": 6
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 3
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'imgproxy' AND SpanKind = 'Server' AND (SpanAttributes['http.response.status_code'] >= '500' OR SpanAttributes['http.status_code'] >= '500')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "h": 3,
+      "id": "585a3a5302ff50da143aa6ec",
+      "name": "imgproxy 5xx (count; 4xx are scanners and dead sources)",
+      "w": 6,
+      "x": 6,
+      "y": 6
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 3
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName IN ('shutterflow-imgproxy', 'shutterflow-imgproxy-small') AND SpanKind = 'Server' AND (SpanAttributes['http.response.status_code'] >= '500' OR SpanAttributes['http.status_code'] >= '500')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "h": 3,
+      "id": "8c16c4b25fb694763b877a9e",
+      "name": "shutterflow imgproxy 5xx (count; 4xx are bad signatures)",
+      "w": 6,
+      "x": 0,
+      "y": 9
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 3
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'shutterflow-share' AND SpanKind = 'Server' AND (StatusCode = 'Error' OR SpanAttributes['http.response.status_code'] >= '500' OR SpanAttributes['http.status_code'] >= '500')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "h": 3,
+      "id": "8c97e31066de7ad31b991f37",
+      "name": "shutterflow-share server errors (5xx or error spans; count)",
+      "w": 6,
+      "x": 6,
+      "y": 9
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 3
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'email-gateway' AND StatusCode = 'Error'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "h": 3,
+      "id": "2f6839f03fa76082672c7b27",
+      "name": "email-gateway errors (error spans; count)",
+      "w": 6,
+      "x": 0,
+      "y": 12
+    },
+    {
+      "config": {
+        "color": "chart-green",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'rollhook' AND SeverityNumber >= 17",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "h": 3,
+      "id": "63edda768eccc52278b2803a",
+      "name": "rollhook error logs (count)",
+      "w": 6,
+      "x": 6,
+      "y": 12
+    }
+  ]
+}

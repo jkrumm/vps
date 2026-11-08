@@ -246,7 +246,7 @@ scripts/hyperdx-dev-bootstrap.sh  Dev — idempotent local HyperDX user + access
 scripts/hyperdx-webhook-setup.sh  Prod — idempotent ntfy webhook ("ntfy alerts", topic `alerts`) setup, token from op://common/ntfy/TOKEN (make hyperdx-webhook-setup)
 scripts/hyperdx-sync.sh       Dashboards + alerts-as-code over REST v2 — export/apply (make hyperdx-export / hyperdx-apply)
 observability/dashboards/     Dashboard JSON source of truth — see observability/README.md
-observability/alerts/         Alert JSON source of truth — same export/apply loop (docs/observability.md)
+observability/alerts/         Alert JSON source of truth — same export/apply loop (docs/observability.md); every telemetry app has an error alert on the `Factory door` webhook, routed to its repo by a door route named after the alert (docs/observability.md → Per-app error alerts)
 cron/pg-backup                Postgres backup, daily 03:00
 cron/pg-health                Postgres liveness heartbeat, every minute — sources /etc/vps/pg-health.env (no op run — rate limits)
 cron/pg-health.env.tpl        op template for the seeded pg-health cron env (materialized via make cron-env-seed)

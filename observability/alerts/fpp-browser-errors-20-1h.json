@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Free Planning Poker",
+  "displayName": "Free Planning Poker - Browser errors",
+  "interval": "1h",
+  "message": null,
+  "name": "fpp browser errors >= 20 (1h)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "fpp"
+  ],
+  "threshold": 20,
+  "thresholdType": "above",
+  "tile": "Browser errors"
+}

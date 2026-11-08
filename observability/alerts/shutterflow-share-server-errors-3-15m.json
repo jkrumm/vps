@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Apps \u2014 Errors",
+  "displayName": "Apps \u2014 Errors - shutterflow-share server errors (5xx or error spans; count)",
+  "interval": "15m",
+  "message": null,
+  "name": "shutterflow-share server errors >= 3 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "shutterflow"
+  ],
+  "threshold": 3,
+  "thresholdType": "above",
+  "tile": "shutterflow-share server errors (5xx or error spans; count)"
+}

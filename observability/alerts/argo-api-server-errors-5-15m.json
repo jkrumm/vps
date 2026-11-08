@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Apps \u2014 Errors",
+  "displayName": "Apps \u2014 Errors - argo-api server errors (HTTP 5xx; count)",
+  "interval": "15m",
+  "message": null,
+  "name": "argo-api server errors >= 5 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "argo"
+  ],
+  "threshold": 5,
+  "thresholdType": "above",
+  "tile": "argo-api server errors (HTTP 5xx; count)"
+}

@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Apps \u2014 Errors",
+  "displayName": "Apps \u2014 Errors - shutterflow imgproxy 5xx (count; 4xx are bad signatures)",
+  "interval": "15m",
+  "message": null,
+  "name": "shutterflow imgproxy 5xx >= 3 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "shutterflow"
+  ],
+  "threshold": 3,
+  "thresholdType": "above",
+  "tile": "shutterflow imgproxy 5xx (count; 4xx are bad signatures)"
+}
