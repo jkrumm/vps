@@ -105,6 +105,17 @@ services:
       # No password (Valkey is on an internal-only Docker network). Unsetting
       # this env var degrades gracefully to in-memory-only behavior.
       REDIS_URL: redis://redis:6379
+      # In-app feedback → software-factory door on the mini, over the tailnet
+      # (tag:vps → tag:devhost, tcp:8796). Both unset = POST /feedback answers 503;
+      # set but wrong = 502.
+      FACTORY_FEEDBACK_URL: https://${MINI_TAILNET_NAME:?MINI_TAILNET_NAME must be set}:8796/feedback/free-planning-poker
+      FACTORY_FEEDBACK_TOKEN: ${FACTORY_FEEDBACK_TOKEN:?FACTORY_FEEDBACK_TOKEN must be set}
+    # The VPS does not use MagicDNS: the mini's tailnet name resolves to unrelated
+    # public addresses here. The door is `tailscale serve` on the mini, with a cert
+    # for the name only, so the URL keeps the name (TLS server name) and this pins
+    # it to the tailnet IP.
+    extra_hosts:
+      - "${MINI_TAILNET_NAME:?MINI_TAILNET_NAME must be set}:${MINI_TAILSCALE_IP:?MINI_TAILSCALE_IP must be set}"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3003/health"]
       interval: 5s

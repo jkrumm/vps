@@ -321,6 +321,8 @@ mysql://fpp:<password>@db.free-planning-poker.com:33306/free-planning-poker?ssl=
 
 Both `fpp-server` and `fpp-analytics` follow the RollHook contract (no `container_name`, no `ports`, healthcheck, `IMAGE_TAG` env var, `rollhook.allowed_repos=jkrumm/free-planning-poker`). The updater is a sleep-loop sidecar that connects to MariaDB internally with TLS+no-verify (cert CN `*.free-planning-poker.com` doesn't match the `mariadb` hostname).
 
+`fpp-server` also forwards in-app feedback to the software-factory door on the mini (`FACTORY_FEEDBACK_URL` + `FACTORY_FEEDBACK_TOKEN`; unset → `POST /feedback` answers 503, wrong → 502). The VPS has no MagicDNS, so `extra_hosts` pins `${MINI_TAILNET_NAME}` to `${MINI_TAILSCALE_IP}`; the URL must keep the name because the door (`tailscale serve`) only has a cert for it. Needs the ACL grant `tag:vps → tag:devhost` on tcp:8796. The three vars live in the root `.env.tpl` (for `make fpp-up`) and `apps/fpp/.env.tpl` (for RollHook; re-run `make fpp-env` after changing them). If the mini is renamed or re-joined, update `op://vps/config/MINI_*`.
+
 ---
 
 ## Postgres Schema Model

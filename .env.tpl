@@ -33,6 +33,11 @@ FPP_ANALYTICS_SECRET_TOKEN=op://vps/fpp/ANALYTICS_SECRET_TOKEN
 FPP_ANALYTICS_SENTRY_DSN=op://vps/fpp/ANALYTICS_SENTRY_DSN
 FPP_EMAIL_GATEWAY_SECRET_KEY=op://vps/email-gateway/SECRET_KEY
 UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL=op://vps/config/UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL
+# In-app feedback → factory door on the mini (tailnet). The VPS has no MagicDNS, so
+# fpp-server pins the mini's tailnet name to its tailnet IP via extra_hosts.
+FACTORY_FEEDBACK_TOKEN=op://vps/fpp-feedback/token
+MINI_TAILNET_NAME=op://vps/config/MINI_TAILNET_NAME
+MINI_TAILSCALE_IP=op://vps/config/MINI_TAILSCALE_IP
 
 # --- Services ---
 UMAMI_DB_PASSWORD=op://vps/umami/DB_PASSWORD

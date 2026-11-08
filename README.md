@@ -185,6 +185,8 @@ Single-tenant DB for Free Planning Poker, quarantined in `apps/fpp/` because it'
 | `FPP_SERVER_SENTRY_DSN`, `FPP_ANALYTICS_SENTRY_DSN` | `https://...@sentry.io/...` | Per-service Sentry DSN |
 | `FPP_EMAIL_GATEWAY_SECRET_KEY` | `<secret>` | email-gateway bearer key for fpp-analytics (`op://vps/email-gateway/SECRET_KEY`); the URL is `https://email-gateway.${DOMAIN}` in compose |
 | `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL` | `https://...` | Heartbeat URL for the 10-min sync sidecar (separate Kuma monitor) |
+| `FACTORY_FEEDBACK_TOKEN` | `<secret>` | Bearer token for the factory door's in-app feedback route (`op://vps/fpp-feedback/token`); fpp-server reads it with `FACTORY_FEEDBACK_URL` (built in compose) |
+| `MINI_TAILNET_NAME`, `MINI_TAILSCALE_IP` | `<tailnet-name>`, `<tailscale-ip>` | The mini's tailnet DNS name (no trailing dot) and first tailnet IP, in `op://vps/config/`. From `ssh vps 'tailscale status --json'` → the mini peer's `DNSName` and `TailscaleIPs[0]`. Not secrets; the VPS has no MagicDNS, so compose pins the name to the IP via `extra_hosts` |
 
 **imgproxy (image CDN)**
 
