@@ -233,7 +233,19 @@ fpp-shell:
 
 ## email-gateway stack (Bun + Resend, RollHook-managed) — apps/email-gateway/compose.yml
 ## SQLite in /var/lib/email-gateway. RollHook deploys on push to jkrumm/email-gateway:master.
-email-gateway-up:   require-prod ; $(OP_RUN) docker compose -f apps/email-gateway/compose.yml up -d
+## The service is recreated pinned to the image its running container uses (IMAGE_TAG) — a bare
+## `up -d` would pull the nonexistent :latest. No container yet = genesis start from :latest.
+email-gateway-up: require-prod
+	@NAME=$$(docker ps -a --filter "label=com.docker.compose.service=email-gateway" --format '{{.Names}}' | head -1); \
+	PIN=""; \
+	if [ -z "$$NAME" ]; then \
+	  echo "  no email-gateway container exists — genesis start from :latest (bootstrap-seeded)"; \
+	else \
+	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
+	  [ -n "$$IMG" ] || { echo "  ✗ email-gateway container '$$NAME' exists but its image could not be read — inspect it manually"; exit 1; }; \
+	  echo "  pinning email-gateway → $$IMG"; PIN="IMAGE_TAG=$$IMG"; \
+	fi; \
+	$(OP_RUN) env $$PIN docker compose -f apps/email-gateway/compose.yml up -d
 email-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/email-gateway/compose.yml down
 ## One-shot bootstrap — clone email-gateway repo, build, and push :initial to
 ## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
