@@ -166,7 +166,23 @@ rollhook-update: require-prod
 
 ## FPP stack (MariaDB now; fpp-server + fpp-analytics later) — apps/fpp/compose.yml
 ## On a fresh server: networking-up first, then fpp-cert-sync, then fpp-up.
-fpp-up:   require-prod ; $(OP_RUN) docker compose -f apps/fpp/compose.yml up -d
+## fpp-server / fpp-analytics / the updater are RollHook-managed, so each is recreated alone with
+## IMAGE_TAG pinned to the image its running container uses — a bare `up -d` would pull the
+## nonexistent :latest (or roll back to it). No container yet = genesis start from :latest.
+fpp-up: require-prod
+	$(OP_RUN) docker compose -f apps/fpp/compose.yml up -d mariadb
+	@for SVC in fpp-server fpp-analytics fpp-analytics-updater; do \
+	  NAME=$$(docker ps -a --filter "label=com.docker.compose.service=$$SVC" --format '{{.Names}}' | head -1); \
+	  PIN=""; \
+	  if [ -z "$$NAME" ]; then \
+	    echo "  no $$SVC container exists — genesis start from :latest (bootstrap-seeded)"; \
+	  else \
+	    IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
+	    [ -n "$$IMG" ] || { echo "  ✗ $$SVC container '$$NAME' exists but its image could not be read — inspect it manually"; exit 1; }; \
+	    echo "  pinning $$SVC → $$IMG"; PIN="IMAGE_TAG=$$IMG"; \
+	  fi; \
+	  $(OP_RUN) env $$PIN docker compose -f apps/fpp/compose.yml up -d --no-deps $$SVC || exit 1; \
+	done
 fpp-down: require-prod ; $(OP_RUN) docker compose -f apps/fpp/compose.yml down
 fpp-mariadb-setup: require-prod
 	$(OP_RUN) ./apps/fpp/scripts/setup-mariadb.sh
