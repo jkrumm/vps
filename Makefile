@@ -770,6 +770,7 @@ ifeq ($(APP),)
 	  case "$$a" in \
 	    networking|infra|monitoring) echo "  · skip $$a (infra target — no app health check)"; continue ;; \
 	  esac; \
+	  case " $(KNOWN_APPS) " in *" $$a "*) ;; *) echo "  · skip $$a (no longer in this repo)"; continue ;; esac; \
 	  $(MAKE) --no-print-directory verify APP=$$a || failed=1; \
 	done; \
 	exit $$failed
