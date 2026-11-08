@@ -62,6 +62,7 @@ grep -h '\${' compose*.yml scripts/*.sh | grep -oE '\$\{[A-Z_]+\}' | sort -u
 Services with `com.centurylinklabs.watchtower.enable=false` require manual upgrades. Currently:
 - `postgres` — documented in AGENTS.md and README Upgrade Procedures
 - `redis` (valkey) — documented in AGENTS.md and README Upgrade Procedures
+- `mariadb` (apps/fpp/compose.yml) — documented in AGENTS.md and README Upgrade Procedures (`make fpp-mariadb-upgrade`)
 
 If a new excluded container appears, flag it and prompt to add upgrade procedure.
 
