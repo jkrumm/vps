@@ -23,8 +23,8 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
-if ! command -v rrsync >/dev/null 2>&1; then
-  echo "✗ rrsync missing (apt install rsync)" >&2
+if [[ ! -x /usr/bin/rrsync ]]; then
+  echo "✗ /usr/bin/rrsync missing (apt install rsync; wo-backup-shell execs that path)" >&2
   exit 1
 fi
 # Installed before the user is created or its shell switched, so there is never a moment when the
