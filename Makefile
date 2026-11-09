@@ -42,6 +42,22 @@ else
 OP_RUN_ENV = $(OP_RUN_DEV)
 endif
 
+# Pin helper for RollHook-managed apps — ONE definition every <app>-up uses.
+# RollHook rolls the image, compose files only carry a nonexistent :latest default, so a bare
+# `up -d` would pull or roll back to it. Usage inside a recipe:
+#   $(PIN_SH); PINS=$$(pin_all SVC:VAR [SVC:VAR ...]) || exit 1; $(OP_RUN) env $$PINS docker compose ... up -d
+# pin_all prints " VAR=<image of SVC's container>" per pair (stdout, for `env`) and the progress
+# lines on stderr. A service without any container (`docker ps -a`: a stopped one still counts)
+# is a genesis start from the bootstrap-seeded :latest and contributes nothing; a container whose
+# image cannot be read fails the target (return 1 -> `|| exit 1`).
+PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
+	name=$$(docker ps -a --filter "label=com.docker.compose.service=$$svc" --format '{{.Names}}' | head -1); \
+	if [ -z "$$name" ]; then echo "  no $$svc container exists — genesis start from :latest (bootstrap-seeded)" >&2; return 0; fi; \
+	img=$$(docker inspect --format '{{.Config.Image}}' "$$name" 2>/dev/null || echo ""); \
+	[ -n "$$img" ] || { echo "  ✗ $$svc container '$$name' exists but its image could not be read — inspect it manually" >&2; return 1; }; \
+	echo "  pinning $$svc → $$img" >&2; printf '%s=%s\n' "$$var" "$$img"; }; \
+	pin_all() { out=""; for pair in "$$@"; do p=$$(pin_resolve "$${pair%%:*}" "$${pair\#\#*:}") || return 1; out="$$out $$p"; done; echo "$$out"; }
+
 .DEFAULT_GOAL := help
 
 .PHONY: help require-prod require-dev weatherorb-up weatherorb-down weatherorb-env weatherorb-bootstrap-image weatherorb-account-bootstrap-image weatherorb-backup-user weatherorb-redeploy gh-runner-setup gh-runner-remove gh-runner-reapply gh-runner-sync \
@@ -58,7 +74,8 @@ endif
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
         postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-upgrade dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
-        check deploy verify version logs _deploy-affected
+        check deploy verify version logs _deploy-affected sql-postgres \
+        traefik-recreate clickstack-recreate cron-install fail2ban-install
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -151,8 +168,8 @@ monitoring-down: require-prod ; $(OP_RUN) docker compose -f compose.monitoring.y
 ## else in the file.
 infra-upgrade: require-prod
 	$(OP_RUN) docker compose -f compose.infra.yml pull postgres valkey
-	$(OP_RUN) docker compose -f compose.infra.yml up -d postgres valkey
-	@sleep 5; docker exec postgres postgres --version; docker exec redis valkey-server --version | cut -d, -f1
+	$(OP_RUN) docker compose -f compose.infra.yml up -d --wait postgres valkey
+	@docker exec postgres postgres --version; docker exec redis valkey-server --version | cut -d, -f1
 
 ## Pull the newest ghcr.io/jkrumm/rollhook:latest and recreate the container.
 ## RollHook deploys every other app but cannot deploy itself; Watchtower only
@@ -161,8 +178,8 @@ infra-upgrade: require-prod
 ## so the probe goes through `docker exec`.
 rollhook-update: require-prod
 	$(OP_RUN) docker compose -f compose.networking.yml pull rollhook
-	$(OP_RUN) docker compose -f compose.networking.yml up -d rollhook
-	@sleep 5; echo "  running: $$(docker exec rollhook curl -sf http://localhost:7700/health || echo '<not answering yet>')"
+	$(OP_RUN) docker compose -f compose.networking.yml up -d --wait rollhook
+	@echo "  running: $$(docker exec rollhook curl -sf http://localhost:7700/health || echo '<not answering yet>')"
 
 ## FPP stack (MariaDB now; fpp-server + fpp-analytics later) — apps/fpp/compose.yml
 ## On a fresh server: networking-up first, then fpp-cert-sync, then fpp-up.
@@ -171,17 +188,10 @@ rollhook-update: require-prod
 ## nonexistent :latest (or roll back to it). No container yet = genesis start from :latest.
 fpp-up: require-prod
 	$(OP_RUN) docker compose -f apps/fpp/compose.yml up -d mariadb
-	@for SVC in fpp-server fpp-analytics fpp-analytics-updater; do \
-	  NAME=$$(docker ps -a --filter "label=com.docker.compose.service=$$SVC" --format '{{.Names}}' | head -1); \
-	  PIN=""; \
-	  if [ -z "$$NAME" ]; then \
-	    echo "  no $$SVC container exists — genesis start from :latest (bootstrap-seeded)"; \
-	  else \
-	    IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
-	    [ -n "$$IMG" ] || { echo "  ✗ $$SVC container '$$NAME' exists but its image could not be read — inspect it manually"; exit 1; }; \
-	    echo "  pinning $$SVC → $$IMG"; PIN="IMAGE_TAG=$$IMG"; \
-	  fi; \
-	  $(OP_RUN) env $$PIN docker compose -f apps/fpp/compose.yml up -d --no-deps $$SVC || exit 1; \
+	@$(PIN_SH); \
+	for SVC in fpp-server fpp-analytics fpp-analytics-updater; do \
+	  PINS=$$(pin_all $$SVC:IMAGE_TAG) || exit 1; \
+	  $(OP_RUN) env $$PINS docker compose -f apps/fpp/compose.yml up -d --no-deps $$SVC || exit 1; \
 	done
 fpp-down: require-prod ; $(OP_RUN) docker compose -f apps/fpp/compose.yml down
 fpp-mariadb-setup: require-prod
@@ -212,8 +222,8 @@ fpp-backup: require-prod
 ## whatever RollHook last deployed.
 fpp-mariadb-upgrade: require-prod
 	$(OP_RUN) docker compose -f apps/fpp/compose.yml pull mariadb
-	$(OP_RUN) docker compose -f apps/fpp/compose.yml up -d mariadb
-	@sleep 5; docker exec mariadb mariadbd --version
+	$(OP_RUN) docker compose -f apps/fpp/compose.yml up -d --wait mariadb
+	@docker exec mariadb mariadbd --version
 
 # NOTE: restoring PROD MariaDB from S3 has NO make target by design — it overwrites
 # production. It is a gated, human-only DR tool: apps/fpp/scripts/restore-mariadb.sh
@@ -236,16 +246,8 @@ fpp-shell:
 ## The service is recreated pinned to the image its running container uses (IMAGE_TAG) — a bare
 ## `up -d` would pull the nonexistent :latest. No container yet = genesis start from :latest.
 email-gateway-up: require-prod
-	@NAME=$$(docker ps -a --filter "label=com.docker.compose.service=email-gateway" --format '{{.Names}}' | head -1); \
-	PIN=""; \
-	if [ -z "$$NAME" ]; then \
-	  echo "  no email-gateway container exists — genesis start from :latest (bootstrap-seeded)"; \
-	else \
-	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
-	  [ -n "$$IMG" ] || { echo "  ✗ email-gateway container '$$NAME' exists but its image could not be read — inspect it manually"; exit 1; }; \
-	  echo "  pinning email-gateway → $$IMG"; PIN="IMAGE_TAG=$$IMG"; \
-	fi; \
-	$(OP_RUN) env $$PIN docker compose -f apps/email-gateway/compose.yml up -d
+	@$(PIN_SH); PINS=$$(pin_all email-gateway:IMAGE_TAG) || exit 1; \
+	$(OP_RUN) env $$PINS docker compose -f apps/email-gateway/compose.yml up -d
 email-gateway-down: require-prod ; $(OP_RUN) docker compose -f apps/email-gateway/compose.yml down
 ## One-shot bootstrap — clone email-gateway repo, build, and push :initial to
 ## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
@@ -266,19 +268,8 @@ email-gateway-env: require-prod
 ## jkrumm/shutterflow:master. shutterflow-up pins the running share image (never rolls back to a
 ## stale :latest); genesis start uses the bootstrap-seeded :latest.
 shutterflow-up: require-prod
-	@NAME=$$(docker ps -a --filter 'label=com.docker.compose.service=shutterflow-share' --format '{{.Names}}' | head -1); \
-	if [ -z "$$NAME" ]; then \
-	  echo "  no shutterflow-share container exists — genesis start from :latest (bootstrap-seeded)"; \
-	  $(OP_RUN) docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env up -d; \
-	else \
-	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
-	  if [ -z "$$IMG" ]; then \
-	    echo "  ✗ shutterflow-share container '$$NAME' exists but its image could not be read — inspect it manually"; \
-	    exit 1; \
-	  fi; \
-	  echo "  pinning shutterflow-share → $$IMG"; \
-	  $(OP_RUN) env SHUTTERFLOW_SHARE_IMAGE=$$IMG docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env up -d; \
-	fi
+	@$(PIN_SH); PINS=$$(pin_all shutterflow-share:SHUTTERFLOW_SHARE_IMAGE) || exit 1; \
+	$(OP_RUN) env $$PINS docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env up -d
 shutterflow-down: require-prod ; $(OP_RUN) docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env down
 
 ## Materialize apps/shutterflow/.env from .env.tpl (via `op inject`) plus the `proxy` network
@@ -326,22 +317,7 @@ shutterflow-key-broker-image: require-prod
 ## `docker ps -a` (not `docker ps`): a stopped-but-present container must
 ## still be pinned, not mistaken for genesis and rolled back to a stale :latest.
 weatherorb-up: require-prod
-	@PINS=""; \
-	for PAIR in weatherorb-edge:WEATHERORB_EDGE_IMAGE weatherorb-account:WEATHERORB_ACCOUNT_IMAGE; do \
-	  SVC=$${PAIR%%:*}; VAR=$${PAIR##*:}; \
-	  NAME=$$(docker ps -a --filter "label=com.docker.compose.service=$$SVC" --format '{{.Names}}' | head -1); \
-	  if [ -z "$$NAME" ]; then \
-	    echo "  no $$SVC container exists — genesis start from :latest (bootstrap-seeded)"; \
-	    continue; \
-	  fi; \
-	  IMG=$$(docker inspect --format '{{.Config.Image}}' "$$NAME" 2>/dev/null || echo ""); \
-	  if [ -z "$$IMG" ]; then \
-	    echo "  ✗ $$SVC container '$$NAME' exists but its image could not be read — inspect it manually"; \
-	    exit 1; \
-	  fi; \
-	  echo "  pinning $$SVC → $$IMG"; \
-	  PINS="$$PINS $$VAR=$$IMG"; \
-	done; \
+	@$(PIN_SH); PINS=$$(pin_all weatherorb-edge:WEATHERORB_EDGE_IMAGE weatherorb-account:WEATHERORB_ACCOUNT_IMAGE) || exit 1; \
 	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d && \
 	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env \
 	  up -d --no-deps --force-recreate weatherorb-probe weatherorb-egress
@@ -439,7 +415,9 @@ edge-cache-apply: require-prod
 ## basalt-ui-marketing stack (static Astro docs site, RollHook-managed) — apps/basalt-ui-marketing/compose.yml
 ## Stateless, no DB, no .env — the image bakes the built site; RollHook injects IMAGE_TAG.
 ## RollHook deploys on pushes to jkrumm/basalt-ui:master touching apps/marketing/**.
-basalt-ui-marketing-up:   require-prod ; $(OP_RUN) docker compose -f apps/basalt-ui-marketing/compose.yml up -d
+basalt-ui-marketing-up:   require-prod
+	@$(PIN_SH); PINS=$$(pin_all basalt-ui-marketing:IMAGE_TAG) || exit 1; \
+	$(OP_RUN) env $$PINS docker compose -f apps/basalt-ui-marketing/compose.yml up -d
 basalt-ui-marketing-down: require-prod ; $(OP_RUN) docker compose -f apps/basalt-ui-marketing/compose.yml down
 ## One-shot bootstrap — clone basalt-ui, build apps/marketing, and push :initial to
 ## rollhook.jkrumm.com so RollHook has a running container to authorize OIDC
@@ -450,7 +428,9 @@ basalt-ui-marketing-bootstrap-image: require-prod
 ## jkrumm-com stack (static Astro portfolio site, RollHook-managed) — apps/jkrumm-com/compose.yml
 ## Stateless, no DB, no .env — the image bakes the built site; RollHook injects IMAGE_TAG.
 ## RollHook deploys on pushes to jkrumm/jkrumm.com:master.
-jkrumm-com-up:   require-prod ; $(OP_RUN) docker compose -f apps/jkrumm-com/compose.yml up -d
+jkrumm-com-up:   require-prod
+	@$(PIN_SH); PINS=$$(pin_all jkrumm-com:IMAGE_TAG) || exit 1; \
+	$(OP_RUN) env $$PINS docker compose -f apps/jkrumm-com/compose.yml up -d
 jkrumm-com-down: require-prod ; $(OP_RUN) docker compose -f apps/jkrumm-com/compose.yml down
 ## One-shot bootstrap — clone jkrumm.com, build the repo-root Dockerfile, and push
 ## :initial to rollhook.jkrumm.com so RollHook has a running container to
@@ -615,7 +595,7 @@ shell-postgres:
 
 ## Non-interactive psql: SQL on stdin, results on stdout (no TTY — usable over
 ## plain ssh and from agents). Same env wrapper as shell-postgres.
-##   make sql-postgres <<< "SELECT count(*) FROM usage_record"
+##   make sql-postgres <<< "SELECT schemaname, count(*) FROM pg_tables GROUP BY 1"
 sql-postgres:
 	@$(OP_RUN_ENV) sh -c 'docker exec -i postgres psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1'
 
@@ -656,14 +636,23 @@ KNOWN_APPS := basalt-ui-marketing email-gateway fpp imgproxy jkrumm-com photo-ga
 
 # Files changed since the last recorded deploy → the targets `make deploy` (no
 # APP) applies. `apps/<name>/**` maps to that app; the shared stacks map to their
-# own target so a traefik/observability change restarts one stack, not every app.
+# own target so a change restarts one stack, not every app. Bind-mounted content that `up -d`
+# would not pick up maps to a scoped force-recreate (traefik-conf, clickstack-conf), host files
+# to an install step (cron, fail2ban), and dashboards/alerts to a hint (hyperdx: needs
+# `make hyperdx-apply`, which this target never runs). traefik/dynamic/ is hot-reloaded
+# (file provider watch), cron/*.env.tpl is seeded by `make cron-env-seed`: neither maps.
 # Recursive (=) on purpose: `git diff` runs only when deploy actually needs it.
 DEPLOY_AFFECTED = $(shell old=$$(cat .deploy-sha 2>/dev/null) || exit 0; [ -n "$$old" ] || exit 0; \
 	git diff --name-only "$$old" HEAD 2>/dev/null | \
-	awk -F/ '/^apps\// { print $$2; next }; \
-		/^compose\.networking\.yml$$/ || /^traefik\// { print "networking"; next }; \
+	awk -F/ '/^apps\/fpp\/fail2ban\// { print "fail2ban"; next }; \
+		/^apps\// { print $$2; next }; \
+		/^compose\.networking\.yml$$/ { print "networking"; next }; \
+		/^traefik\/traefik\.yml$$/ { print "traefik-conf"; next }; \
 		/^compose\.infra\.yml$$/ { print "infra"; next }; \
-		/^compose\.monitoring\.yml$$/ || /^observability\// { print "monitoring"; next }' | \
+		/^compose\.monitoring\.yml$$/ { print "monitoring"; next }; \
+		/^clickstack\// { print "clickstack-conf"; next }; \
+		/^observability\// { print "hyperdx"; next }; \
+		/^cron\// && !/\.env\.tpl$$/ { print "cron"; next }' | \
 	awk '!seen[$$0]++')
 
 # app → primary compose service(s). RollHook-managed apps have no
@@ -740,6 +729,27 @@ else
 endif
 endif
 
+## Recreate only traefik / clickstack: their config is bind-mounted, so a plain `up -d` keeps the
+## old container (and old config) running. Scoped (--no-deps) — nothing else in the stack churns.
+traefik-recreate: require-prod
+	$(OP_RUN) docker compose -f compose.networking.yml up -d --force-recreate --no-deps traefik
+clickstack-recreate: require-prod
+	$(OP_RUN) docker compose -f compose.monitoring.yml up -d --force-recreate --no-deps clickstack
+
+## Reinstall cron/* (not the *.env.tpl seeds) into /etc/cron.d, same install as setup.sh. Idempotent.
+cron-install: require-prod
+	@for f in cron/*; do \
+	  case "$$f" in *.env.tpl) continue ;; esac; \
+	  sudo install -o root -g root -m 644 "$$f" "/etc/cron.d/$${f#cron/}" || exit 1; \
+	  echo "  ✓ /etc/cron.d/$${f#cron/}"; \
+	done
+
+## Reinstall the MariaDB fail2ban filter + jail (paths from setup.sh) and reload fail2ban.
+fail2ban-install: require-prod
+	sudo install -o root -g root -m 644 apps/fpp/fail2ban/filter-mariadb-auth.conf /etc/fail2ban/filter.d/mariadb-auth.conf
+	sudo install -o root -g root -m 644 apps/fpp/fail2ban/jail-mariadb.conf /etc/fail2ban/jail.d/mariadb.conf
+	sudo systemctl reload fail2ban
+
 # Internal: run one `deploy` per affected token. Infra stacks are not in
 # KNOWN_APPS, so they call their <stack>-up directly; apps go back through
 # `deploy APP=` to reuse its validation and dispatch.
@@ -747,6 +757,11 @@ _deploy-affected:
 	@for a in $(APPS); do \
 	  case "$$a" in \
 	    networking|infra|monitoring) $(MAKE) --no-print-directory $$a-up || exit 1 ;; \
+	    traefik-conf) $(MAKE) --no-print-directory traefik-recreate || exit 1 ;; \
+	    clickstack-conf) $(MAKE) --no-print-directory clickstack-recreate || exit 1 ;; \
+	    cron) $(MAKE) --no-print-directory cron-install || exit 1 ;; \
+	    fail2ban) $(MAKE) --no-print-directory fail2ban-install || exit 1 ;; \
+	    hyperdx) echo "  · observability/ changed — run 'make hyperdx-apply ENV=prod' (dashboards/alerts are not applied by deploy)" ;; \
 	    *) case " $(KNOWN_APPS) " in *" $$a "*) ;; *) echo "  · skip $$a (no longer in this repo)"; continue ;; esac; \
 	       $(MAKE) --no-print-directory deploy APP=$$a || exit 1 ;; \
 	  esac; \
@@ -768,7 +783,7 @@ ifeq ($(APP),)
 	failed=0; \
 	for a in $$apps; do \
 	  case "$$a" in \
-	    networking|infra|monitoring) echo "  · skip $$a (infra target — no app health check)"; continue ;; \
+	    networking|infra|monitoring|traefik-conf|clickstack-conf|cron|fail2ban|hyperdx) echo "  · skip $$a (infra target — no app health check)"; continue ;; \
 	  esac; \
 	  case " $(KNOWN_APPS) " in *" $$a "*) ;; *) echo "  · skip $$a (no longer in this repo)"; continue ;; esac; \
 	  $(MAKE) --no-print-directory verify APP=$$a || failed=1; \
