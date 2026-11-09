@@ -6,6 +6,7 @@ set -euo pipefail
 # Run via: make fpp-mariadb-setup
 # Requires: mariadb container running, 1Password secrets in env via op run.
 
+# shellcheck disable=SC2120 # "$@" is optional passthrough
 mariadb_root() {
   docker exec -i \
     -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" \

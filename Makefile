@@ -644,15 +644,7 @@ KNOWN_APPS := basalt-ui-marketing email-gateway fpp imgproxy jkrumm-com photo-ga
 # Recursive (=) on purpose: `git diff` runs only when deploy actually needs it.
 DEPLOY_AFFECTED = $(shell old=$$(cat .deploy-sha 2>/dev/null) || exit 0; [ -n "$$old" ] || exit 0; \
 	git diff --name-only "$$old" HEAD 2>/dev/null | \
-	awk -F/ '/^apps\/fpp\/fail2ban\// { print "fail2ban"; next }; \
-		/^apps\// { print $$2; next }; \
-		/^compose\.networking\.yml$$/ { print "networking"; next }; \
-		/^traefik\/traefik\.yml$$/ { print "traefik-conf"; next }; \
-		/^compose\.infra\.yml$$/ { print "infra"; next }; \
-		/^compose\.monitoring\.yml$$/ { print "monitoring"; next }; \
-		/^clickstack\// { print "clickstack-conf"; next }; \
-		/^observability\// { print "hyperdx"; next }; \
-		/^cron\// && !/\.env\.tpl$$/ { print "cron"; next }' | \
+	awk -f scripts/deploy-affected.awk | \
 	awk '!seen[$$0]++')
 
 # app → primary compose service(s). RollHook-managed apps have no
@@ -680,8 +672,19 @@ check:
 		uv run --no-project --with pyyaml python3 -c "import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]" compose.*.yml apps/*/compose.yml || exit 1; \
 	fi
 	@echo "→ bash -n over shell scripts"; \
-	for f in scripts/*.sh apps/*/scripts/*.sh; do bash -n "$$f" || exit 1; done; \
-	echo "OK: local validation passed"
+	for f in scripts/*.sh apps/*/scripts/*.sh; do bash -n "$$f" || exit 1; done
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		echo "→ shellcheck -S warning"; \
+		shellcheck -S warning scripts/*.sh apps/*/scripts/*.sh scripts/wo-backup-shell || exit 1; \
+	else echo "WARN: shellcheck not installed — skipping (CI runs it)"; fi
+	@for d in apps/weatherorb/egress apps/weatherorb/probe; do \
+		echo "→ unittest $$d"; (cd "$$d" && python3 -I -m unittest) || exit 1; \
+	done
+	@echo "→ compose invariant lint + tests"; \
+	python3 scripts/lint-compose.py || exit 1; \
+	python3 -I -m unittest discover -s scripts -p 'test_lint_compose.py' || exit 1; \
+	bash scripts/test_deploy_affected.sh || exit 1
+	@echo "OK: local validation passed"
 
 # deploy is the config-apply half of shipping: run it ON THE VPS (ENV=prod)
 # after `git pull`. It dispatches to the app's existing <app>-up target, which

@@ -7,6 +7,7 @@ set -euo pipefail
 # Run via: make postgres-setup
 # Requires: postgres container running, 1Password secrets in environment via op run.
 
+# shellcheck disable=SC2120 # "$@" is optional passthrough
 psql_main() {
   docker exec -i postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" "$@"
 }

@@ -24,3 +24,4 @@ traefik/acme.json
 # Repo-contract state — last deployed SHA + affected app list (Makefile `deploy`)
 .deploy-sha
 .deploy-apps
+__pycache__/
