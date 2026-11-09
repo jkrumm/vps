@@ -21,28 +21,11 @@ http:
     # Security headers — HSTS + browser security hardening.
     security-headers:
       headers:
-        frameDeny: true
         contentTypeNosniff: true
-        browserXssFilter: true
         referrerPolicy: "strict-origin-when-cross-origin"
-        # microphone=(self): own-origin only (still gated by the browser permission
-        # prompt; cross-origin/embedded iframes stay blocked). Argo's voice input
-        # (getUserMedia) needs it; camera/geolocation/payment stay fully disabled.
-        permissionsPolicy: "camera=(), microphone=(self), geolocation=(), payment=()"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=()"
         stsSeconds: 31536000
         stsIncludeSubdomains: true
         stsPreload: true
         forceSTSHeader: true
         customFrameOptionsValue: "SAMEORIGIN"
-
-    # Tailscale-only — restrict access to Tailscale CGNAT range (100.64.0.0/10).
-    # NOTE: Ineffective when Traefik sits behind Docker published ports — Docker NAT
-    # rewrites the source IP to the bridge gateway (172.x.x.x), so the check always fails.
-    # Internal dashboards (traefik.DOMAIN, hyperdx.DOMAIN) use DNS-based access control
-    # instead: DNS-only A records → Tailscale IP make them unreachable from public internet.
-    # This middleware is kept as a reference; only use it when Traefik receives real client IPs
-    # (e.g., host network mode or trusted proxy forwarding).
-    tailscale-only:
-      ipAllowList:
-        sourceRange:
-          - "100.64.0.0/10"

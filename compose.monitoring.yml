@@ -70,7 +70,7 @@ services:
   # Notifications only at warn level (failures, not every successful update).
   # ---------------------------------------------------------------------------
   watchtower:
-    image: containrrr/watchtower:latest
+    image: nickfedor/watchtower:1.24.0
     container_name: watchtower
     restart: unless-stopped
     depends_on:
@@ -84,7 +84,6 @@ services:
     environment:
       # Connect to Docker via proxy (no direct docker.sock mount needed)
       DOCKER_HOST: tcp://socket-proxy-watchtower:2375
-      DOCKER_API_VERSION: "1.44"
       # ntfy topic `updates` via shoutrrr. Empty user + access token = Basic auth, which
       # ntfy accepts. Host is ntfy.${DOMAIN} (tailnet-resolving), token from 1Password
       # common/ntfy/TOKEN.
@@ -132,14 +131,16 @@ services:
   # ClickStack — all-in-one observability (ClickHouse + OTel Collector + HyperDX UI + MongoDB).
   # Replaces standalone OTel Collector + SigNoz. Apps send OTLP to clickstack:4318.
   # UI accessible via Traefik at clickstack.DOMAIN (Tailscale-only).
-  # Watchtower auto-updates the full stack image.
+  # Pinned to an exact version and excluded from Watchtower: a ClickHouse/HyperDX/Mongo
+  # bundle upgrade can migrate on-disk data, so bump the tag manually (backup first).
   # ---------------------------------------------------------------------------
   clickstack:
-    image: clickhouse/clickstack-all-in-one:latest
+    image: clickhouse/clickstack-all-in-one:2.43.1
     container_name: clickstack
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    mem_limit: 6g
     environment:
       HYPERDX_LOG_LEVEL: info
       USAGE_STATS_ENABLED: "false"
@@ -171,6 +172,8 @@ services:
     ports:
       - "${VPS_TAILSCALE_IP:?VPS_TAILSCALE_IP must be set}:13133:13133"   # OTel health check — Tailscale only
     labels:
+      # Watchtower: excluded from auto-updates — bump the pinned tag manually
+      - "com.centurylinklabs.watchtower.enable=false"
       # HyperDX UI — Tailscale-only via DNS (A record → Tailscale IP, DNS-only/grey cloud).
       # Docker NAT rewrites source IPs, so ipAllowList is ineffective here.
       # CGNAT routing (100.x.x.x) is unreachable from public internet — DNS is the access control.
@@ -248,7 +251,7 @@ services:
   # Schema: umami (within main Postgres database). Watchtower auto-updates.
   # ---------------------------------------------------------------------------
   umami:
-    image: ghcr.io/umami-software/umami:postgresql-latest
+    image: ghcr.io/umami-software/umami:3
     container_name: umami
     restart: unless-stopped
     security_opt:

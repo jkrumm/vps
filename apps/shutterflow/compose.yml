@@ -171,7 +171,7 @@ services:
   shutterflow-imgproxy:
     # Exact pin, the tag shutterflow's dev service uses: an imgproxy upgrade is a deploy the
     # master-serving canary re-checks (0042 safety 5), never a silent watchtower bump.
-    image: ghcr.io/imgproxy/imgproxy:v4.0.18
+    image: ghcr.io/imgproxy/imgproxy:v4.0.20
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -283,7 +283,7 @@ services:
   # IMGPROXY_SMALL_URL is set (unset = every variant renders the master, the rollback).
   # ---------------------------------------------------------------------------
   shutterflow-imgproxy-small:
-    image: ghcr.io/imgproxy/imgproxy:v4.0.18
+    image: ghcr.io/imgproxy/imgproxy:v4.0.20
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

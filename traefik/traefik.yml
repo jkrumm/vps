@@ -66,7 +66,7 @@ tracing:
     http:
       endpoint: http://clickstack:4319
   serviceName: traefik
-  sampleRate: 1.0
+  sampleRate: 0.1
 
 metrics:
   otlp:

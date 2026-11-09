@@ -21,9 +21,6 @@ traefik/acme.json
 .idea/
 .vscode/
 
-# Doppler local config
-.doppler.yaml
-
 # Repo-contract state — last deployed SHA + affected app list (Makefile `deploy`)
 .deploy-sha
 .deploy-apps

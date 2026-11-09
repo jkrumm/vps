@@ -48,7 +48,8 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   # ---------------------------------------------------------------------------
-  # Valkey 9.1 — Redis-compatible cache and queue backend.
+  # Valkey 9.1 — Redis-compatible cache (allkeys-lru eviction: keys may be dropped under memory pressure;
+  # a queue backend would need noeviction).
   # container_name: redis so apps can connect via redis:6379 unchanged.
   # Pinned to the minor line, NOT the bare major: the `9` tag floats across minors
   # (it resolved to 9.1.0 while 9.0.x was still current), so a routine pull would

@@ -247,7 +247,7 @@ services:
   # weatherorb-egress — CONNECT-only egress proxy for the alert webhooks (ADR 0023).
   # ---------------------------------------------------------------------------
   weatherorb-egress:
-    image: python:3.13.16-alpine3.24
+    image: python:3.14-alpine
     restart: unless-stopped
     command: python /app/proxy.py
     user: "65534:65534"
@@ -296,7 +296,7 @@ services:
   # weatherorb-probe — external availability probe for /v1 (ADR 0026).
   # ---------------------------------------------------------------------------
   weatherorb-probe:
-    image: python:3.13.16-alpine3.24
+    image: python:3.14-alpine
     restart: unless-stopped
     command: python /app/probe.py
     user: "65534:65534"
