@@ -16,5 +16,9 @@ jobs:
       - uses: docker/setup-compose-action@v2
         with:
           version: latest
+      # The weatherorb tests run on the container's Python (asyncio Server.close_clients needs 3.13+).
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
       # shellcheck ships on ubuntu-latest; `make check` needs no secrets or op
       - run: make check
