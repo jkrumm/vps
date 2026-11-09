@@ -11,5 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # docker compose and shellcheck ship on ubuntu-latest; `make check` needs no secrets or op
+      # The runner's bundled Compose rejects `${VAR:-default}:/path:ro` volume specs under
+      # --no-interpolate; current Compose (what the repo runs on) accepts them.
+      - uses: docker/setup-compose-action@v2
+        with:
+          version: latest
+      # shellcheck ships on ubuntu-latest; `make check` needs no secrets or op
       - run: make check
