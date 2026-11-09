@@ -5,7 +5,7 @@
 # Refresh after rotating any secret:
 #   make fpp-env
 #
-# The resulting apps/fpp/.env is gitignored, chmod 600, and lives on VPS only.
+# The resulting apps/fpp/.env is gitignored, 0640 owner:ROLLHOOK_GID (RollHook re-runs compose and must read it), and lives on VPS only.
 
 DOMAIN=op://vps/config/DOMAIN
 

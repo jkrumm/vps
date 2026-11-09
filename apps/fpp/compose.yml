@@ -196,8 +196,7 @@ services:
 
   # ---------------------------------------------------------------------------
   # fpp-analytics-updater — sleep-loop sidecar that syncs MariaDB → parquet
-  # every 10 min. Same image as fpp-analytics; manual restart on image refresh
-  # (no zero-downtime requirement — brief gap in a polling cron is fine).
+  # every 10 min. Same content as fpp-analytics; deployed by RollHook (see below).
   #
   # Connects to mariadb on the internal mariadb-net. MariaDB enforces TLS via
   # --require-secure-transport=ON so DB_SSL=true is mandatory. The wildcard cert

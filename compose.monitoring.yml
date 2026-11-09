@@ -130,7 +130,7 @@ services:
   # ---------------------------------------------------------------------------
   # ClickStack — all-in-one observability (ClickHouse + OTel Collector + HyperDX UI + MongoDB).
   # Replaces standalone OTel Collector + SigNoz. Apps send OTLP to clickstack:4318.
-  # UI accessible via Traefik at clickstack.DOMAIN (Tailscale-only).
+  # UI accessible via Traefik at hyperdx.DOMAIN (Tailscale-only).
   # Pinned to an exact version and excluded from Watchtower: a ClickHouse/HyperDX/Mongo
   # bundle upgrade can migrate on-disk data, so bump the tag manually (backup first).
   # ---------------------------------------------------------------------------

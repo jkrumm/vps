@@ -466,8 +466,8 @@ data (`otel_*`/`hyperdx_*` tables), which already has its own 30-day TTL.
 
 **Why it regrows without this**: applying (or changing) a system-log table's
 config renames the existing table aside to a numbered `<table>_N` copy and
-creates a fresh one on ClickHouse restart. Watchtower auto-upgrades the
-`clickstack` image, so every version bump silently orphans another `_N`
+creates a fresh one on ClickHouse restart. The `clickstack` image is
+pinned and excluded from Watchtower, so only a manual version bump orphans another `_N`
 copy with no TTL of its own — these accumulate forever until dropped by
 hand. First cleanup (2026-09-08) reclaimed ~47 GB this way.
 

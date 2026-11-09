@@ -51,7 +51,8 @@ SSH agent is handled globally via 1Password (`IdentityAgent` in `~/.ssh/config`)
 ### 4. 1Password CLI
 
 ```bash
-# Add to ~/.bashrc as jkrumm:
+# Cron jobs read /etc/vps/op.env (OP_SERVICE_ACCOUNT_TOKEN=<token>, chmod 600, owner jkrumm).
+# Interactive shells: add to ~/.bashrc as jkrumm:
 export OP_SERVICE_ACCOUNT_TOKEN="<token>"
 source ~/.bashrc
 op vault list   # verify access to vps + common vaults

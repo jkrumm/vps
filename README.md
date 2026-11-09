@@ -7,7 +7,8 @@ Production Docker Compose stack for a VPS (12 vCPU · 24 GB · 180 GB SSD · Ubu
 ## Quick Reference
 
 ```bash
-make up              # start everything (networking → infra → monitoring → fpp)
+make up              # prod: networking → infra → monitoring → fpp → email-gateway → photo-gallery → imgproxy
+                      # weatherorb, shutterflow, basalt-ui-marketing, jkrumm-com: own bootstrap, then `make <app>-up`
 make down             # stop everything (reverse order)
 make ps               # container status
 
@@ -88,20 +89,20 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | postgres | postgres:18 | Primary DB — pinned major version | **manual only** |
 | valkey | valkey/valkey:9 | Cache + queues — `container_name: redis` | **manual only** |
 | mariadb | mariadb:11.4 | FPP-only DB, publicly exposed on 33306 — see FPP MariaDB exception | **manual only** |
-| clickstack | clickhouse/clickstack-all-in-one | Observability — OTel + ClickHouse + HyperDX UI. See [docs/observability.md](docs/observability.md) | auto |
+| clickstack | clickhouse/clickstack-all-in-one:2.43.1 | Observability — OTel + ClickHouse + HyperDX UI. See [docs/observability.md](docs/observability.md) | **manual only** (pinned, `mem_limit` 6g) |
 | beszel-agent | henrygd/beszel-agent | Server metrics agent | auto |
 | dozzle | amir20/dozzle | Log streaming agent | auto |
 | socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | auto |
 | socket-proxy-watchtower | tecnativa/docker-socket-proxy | Write Docker API for Watchtower | auto |
-| watchtower | containrrr/watchtower | Auto-updates containers, ntfy notification on failure | auto |
-| umami | ghcr.io/umami-software/umami | Self-hosted analytics at `umami.<DOMAIN>` — see Integrating Umami below | auto |
+| watchtower | nickfedor/watchtower:1.24.0 | Auto-updates containers, ntfy notification on failure | auto |
+| umami | ghcr.io/umami-software/umami:3 | Self-hosted analytics at `umami.<DOMAIN>` — see Integrating Umami below | auto |
 | photo-gallery | nginx:alpine | Static Astro photo gallery — content rsynced from laptop via photo-flow CLI | auto |
 | imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Image CDN — on-the-fly resize/convert over a private B2 bucket. See [docs/image-cdn.md](docs/image-cdn.md) | auto (v4.x) |
 | shutterflow-share | `rollhook.jkrumm.com/shutterflow-share` | Shutterflow share server (accounts, albums, share links) at `shutterflow.app` | RollHook |
-| shutterflow-imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Shutterflow's **signed** derivative CDN at `cdn.shutterflow.app` over `shutterflow/prod/derivatives/` | auto (v4.x) |
+| shutterflow-imgproxy | ghcr.io/imgproxy/imgproxy:v4.0.20 | Shutterflow's **signed** derivative CDN at `cdn.shutterflow.app` over `shutterflow/prod/derivatives/` | **manual only** (exact pin, Watchtower off) |
 | weatherorb-edge | `.../weatherorb-edge` | Tailscale-serve edge for the weatherorb weather/wave service | RollHook |
 | weatherorb-account | `.../weatherorb-account` | Bun + Better Auth account service (own database `weatherorb_accounts`), reached only by the edge — its one Traefik router is the tailnet-only alert-worker door | RollHook |
-| weatherorb-egress | `python:3.13-alpine` + `apps/weatherorb/egress/proxy.py` | CONNECT-only egress proxy for the forecast-alert webhooks (weatherorb ADR 0023): tailnet-only `:18443`, IP-literal `:443` targets, non-public refused | `make weatherorb-up` (no pin, Watchtower off) |
+| weatherorb-egress | `python:3.14-alpine` + `apps/weatherorb/egress/proxy.py` | CONNECT-only egress proxy for the forecast-alert webhooks (weatherorb ADR 0023): tailnet-only `:18443`, IP-literal `:443` targets, non-public refused | `make weatherorb-up` (no pin, Watchtower off) |
 | email-gateway | `.../email-gateway` | Bun + Resend — FPP contact-form + analytics + SY Serendipity charter-request emails | RollHook |
 | basalt-ui-marketing | `.../basalt-ui-marketing` | basalt-ui.com marketing/docs site (Astro) | RollHook |
 | jkrumm-com | `.../jkrumm-com` | jkrumm.com portfolio site (Astro) | RollHook |
@@ -115,7 +116,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 - **Cloudflare Tunnel, zero inbound ports.** cloudflared is outbound-only to the edge. DNS-01 ACME still issues the wildcard cert so cloudflared can verify Traefik's TLS handshake internally.
 - **Four socket proxies, no docker.sock mounts.** Traefik and Dozzle/Beszel each get a dedicated read-only proxy; RollHook and Watchtower each get a dedicated `POST=1` proxy on an isolated network — write access never shared.
 - **SSH via Tailscale only, enforced by UFW**, not sshd's bind address — see `AGENTS.md` → Quick Reference for the boot-order reason sshd is never rebound.
-- **Watchtower over WUD.** Auto-updates everything except Postgres/Valkey/MariaDB (major version bumps need a deliberate backup first). ntfy topic `updates`, warn level only.
+- **Watchtower over WUD.** Auto-updates everything except Postgres/Valkey/MariaDB/ClickStack (major version bumps need a deliberate backup first). ntfy topic `updates`, warn level only.
 - **`container_name: redis` for Valkey** — every app references `redis:6379` unmodified.
 - **1Password for secrets**, zero in the repo (`.env.tpl` is `op://` refs only). Deploy: `op run --env-file=.env.tpl -- docker compose up -d` (or `make up`). Why two runners/templates exist: `docs/secrets-injection.md`.
 - **No Terraform.** Single-server setup doesn't justify state management; UFW is the only firewall layer.
@@ -325,17 +326,20 @@ graceful SIGTERM, …): `AGENTS.md` → RollHook.
 
 ## Backups
 
-Two daily backups, both stream to the same `jkrumm` B2 bucket under `backups/vps/`. Retention (14-day hide → delete) enforced by a single B2 lifecycle rule on the `backups/vps/` prefix — append-only key, no client-side pruning.
+Three daily backups, all stream to the same `jkrumm` B2 bucket under `backups/vps/`. Retention (14-day hide → delete) enforced by a single B2 lifecycle rule on the `backups/vps/` prefix — append-only key, no client-side pruning.
 
 | Cron | Time | Script | S3 path | Kuma var |
 |-|-|-|-|-|
 | `/etc/cron.d/pg-backup` | 03:00 | `scripts/backup-pg.sh` | `backups/vps/postgres/` | `UPTIME_KUMA_PUSH_URL` |
 | `/etc/cron.d/fpp-mariadb-backup` | 03:30 | `apps/fpp/scripts/backup-mariadb.sh` | `backups/vps/mariadb/` | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` |
+| `/etc/cron.d/email-gateway-backup` | 03:45 | `scripts/backup-email-gateway.sh` (SQLite `.backup` of `email-gateway.sqlite` + `mail.sqlite`) | `backups/vps/email-gateway/` | `EMAIL_GATEWAY_BACKUP_KUMA_PUSH_URL` (optional, not yet in a template) |
 | `/etc/cron.d/pg-health` | every minute | `scripts/health-pg.sh` | n/a (liveness) | `UPTIME_KUMA_POSTGRES_PUSH_URL` |
 | `/etc/cron.d/weatherorb-accounts-dump` | hourly :15 | `scripts/dump-weatherorb-accounts.sh` | `/var/backups/weatherorb-accounts/` (48 kept; homelab pulls as `wo-backup`) | — |
 | `/etc/cron.d/docker-prune` | Sunday 04:30 | inline `docker image prune -af && docker builder prune -f --filter until=168h` (never volumes) | n/a (hygiene) | — |
 
-Manual triggers: `make backup` (Postgres), `make fpp-backup` (MariaDB).
+Manual triggers: `make backup` (Postgres), `make fpp-backup` (MariaDB). Pg and MariaDB dumps are verified before the Kuma ping.
+
+**Not backed up:** `shutterflow-key-broker-state` (only `purges.json`: closed accounts + grace periods; not rebuildable, a known gap) and `rollhook-data` (deploy history, rebuilt by re-running CI). Postgres roles/globals come from `make postgres-setup`.
 Restoring PROD from S3 has **no make target by design** — gated, human-only DR
 tools only (`scripts/restore-pg.sh`, `apps/fpp/scripts/restore-mariadb.sh`),
 full procedure in `docs/disaster-recovery.md`. Dev seeding/DR-drill targets
@@ -355,7 +359,7 @@ trust the sync/restore scripts' own summaries — only `db-counts` runs a real
 
 ## Upgrading Postgres, Valkey or MariaDB
 
-All three are excluded from Watchtower auto-updates, and a restart alone does not
+All three (and ClickStack, pinned `2.43.1`) are excluded from Watchtower auto-updates, and a restart alone does not
 help — Docker reuses the image already on disk. They only move when `make
 infra-upgrade` / `make fpp-mariadb-upgrade` runs (`AGENTS.md` → Quick
 Reference), so check them periodically (`/audit` phase 8).
