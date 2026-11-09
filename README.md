@@ -264,7 +264,7 @@ it after rotating any referenced secret.
 | Variable | Value | How to get |
 |-|-|-|
 | `ROLLHOOK_SECRET` | `<generated>` | `vps/rollhook/SECRET`. Doubles as the registry password (`docker login rollhook.jkrumm.com -u rollhook`) — no separate registry secret. |
-| `NOTIFICATION_WEBHOOK_URL` | `https://:${NTFY_TOKEN}@ntfy.${DOMAIN}/updates` | Deploy success/failure (raw job JSON) to ntfy topic `updates`. |
+| `NTFY_URL` | `https://ntfy.<your-domain>/updates` | Deploy success/failure as a native ntfy message, authenticated with `NTFY_TOKEN`. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://clickstack:4319` | Unauthed OTLP HTTP on the docker bridge — RollHook is on `monitoring-net`. |
 | `DEPLOY_ENVIRONMENT` | `prod` | Tag attached to deploy logs/markers. |
 

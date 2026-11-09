@@ -175,11 +175,10 @@ services:
       ROLLHOOK_URL: https://rollhook.jkrumm.com
       PORT: "7700"
       DOCKER_HOST: tcp://socket-proxy-rollhook:2375
-      # Deploy notifications — posts the job result JSON to the ntfy topic `updates`
-      # (same topic as Watchtower). Empty user + access token in the URL = Basic auth,
-      # which ntfy accepts. RollHook has no ntfy-native formatter yet, so the message
-      # body is the raw job JSON.
-      NOTIFICATION_WEBHOOK_URL: https://:${NTFY_TOKEN}@ntfy.${DOMAIN}/updates
+      # Deploy notifications — native ntfy message on the topic `updates` (same
+      # topic as Watchtower). ROLLHOOK_URL above is the click-through target.
+      NTFY_URL: https://ntfy.${DOMAIN}/updates
+      NTFY_TOKEN: ${NTFY_TOKEN}
       # OTLP logs export to ClickStack via the unauthed :4319 receiver bound
       # to the docker bridge (see clickstack/otel-custom.yaml + the Traefik
       # precedent above). Surfaces deploys as queryable markers in HyperDX
@@ -187,7 +186,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       DEPLOY_ENVIRONMENT: prod
     volumes:
-      - rollhook-data:/app/data
+      - rollhook-data:/data
       # Mount all app compose dirs — RollHook reads compose.yml from inside the container
       - /home/jkrumm/vps/apps:/home/jkrumm/vps/apps
 
