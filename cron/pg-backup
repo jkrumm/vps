@@ -2,10 +2,12 @@
 # Runs as deploy user with 1Password-injected environment.
 # Install: cp cron/pg-backup /etc/cron.d/pg-backup && chmod 644 /etc/cron.d/pg-backup
 #
-# bash -c '. ~/.bashrc; ...' is required so cron picks up OP_SERVICE_ACCOUNT_TOKEN
-# from the user's bashrc — cron runs with an empty environment otherwise and
-# `op run` fails with "No accounts configured for use with 1Password CLI".
+# Cron runs with an empty environment, so OP_SERVICE_ACCOUNT_TOKEN is loaded from
+# /etc/vps/op.env (0600 jkrumm, created by scripts/setup.sh) — otherwise `op run`
+# fails with "No accounts configured for use with 1Password CLI". The fallback to
+# ~/.bashrc only covers the window before that file exists: Ubuntu's stock .bashrc
+# returns early when non-interactive, so it works only if the token sits above that guard.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-0 3 * * * jkrumm /bin/bash -c '. /home/jkrumm/.bashrc; cd /home/jkrumm/vps && op run --env-file=.env.tpl -- /home/jkrumm/vps/scripts/backup-pg.sh' >> /home/jkrumm/pg-backup.log 2>&1
+0 3 * * * jkrumm /bin/bash -c 'if [ -r /etc/vps/op.env ]; then set -a; . /etc/vps/op.env; set +a; else . /home/jkrumm/.bashrc; fi; cd /home/jkrumm/vps && op run --env-file=.env.tpl -- /home/jkrumm/vps/scripts/backup-pg.sh' >> /home/jkrumm/pg-backup.log 2>&1

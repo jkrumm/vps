@@ -71,9 +71,16 @@ fi
 
 if docker ps --format '{{.Names}}' | grep -q '^mariadb$'; then
   echo "Reloading TLS in running mariadb container (FLUSH SSL)..."
-  docker exec -i \
+  # On failure remove cert.pem: the next run sees "changed" and retries, instead of
+  # reporting "unchanged" while MariaDB keeps serving the old cert. Exit non-zero
+  # so the cron log shows it.
+  if ! docker exec -i \
     -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD:-}" \
-    mariadb mariadb -u root -e 'FLUSH SSL;'
+    mariadb mariadb -u root -e 'FLUSH SSL;'; then
+    rm -f "${CERTS_DIR}/cert.pem"
+    echo "ERROR: FLUSH SSL failed — removed cert.pem so the next run retries." >&2
+    exit 1
+  fi
   echo "TLS reloaded."
 else
   echo "MariaDB container not running — certs written, will be picked up on next start."

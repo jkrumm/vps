@@ -28,8 +28,12 @@ ping_kuma() {
   fi
 }
 
+TMP=$(mktemp /tmp/mariadb_backup_XXXXXX.sql.gz)
+
 cleanup() {
-  if [[ $? -ne 0 ]]; then
+  local rc=$?
+  rm -f "${TMP}"
+  if [[ ${rc} -ne 0 ]]; then
     log "Backup FAILED: ${BACKUP_FILENAME}"
     ping_kuma "down" "backup_failed"
   fi
@@ -38,7 +42,9 @@ trap cleanup EXIT
 
 log "Starting backup: ${BACKUP_FILENAME}"
 
-# Stream mariadb-dump → gzip → S3, all in-process (no temp file).
+# Dump → gzip → temp file, verified, THEN uploaded: the bucket is append-only (no delete),
+# so a truncated object could never be removed. mariadb-dump ends a complete dump with a
+# "-- Dump completed" line; gzip -t proves the stream is intact. pipefail aborts on a failed dump.
 # --single-transaction: consistent InnoDB snapshot without table locks.
 # --routines + --triggers + --events: include stored procs, triggers, scheduled events.
 # --ssl-verify-server-cert=0: server cert is *.free-planning-poker.com, internal hostname is `mariadb`.
@@ -58,9 +64,28 @@ docker run --rm \
     --events \
     --databases "${MARIADB_DB}" \
   | gzip -9 \
-  | aws s3 cp - "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
-    --endpoint-url "${AWS_S3_ENDPOINT}" \
-    --storage-class STANDARD
+  > "${TMP}"
+
+gzip -t "${TMP}"
+if ! gzip -dc "${TMP}" | tail -n 5 | grep -q '^-- Dump completed'; then
+  log "Dump incomplete: no '-- Dump completed' trailer"
+  exit 1
+fi
+LOCAL_SIZE=$(wc -c < "${TMP}" | tr -d ' ')
+log "Dump verified: ${LOCAL_SIZE} bytes"
+
+aws s3 cp "${TMP}" "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
+  --endpoint-url "${AWS_S3_ENDPOINT}" \
+  --storage-class STANDARD
+
+REMOTE_SIZE=$(aws s3api head-object \
+  --bucket "${AWS_S3_BUCKET}" --key "${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
+  --endpoint-url "${AWS_S3_ENDPOINT}" \
+  --query ContentLength --output text)
+if [[ "${REMOTE_SIZE}" != "${LOCAL_SIZE}" ]]; then
+  log "Upload size mismatch: local ${LOCAL_SIZE}, remote ${REMOTE_SIZE}"
+  exit 1
+fi
 
 log "Backup uploaded: s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}"
 log "Backup complete."

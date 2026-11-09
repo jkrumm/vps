@@ -30,8 +30,12 @@ ping_kuma() {
   fi
 }
 
+TMP=$(mktemp /tmp/pg_backup_XXXXXX.dump)
+
 cleanup() {
-  if [[ $? -ne 0 ]]; then
+  local rc=$?
+  rm -f "${TMP}"
+  if [[ ${rc} -ne 0 ]]; then
     log "Backup FAILED: ${BACKUP_FILENAME}"
     ping_kuma "down" "backup_failed"
   fi
@@ -40,8 +44,10 @@ trap cleanup EXIT
 
 log "Starting backup: ${BACKUP_FILENAME}"
 
-# Run pg_dump in a one-shot container, stream directly to S3
-# Uses the same postgres:18 image as the running database for compatibility.
+# Dump to a temp file first and verify it BEFORE upload: the bucket is append-only
+# (no delete), so a truncated object could never be removed and would sit there as the
+# "newest backup". pipefail + set -e abort on a failed dump; pg_restore --list proves the
+# archive is complete and readable. Uses the same postgres:18 image as the running database.
 docker run --rm \
   --network postgres-net \
   -e PGPASSWORD="${POSTGRES_PASSWORD}" \
@@ -52,9 +58,24 @@ docker run --rm \
     --dbname="${POSTGRES_DB}" \
     --format=custom \
     --compress=9 \
-  | aws s3 cp - "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
-    --endpoint-url "${AWS_S3_ENDPOINT}" \
-    --storage-class STANDARD
+  > "${TMP}"
+
+docker run --rm -i postgres:18 pg_restore --list < "${TMP}" > /dev/null
+LOCAL_SIZE=$(wc -c < "${TMP}" | tr -d ' ')
+log "Dump verified: ${LOCAL_SIZE} bytes"
+
+aws s3 cp "${TMP}" "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
+  --endpoint-url "${AWS_S3_ENDPOINT}" \
+  --storage-class STANDARD
+
+REMOTE_SIZE=$(aws s3api head-object \
+  --bucket "${AWS_S3_BUCKET}" --key "${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
+  --endpoint-url "${AWS_S3_ENDPOINT}" \
+  --query ContentLength --output text)
+if [[ "${REMOTE_SIZE}" != "${LOCAL_SIZE}" ]]; then
+  log "Upload size mismatch: local ${LOCAL_SIZE}, remote ${REMOTE_SIZE}"
+  exit 1
+fi
 
 log "Backup uploaded: s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}"
 

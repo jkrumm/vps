@@ -1,0 +1,12 @@
+# email-gateway SQLite daily backup — 03:45 (after pg 03:00, mariadb 03:30)
+# Install: installed automatically by scripts/setup.sh (section 12).
+#
+# Cron runs with an empty environment, so OP_SERVICE_ACCOUNT_TOKEN is loaded from
+# /etc/vps/op.env (0600 jkrumm, created by scripts/setup.sh) — otherwise `op run`
+# fails with "No accounts configured for use with 1Password CLI". The fallback to
+# ~/.bashrc only covers the window before that file exists.
+# Optional Kuma push: EMAIL_GATEWAY_BACKUP_KUMA_PUSH_URL in the environment (skipped when unset).
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+45 3 * * * jkrumm /bin/bash -c 'if [ -r /etc/vps/op.env ]; then set -a; . /etc/vps/op.env; set +a; else . /home/jkrumm/.bashrc; fi; cd /home/jkrumm/vps && op run --env-file=.env.tpl -- /home/jkrumm/vps/scripts/backup-email-gateway.sh' >> /home/jkrumm/email-gateway-backup.log 2>&1

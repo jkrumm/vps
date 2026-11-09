@@ -54,11 +54,17 @@ read -rp "Type the database name to confirm: " confirm
 
 echo "Downloading ${BACKUP_FILE} from S3..."
 TMPFILE=$(mktemp /tmp/pg_restore_XXXXXX.dump)
-trap "rm -f ${TMPFILE}" EXIT
+trap 'rm -f "${TMPFILE}"' EXIT
 
 aws s3 cp "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILE}" "${TMPFILE}" \
   --endpoint-url "${AWS_S3_ENDPOINT}"
 
+# Ownership is restored (no --no-owner): each schema-owning role must own its
+# schema, tables and migration journal again (AGENTS.md, Postgres Schema Model).
+# Roles are cluster-level and survive dropdb, but on a fresh cluster they must
+# exist BEFORE this runs — `make postgres-setup` first (docs/disaster-recovery.md).
+# --no-privileges: GRANTs are not taken from the dump; `make postgres-setup`
+# re-applies them (idempotent) afterwards.
 echo "Restoring into ${POSTGRES_DB}..."
 docker run --rm \
   --network postgres-net \
@@ -66,9 +72,10 @@ docker run --rm \
   -v "${TMPFILE}:/backup.dump:ro" \
   postgres:18 \
   sh -c "
-    dropdb --host=postgres --username=${POSTGRES_USER} --if-exists ${POSTGRES_DB} &&
+    dropdb --force --host=postgres --username=${POSTGRES_USER} --if-exists ${POSTGRES_DB} &&
     createdb --host=postgres --username=${POSTGRES_USER} ${POSTGRES_DB} &&
-    pg_restore --host=postgres --username=${POSTGRES_USER} --dbname=${POSTGRES_DB} --no-owner --no-privileges /backup.dump
+    pg_restore --host=postgres --username=${POSTGRES_USER} --dbname=${POSTGRES_DB} --no-privileges /backup.dump
   "
 
 echo "Restore complete: ${POSTGRES_DB}"
+echo "Next: make postgres-setup (re-applies grants), then check ownership — docs/disaster-recovery.md"

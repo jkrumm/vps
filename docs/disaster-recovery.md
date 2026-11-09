@@ -56,32 +56,55 @@ make db-counts                                                      # exact COUN
 
 ### 2. Restore prod (on the VPS, deliberate)
 
+Postgres, in this order:
+
 ```bash
 ssh vps
 cd ~/vps
+# a. Roles first. They are cluster-level: they survive the drop, but a fresh
+#    cluster has none, and the restore needs every schema-owning role to exist.
+make postgres-setup
+# b. Restore. Drops (--force, disconnects clients) and recreates the database,
+#    and restores ownership (no --no-owner), so each app role owns its schema,
+#    tables and migration journal. GRANTs are not taken from the dump.
 BREAK_GLASS=1 BACKUP_FILE=postgres_<db>_YYYYMMDD_HHMMSS.dump \
   op run --env-file=.env.tpl -- ./scripts/restore-pg.sh
-# MariaDB (interactive filename prompt):
+# c. Grants again. The drop wiped database-level grants (CONNECT, CREATE);
+#    postgres-setup is idempotent and re-applies them and the schema grants.
+make postgres-setup
+```
+
+MariaDB (interactive filename prompt), then its grants:
+
+```bash
 BREAK_GLASS=1 op run --env-file=.env.tpl -- ./apps/fpp/scripts/restore-mariadb.sh
+make fpp-mariadb-setup
 ```
 
 Answer the sudo prompt and type the database name when asked.
 
-### 3. Re-apply grants
-
-A prod restore drops and recreates the database, which wipes per-DB grants:
-
-```bash
-make postgres-setup        # Postgres — re-applies all schema roles/grants
-make fpp-mariadb-setup     # MariaDB — re-applies the fpp user grants
-```
-
-### 4. Verify
+### 3. Verify
 
 ```bash
 make shell-postgres        # spot-check rows per schema
 make fpp-shell             # spot-check fpp tables
 ```
+
+Check Postgres ownership: every app schema, and its tables, owned by the app
+role (none by the superuser):
+
+```sql
+SELECT n.nspname, pg_get_userbyid(n.nspowner) AS owner FROM pg_namespace n
+ WHERE n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema' ORDER BY 1;
+SELECT schemaname, tableowner, count(*) FROM pg_tables
+ WHERE schemaname NOT IN ('pg_catalog','information_schema') GROUP BY 1,2 ORDER BY 1;
+```
+
+If a schema or its tables show the wrong owner (a restore taken with the old
+`--no-owner` behaviour), fix per schema as superuser:
+`REASSIGN OWNED BY <superuser> TO <app>` is too broad, so use
+`ALTER SCHEMA <app> OWNER TO <app>` plus `ALTER TABLE <app>.<t> OWNER TO <app>`
+per table, then `make postgres-setup`.
 
 ## Postgres major-version upgrade
 

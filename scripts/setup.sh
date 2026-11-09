@@ -154,7 +154,13 @@ sysctl -p /etc/sysctl.d/99-hardening.conf
 # =============================================================================
 log "Configuring UFW..."
 apt-get install -y -qq ufw
-ufw --force reset
+# Never reset on a re-run: a reset drops every rule (incl. any added by hand) and leaves a
+# window with no tailscale0 allow. Rules are added idempotently (`ufw allow` skips duplicates).
+# Deliberate reset: UFW_RESET=1 bash scripts/setup.sh
+if [[ "${UFW_RESET:-}" == "1" ]]; then
+  log "UFW_RESET=1 — resetting UFW rules..."
+  ufw --force reset
+fi
 ufw default deny incoming
 ufw default allow outgoing
 # No inbound 80/443 — Traefik has no host ports; all public traffic enters via
@@ -336,12 +342,22 @@ mkdir -p /etc/vps
 chown "root:${DEPLOY_USER}" /etc/vps
 chmod 750 /etc/vps
 
+# /etc/vps/op.env holds the cron jobs' OP_SERVICE_ACCOUNT_TOKEN (cron/pg-backup,
+# fpp-mariadb-backup, fpp-cert-sync, email-gateway-backup load it with
+# `set -a; . /etc/vps/op.env`). It is created by hand (next steps), NOT here: an empty
+# file would be sourced in place of the ~/.bashrc fallback and break the backups.
+# If it exists, enforce its ownership and mode.
+if [[ -f /etc/vps/op.env ]]; then
+  chown "${DEPLOY_USER}:${DEPLOY_USER}" /etc/vps/op.env
+  chmod 600 /etc/vps/op.env
+fi
+
 # =============================================================================
 # 12. Install cron jobs (Postgres backup, Postgres liveness, MariaDB backup,
 # MariaDB cert sync, weekly Docker image/build-cache prune, hourly weatherorb accounts dump)
 # =============================================================================
 log "Installing cron jobs..."
-for cronfile in pg-backup pg-health fpp-mariadb-backup fpp-cert-sync docker-prune weatherorb-accounts-dump; do
+for cronfile in pg-backup pg-health email-gateway-backup fpp-mariadb-backup fpp-cert-sync docker-prune weatherorb-accounts-dump; do
   cp "${REPO_DIR}/cron/${cronfile}" "/etc/cron.d/${cronfile}"
   chmod 644 "/etc/cron.d/${cronfile}"
   chown root:root "/etc/cron.d/${cronfile}"
@@ -375,7 +391,10 @@ log "============================================================"
 log " 1. Connect Tailscale:    tailscale up  (already done if you see a TS IP)"
 log " 2. Apply SSH hardening:  systemctl restart sshd   (sshd stays on all interfaces;"
 log "                          UFW admits only tailscale0 — verify: ufw status verbose)"
-log " 3. Set 1Password SA:     Add OP_SERVICE_ACCOUNT_TOKEN to /home/${DEPLOY_USER}/.bashrc"
+log " 3. Set 1Password SA:     Create /etc/vps/op.env (read by cron) containing the single line"
+log "                            OP_SERVICE_ACCOUNT_TOKEN=<token from 1Password>"
+log "                          then: chown ${DEPLOY_USER}:${DEPLOY_USER} /etc/vps/op.env && chmod 600 /etc/vps/op.env"
+log "                          Also add it to /home/${DEPLOY_USER}/.bashrc for interactive use, then"
 log "                          source ~/.bashrc && op vault list (verify access)"
 log " 4. Cloudflare Tunnel:    Token already in 1Password (vps/cloudflare-tunnel)"
 log " 5. UFW status:            ufw status verbose"

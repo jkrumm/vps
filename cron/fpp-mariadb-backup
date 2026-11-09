@@ -1,10 +1,12 @@
 # MariaDB daily backup — 03:30 (offset from pg-backup at 03:00)
 # Install: cp cron/fpp-mariadb-backup /etc/cron.d/fpp-mariadb-backup && chmod 644 /etc/cron.d/fpp-mariadb-backup
 #
-# bash -c '. ~/.bashrc; ...' is required so cron picks up OP_SERVICE_ACCOUNT_TOKEN
-# from the user's bashrc — cron runs with an empty environment otherwise and
-# `op run` fails with "No accounts configured for use with 1Password CLI".
+# Cron runs with an empty environment, so OP_SERVICE_ACCOUNT_TOKEN is loaded from
+# /etc/vps/op.env (0600 jkrumm, created by scripts/setup.sh) — otherwise `op run`
+# fails with "No accounts configured for use with 1Password CLI". The fallback to
+# ~/.bashrc only covers the window before that file exists: Ubuntu's stock .bashrc
+# returns early when non-interactive, so it works only if the token sits above that guard.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-30 3 * * * jkrumm /bin/bash -c '. /home/jkrumm/.bashrc; cd /home/jkrumm/vps && op run --env-file=.env.tpl -- /home/jkrumm/vps/apps/fpp/scripts/backup-mariadb.sh' >> /home/jkrumm/fpp-mariadb-backup.log 2>&1
+30 3 * * * jkrumm /bin/bash -c 'if [ -r /etc/vps/op.env ]; then set -a; . /etc/vps/op.env; set +a; else . /home/jkrumm/.bashrc; fi; cd /home/jkrumm/vps && op run --env-file=.env.tpl -- /home/jkrumm/vps/apps/fpp/scripts/backup-mariadb.sh' >> /home/jkrumm/fpp-mariadb-backup.log 2>&1
