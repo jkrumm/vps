@@ -166,6 +166,9 @@ services:
     image: ghcr.io/jkrumm/rollhook:latest
     container_name: rollhook
     restart: unless-stopped
+    # RollHook drains in-flight deploy jobs and pending notifications on SIGTERM;
+    # Docker's default 10 s stop timeout would SIGKILL it mid-deploy.
+    stop_grace_period: 3m
     depends_on:
       - socket-proxy-rollhook
     security_opt:
