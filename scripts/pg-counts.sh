@@ -7,8 +7,7 @@
 # Prints stable-sorted `key|value` lines on stdout, see pg-counts.sql.
 #
 # Usage: pg-counts.sh <database>
-# No secrets: the container's unix socket or the bare server's (scripts/lib-pg-dev.sh);
-# the target of the calling script is inherited through PG_DEV_TARGET.
+# No secrets: the server's unix socket (scripts/lib-pg-dev.sh).
 # =============================================================================
 set -euo pipefail
 

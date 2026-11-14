@@ -4,7 +4,8 @@ set -euo pipefail
 # Idempotent Postgres schema + user setup.
 # Runs against the main Postgres database (${POSTGRES_DB}).
 # Each app gets its own schema and a dedicated user with schema-only access.
-# Run via: make postgres-setup
+# Run via: make postgres-setup (prod only — the mini's Postgres is declared in dotfiles
+# config/postgres/cluster.yaml and applied by `make -C ~/SourceRoot/dotfiles pg-apply`).
 # Requires: postgres container running, 1Password secrets in environment via op run.
 
 # shellcheck disable=SC2120 # "$@" is optional passthrough
@@ -112,8 +113,7 @@ SQL
 
 # ---------------------------------------------------------------------------
 # shutterflow — schema: shutterflow, user: shutterflow
-# Guarded: the local dev stack does not provision it (shutterflow runs its own dev Postgres,
-# so .env.dev.tpl carries no SHUTTERFLOW_DB_PASSWORD) — skip instead of failing under set -u.
+# Guarded: skip instead of failing under set -u when the password is not in the environment.
 # ---------------------------------------------------------------------------
 if [ -n "${SHUTTERFLOW_DB_PASSWORD:-}" ]; then
 echo "--> shutterflow"
@@ -149,7 +149,7 @@ fi
 # weatherorb account service — OWN DATABASE weatherorb_accounts, owner/user: weatherorb_account
 # (weatherorb ADR 0013: account data is separable, so it gets its own database that can be
 # dumped hourly and pulled off-host without touching the shared one). Not a schema in
-# ${POSTGRES_DB}. Guarded like shutterflow — the dev stack does not provision it.
+# ${POSTGRES_DB}. Guarded like shutterflow.
 # ---------------------------------------------------------------------------
 if [ -n "${WEATHERORB_ACCOUNT_DB_PASSWORD:-}" ]; then
 echo "--> weatherorb_accounts"
@@ -174,47 +174,6 @@ REVOKE CONNECT ON DATABASE weatherorb_accounts FROM PUBLIC;
 SQL
 else
 echo "--> weatherorb_accounts (skipped: WEATHERORB_ACCOUNT_DB_PASSWORD not set — prod-only database)"
-fi
-
-# ---------------------------------------------------------------------------
-# agent-workflows — OWN DATABASE agent_workflows, owner/login role agent_workflows
-# (agent-workflows keeps its system of record — run records, journal — on the Mac mini's
-# maintained Postgres, docs/mini-postgres.md). A database rather than a schema: the app
-# is the only tenant, and `restore-local` / schema syncs of the shared database can
-# then never touch it. The role is least-privilege — LOGIN only, owns that one
-# database, no CREATEDB/CREATEROLE/SUPERUSER, no privileges on any schema of ${POSTGRES_DB}
-# (it can still CONNECT there through PUBLIC's default, as every role can, but sees nothing).
-# Guarded like weatherorb_accounts: prod has no AGENT_WORKFLOWS_DB_PASSWORD,
-# so this only provisions on the dev host.
-# ---------------------------------------------------------------------------
-if [ -n "${AGENT_WORKFLOWS_DB_PASSWORD:-}" ]; then
-echo "--> agent_workflows"
-
-# The password reaches psql through the container environment (-e NAME, value not in argv)
-# and `\set pw`, and is quoted by the server's format(%L) — never spliced into the script,
-# so no password character can break out of the statement.
-docker exec -i -e AGENT_WORKFLOWS_DB_PASSWORD postgres \
-  psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -v ON_ERROR_STOP=1 <<'SQL'
-\set pw `printenv AGENT_WORKFLOWS_DB_PASSWORD`
-
--- The statements are generated with format() so the server quotes the password, then run by
--- gexec (CREATE DATABASE cannot run inside a DO block either).
-SELECT format('%s ROLE agent_workflows WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD %L',
-              CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = 'agent_workflows') THEN 'ALTER' ELSE 'CREATE' END,
-              :'pw')
-\gexec
-
-SELECT 'CREATE DATABASE agent_workflows OWNER agent_workflows'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'agent_workflows')
-\gexec
-
--- converge ownership if the database was created some other way
-ALTER DATABASE agent_workflows OWNER TO agent_workflows;
-REVOKE CONNECT ON DATABASE agent_workflows FROM PUBLIC;
-GRANT CONNECT ON DATABASE agent_workflows TO agent_workflows;
-SQL
-else
-echo "--> agent_workflows (skipped: AGENT_WORKFLOWS_DB_PASSWORD not set — dev-host-only database)"
 fi
 
 # ---------------------------------------------------------------------------

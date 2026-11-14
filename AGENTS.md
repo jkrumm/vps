@@ -34,8 +34,8 @@ make edge-cache-apply HOST=example.com    # idempotent provision — DNS, tunnel
 make infra-upgrade       # postgres + valkey (run make backup first)
 make fpp-mariadb-upgrade # mariadb only (run make fpp-backup first)
 
-# DB schema/user provisioning — idempotent, works for both envs
-make postgres-setup      # run after make infra-up, before make monitoring-up
+# DB schema/user provisioning — idempotent
+make postgres-setup      # prod only: run after make infra-up, before make monitoring-up (the mini's Postgres: dotfiles config/postgres/cluster.yaml + make -C ~/SourceRoot/dotfiles pg-apply)
 make fpp-mariadb-setup   # run after make fpp-up
 make cron-env-seed       # materialize /etc/vps/*.env for cron jobs from 1Password (re-run after secret rotation)
 
@@ -57,22 +57,21 @@ make cron-install / fail2ban-install          # prod — reinstall cron/* into /
 # Status + ops
 make ps                  # docker ps with name/status/ports
 make db-counts           # exact per-table COUNT(*) (Postgres + MariaDB) — diff to verify a sync/restore matches prod
-make shell-postgres      # psql shell (uses op run with .env.tpl)
+make shell-postgres      # psql shell (dev: the mini's Postgres over /tmp:5432, DB=<name>; prod: op run + the container). make sql-postgres: SQL on stdin
 make fpp-shell           # mariadb shell (uses op run with .env.tpl)
 make backup              # manual pg_dump → S3 (prod only — guarded)
 make fpp-backup          # manual mariadb-dump → S3 (prod only — guarded)
 
 # Dev — local seeding / DR from prod (all dev-only, never touch prod)
-make restore-local       # pull latest (or BACKUP_FILE=) S3 pg backup → local. Drops whole local DB.
+make restore-local       # pull latest (or BACKUP_FILE=) S3 pg backup → the mini's Postgres. Drops and restores the dump's schemas in ${POSTGRES_DB}, never the database.
 make pg-sync-schema SCHEMA=argo  # one schema only (least-priv, leaves other schemas intact)
 make fpp-sync-from-prod  # direct ssh+docker exec mariadb-dump from VPS → local (fresh, no S3)
 make fpp-restore-local   # pull latest S3 backup into local mariadb (DR drill / seed)
 make firewall            # show UFW status and rules
 
-# Mac mini Postgres — a MAINTAINED instance (agent_workflows lives in it), dev-only, docs/mini-postgres.md
-make dev-pg-backup           # globals + every database + row-count manifest → HomeLab, checksum-verified; nightly via LaunchAgent; against the container while it runs, else the bare Homebrew server (socket /tmp:5432)
+# Mac mini Postgres — the one Homebrew server (agent_workflows lives in it), declared in dotfiles config/postgres/cluster.yaml, dev-only, docs/mini-postgres.md
+make dev-pg-backup           # globals + every database + row-count manifest → HomeLab, checksum-verified; nightly via LaunchAgent; the Homebrew server over the socket /tmp:5432
 make dev-pg-restore-drill    # newest backup → scratch DBs → exact counts vs the source at backup time → scratch dropped; non-zero on mismatch
-make db-shared               # the `shared` database (role + schema + connection limit per writer) and read-only argo_agw_ro on agent_workflows; idempotent, ends with login/privilege assertions
 make dev-pg-health           # readiness probe (one line, exit 0/1) for the devhost heartbeat
 make dev-pg-launchd          # install the 03:15 backup LaunchAgent (from the main checkout, not a worktree)
 make prune-cron-install  # prod — install the weekly Sunday 04:30 image + build-cache prune (cron/docker-prune); never volumes
@@ -117,7 +116,7 @@ run sat wedged 19h, 2026-08-01). `secrets-run` fails closed in a second.
 
 **Template**: prod targets get the full `.env.tpl` (~40 refs, `$(OP_RUN)`);
 `require-dev` targets get `.env.dev.tpl` (~12 refs, `$(OP_RUN_DEV)`);
-`postgres-setup`/`shell-postgres`/`fpp-shell` follow `$(ENV)` via
+`fpp-shell` follows `$(ENV)` via
 `$(OP_RUN_ENV)`. Why the dev template is a stripped-down subset (three
 least-privilege choices — dev-only superuser passwords, no S3 credential,
 `restore-local` staying MacBook-only) and the full rationale for the
@@ -209,7 +208,7 @@ Internal networks (created by Docker Compose, not external):
 compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy, RollHook)
 compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no exposed ports
 compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
-compose.dev.yml               Local dev (Postgres + Valkey + MariaDB + ClickStack with ports exposed)
+compose.dev.yml               Local dev (Valkey + MariaDB + ClickStack with ports exposed; Postgres is the mini's Homebrew server, not here)
 apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, one tailnet-only worker router) — RollHook-managed, `make weatherorb-up` pins both images — + weatherorb-egress (stdlib CONNECT proxy for the alert webhooks, ADR 0023: tailnet-only :18443, own bridge network, `python:3.14-alpine`, bumped by hand) + weatherorb-probe (stdlib external /v1 availability probe, ADR 0026: once a minute, OTLP span to ClickStack, key from the host-local file `WEATHERORB_PROBE_KEY_FILE` = `/etc/vps/weatherorb-probe-key` (owner 65534, mode 0400), fails closed without it; no published port, public python image, no pin)
 apps/weatherorb/egress/        proxy.py (the egress proxy; IP-literal :443 CONNECT only, refuses non-public targets) + test_proxy.py (`python3 -m unittest`, stdlib only)
 apps/weatherorb/probe/         probe.py (the /v1 availability probe) + test_probe.py (`python3 -m unittest`, stdlib only)
@@ -233,7 +232,7 @@ traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflar
 traefik/dynamic/middlewares.yml  rate-limit, security-headers
 traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed by Traefik
 scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docker, networks, cron, fail2ban)
-scripts/setup-postgres.sh     Idempotent schema/user/grant setup — run via make postgres-setup
+scripts/setup-postgres.sh     Idempotent schema/user/grant setup (prod) — run via make postgres-setup
 scripts/backup-pg.sh          pg_dump → S3 (verified before the Kuma push ping)
 scripts/backup-email-gateway.sh  SQLite `.backup` snapshots of email-gateway.sqlite + mail.sqlite → tar.gz → S3 `backups/vps/email-gateway/`; optional Kuma push via `EMAIL_GATEWAY_BACKUP_KUMA_PUSH_URL` (not yet in any template)
 scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liveness)
@@ -367,9 +366,10 @@ role owns its journal — no extra grants needed here. Applied: argo
 app's own least-priv role. The convention is fixed: **role name == schema name**, and the
 password env var is **`UPPER(schema)_DB_PASSWORD`** (so `argo` → `ARGO_DB_PASSWORD`). App
 repos call `make -C ../vps pg-sync-schema SCHEMA=<app> ENV=dev` (argo's `bun db:sync` does
-exactly this). There is no whole-DB sync: the mini's Postgres is a maintained instance
-(`agent_workflows` lives in it), so `sync-from-prod` was retired. `make restore-local`
-(MacBook-only S3 DR drill) replaces `${POSTGRES_DB}` only and leaves `agent_workflows` alone.
+exactly this). The local side is the mini's Homebrew Postgres (127.0.0.1:5432, as the schema's role). There is no
+whole-DB sync: that server is a maintained instance (`agent_workflows` lives in it), so `sync-from-prod` was
+retired. `make restore-local` (MacBook-only S3 DR drill) drops and restores the dump's schemas inside `${POSTGRES_DB}`
+and leaves every other database alone.
 
 Current schemas:
 
@@ -381,9 +381,9 @@ Current schemas:
 | argo | retired (kept pending drop, see `## Retired: Argo`) | argo |
 | shutterflow | shutterflow-share | shutterflow |
 
-**Mac mini only — own database, not a schema:** `agent_workflows` (owner and login role
-`agent_workflows`, password `op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD`, see activation order in `docs/mini-postgres.md`), provisioned by
-`make postgres-setup ENV=dev`. Prod has no such database. Operations: `docs/mini-postgres.md`.
+**Mac mini only — own databases, not schemas:** `agent_workflows`, `shared` and the rest are declared in dotfiles
+`config/postgres/cluster.yaml` and applied by `make -C ~/SourceRoot/dotfiles pg-apply`; nothing in this repo
+provisions the mini's Postgres. Prod has no such databases. Operations: `docs/mini-postgres.md`.
 ---
 
 ## App Integration Pattern

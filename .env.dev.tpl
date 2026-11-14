@@ -2,8 +2,9 @@
 #
 # Why this exists, separate from .env.tpl
 # ---------------------------------------
-# The dev stack is four throwaway containers (postgres, valkey, mariadb,
-# clickstack) that between them need five values. Until 2026-08-02 `make up` in
+# The dev stack is three throwaway containers (valkey, mariadb, clickstack) plus the
+# scripts that talk to the mini's Postgres (a Homebrew server, declared in dotfiles
+# config/postgres/cluster.yaml). Until 2026-08-02 `make up` in
 # dev resolved the FULL .env.tpl to start them — ~40 refs including the prod
 # Cloudflare tunnel token, the bucket-wide B2 backup credential, every FPP and
 # Sentry secret, and the RollHook admin token. None of that is used by a single
@@ -22,60 +23,41 @@
 # works — a dev-only credential where one is possible, a read-only prod
 # credential where prod data genuinely has to be read.
 
-# --- Postgres / MariaDB identity -------------------------------------------
+# --- Database names ----------------------------------------------------------
 # Names, not credentials — T1, safe to cache. They deliberately still resolve
 # from the SAME op items prod uses rather than being hard-coded here, because
 # restore-pg-local.sh (the S3 DR drill, MacBook) restores a prod dump into the local
-# container: the dump carries `OWNER TO <role>` and `CREATE DATABASE <name>`, so a
-# local database or superuser role named differently from prod makes the restore fail.
+# server and picks the backup by the prod database name, and pg-sync-schema pulls
+# that same database from prod.
 POSTGRES_DB=op://vps/config/POSTGRES_DB
-POSTGRES_USER=op://vps/config/POSTGRES_USER
 MARIADB_DB=op://vps/config/MARIADB_DB
 
-# --- Local superuser passwords (DEV-ONLY VALUES, not prod's) ----------------
-# These containers are created from these values; nothing requires them to match
-# production. (The Postgres volume is no longer throwaway on the mini — it holds
-# agent_workflows, backed up nightly, docs/mini-postgres.md — but the password is
-# still dev-only.) Prod's postgres
-# superuser and mariadb root passwords are the two highest-value credentials in
-# op://vps, and since 2026-08-01 physical possession of the mini yields the
-# login password → sudo → the age key → every cached ref, so caching them there
-# would hand a stolen mini full production database access for no benefit.
+# --- Local MariaDB root password (DEV-ONLY VALUE, not prod's) ----------------
+# The container is created from this value; nothing requires it to match production.
+# Prod's mariadb root password is among the highest-value credentials in op://vps, and
+# since 2026-08-01 physical possession of the mini yields the login password → sudo →
+# the age key → every cached ref, so caching it there would hand a stolen mini full
+# production database access for no benefit.
 #
-# Only the role NAME has to match prod (above); the password does not — the
-# dump is restored through the local socket against the local password.
-POSTGRES_PASSWORD=op://mini/vps-dev/POSTGRES_PASSWORD
+# There is no local Postgres superuser credential: the mini's Postgres (Homebrew
+# server, dotfiles config/postgres/cluster.yaml) trusts the OS user over its 0700
+# unix socket, and its other roles' passwords are declared there (`pg-apply`).
 MARIADB_ROOT_PASSWORD=op://mini/vps-dev/MARIADB_ROOT_PASSWORD
 
-# --- Per-app schema roles (scripts/setup-postgres.sh provisions these) ------
-# Deliberately still the PROD refs, unlike the superuser passwords above. These
-# are per-schema roles, not superusers, and each consuming app's own
-# .env.local.tpl already points at the same ref for its local dev connection
-# (argo's does) — giving the local roles different passwords would silently
-# break every one of those app repos rather than improving anything. This is the
-# owner-classified exception already recorded for op://vps/argo/DB_PASSWORD in
-# dotfiles-private/headless.refs; the other three are the same call.
+# --- Per-schema roles of the prod mirror (scripts/sync-pg-schema-from-vps.sh) -
+# Deliberately the PROD refs, like the cluster declares them (roles argo, umami,
+# basalt_ui_playground): per-schema roles, not superusers, and each consuming app's own
+# .env.local.tpl already points at the same ref for its local dev connection (argo's
+# does) — giving the local roles different passwords would silently break every one of
+# those app repos rather than improving anything. This is the owner-classified exception
+# already recorded for op://vps/argo/DB_PASSWORD in dotfiles-private/headless.refs; the
+# other two are the same call.
 #
-# sync-pg-schema-from-vps.sh resolves <SCHEMA>_DB_PASSWORD by name, so a new
-# schema needs its line here as well as in setup-postgres.sh.
+# sync-pg-schema-from-vps.sh resolves <SCHEMA>_DB_PASSWORD by name, so a new mirrored
+# schema needs its line here and its role in dotfiles config/postgres/cluster.yaml.
 ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD
 UMAMI_DB_PASSWORD=op://vps/umami/DB_PASSWORD
 BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
-
-# --- agent_workflows (dev-host-only database, no prod counterpart) ------------
-# Own database + own least-privilege role, provisioned by setup-postgres.sh. A dev-only
-# credential in the mini vault. The ref is sealed in the mini's cache
-# (dotfiles-private/headless.refs); activation order and why it matters:
-# docs/mini-postgres.md → "Activating the agent_workflows role".
-AGENT_WORKFLOWS_DB_PASSWORD=op://mini/vps-dev/AGENT_WORKFLOWS_DB_PASSWORD
-
-# --- shared database + read-only agent_workflows role (scripts/setup-shared-db.sh) ---
-# One login role per writer in the `shared` database; ARGO_DB_PASSWORD above is reused for its argo
-# role. Dev-only credentials in the mini vault, sealed in the cache before these lines were added
-# (activation order: docs/mini-postgres.md). A new writer adds its line here.
-SHARED_USAGE_DB_PASSWORD=op://mini/vps-dev/SHARED_USAGE_DB_PASSWORD
-SHARED_FACTORY_DB_PASSWORD=op://mini/vps-dev/SHARED_FACTORY_DB_PASSWORD
-ARGO_AGW_RO_DB_PASSWORD=op://mini/vps-dev/ARGO_AGW_RO_DB_PASSWORD
 
 # --- Deliberately ABSENT ----------------------------------------------------
 # AWS_* (S3 backup credential)

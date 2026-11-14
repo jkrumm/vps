@@ -32,10 +32,10 @@ SECRET_RUNNER = $(shell command -v secrets-run >/dev/null 2>&1 \
 OP_RUN     = $(SECRET_RUNNER) --env-file=.env.tpl --
 OP_RUN_DEV = $(SECRET_RUNNER) --env-file=.env.dev.tpl --
 
-# For the handful of targets documented as "works in both envs" (postgres-setup,
-# shell-postgres, db-counts, fpp-shell). They must follow ENV rather than pick a
-# side: the local containers are created with the DEV-ONLY superuser passwords
-# from .env.dev.tpl, so handing them prod's values simply fails to authenticate.
+# For the handful of targets documented as "works in both envs" (fpp-shell). They must
+# follow ENV rather than pick a side: the local containers are created with the DEV-ONLY
+# superuser passwords from .env.dev.tpl, so handing them prod's values simply fails to
+# authenticate.
 ifeq ($(ENV),prod)
 OP_RUN_ENV = $(OP_RUN)
 else
@@ -133,7 +133,7 @@ else
 	@if lsof -nP -iTCP:6379 -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "→ Detected existing Redis/Valkey on :6379 — skipping the dev valkey service"; \
 		echo "  Apps still connect to localhost:6379 either way."; \
-		$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d postgres mariadb; \
+		$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d mariadb; \
 	else \
 		$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d; \
 	fi
@@ -438,15 +438,16 @@ jkrumm-com-down: require-prod ; $(OP_RUN) docker compose -f apps/jkrumm-com/comp
 jkrumm-com-bootstrap-image: require-prod
 	$(OP_RUN) ./apps/jkrumm-com/scripts/bootstrap-image.sh
 
-## Postgres schema/user provisioning — idempotent, works for both envs
+## Postgres schema/user provisioning — idempotent, prod only. The mini's Postgres (every
+## role, database, schema and grant, incl. `shared` and agent_workflows) is declared in
+## dotfiles config/postgres/cluster.yaml and applied by `make -C ~/SourceRoot/dotfiles pg-apply`.
 postgres-setup:
-	$(OP_RUN_ENV) ./scripts/setup-postgres.sh
+	@[ "$(ENV)" = "prod" ] || { echo "postgres-setup is prod only. The mini's Postgres: edit dotfiles config/postgres/cluster.yaml, then make -C ~/SourceRoot/dotfiles pg-apply"; exit 1; }
+	$(OP_RUN) ./scripts/setup-postgres.sh
 
-## Dev (mini) — the `shared` database (one role + schema + connection limit per writer) and the
-## read-only argo_agw_ro role on agent_workflows. Idempotent; ends with login/privilege assertions
-## and fails on any miss. Writers are a table at the top of the script (docs/mini-postgres.md).
-db-shared: require-dev
-	$(OP_RUN_DEV) ./scripts/setup-shared-db.sh
+## Retired (dev): the `shared` database and argo_agw_ro are declared in dotfiles config/postgres/cluster.yaml.
+db-shared:
+	@echo "db-shared is retired. Edit dotfiles config/postgres/cluster.yaml, then make -C ~/SourceRoot/dotfiles pg-apply"; exit 1
 
 ## Materialize /etc/vps/*.env for cron jobs from cron/*.env.tpl (via op inject).
 ## Re-run after rotating a referenced secret.
@@ -509,25 +510,26 @@ backup: require-prod
 # NOTE: restoring PROD Postgres from S3 has NO make target by design — it overwrites
 # production. It is a gated, human-only DR tool: scripts/restore-pg.sh
 # (see docs/disaster-recovery.md).
-## Dev — pull latest (or BACKUP_FILE=...) S3 pg backup → local. Validates DR chain. Drops whole local DB.
+## Dev — pull latest (or BACKUP_FILE=...) S3 pg backup → the mini's Postgres. Validates DR chain.
+## Drops and restores the dump's schemas in ${POSTGRES_DB}; the database itself stays.
 ## MacBook-only: keeps the full .env.tpl because it needs the S3 backup credential,
 ## which is deliberately not cached on the mini. To get prod DATA onto the mini use
 ## pg-sync-schema (pg_dump over SSH, no credential) — this target is the DR drill.
-## Replaces only ${POSTGRES_DB}; the separate agent_workflows database is not touched.
+## Every other database (agent_workflows, shared, …) is not touched.
 restore-local: require-dev
 	$(OP_RUN) ./scripts/restore-pg-local.sh
 ## Dev — converge the local superuser passwords onto .env.dev.tpl. Idempotent.
-## Both images apply their password variable ONLY when initializing an EMPTY data
+## The MariaDB image applies its password variable ONLY when initializing an EMPTY data
 ## directory, so a volume created before the dev-only credentials existed keeps
-## whatever password initialized it — silently, with healthy containers and passing
-## healthchecks, because those use the unix socket. Only TCP connections fail.
+## whatever password initialized it — silently, with a healthy container and a passing
+## healthcheck, because that uses the unix socket. Only TCP connections fail.
 dev-db-passwords: require-dev
 	$(OP_RUN_DEV) ./scripts/dev-db-passwords.sh
 
 ## Dev — back up the maintained Postgres on the mini to the HomeLab now (what the 03:15
 ## LaunchAgent runs). Globals + every database + a row-count manifest, checksum-verified
-## after upload, newest 14 kept. No secret needed: dumps over the unix socket of whichever
-## server is live (the `postgres` container while it runs, else the bare Homebrew server).
+## after upload, newest 14 kept. No secret needed: dumps over the unix socket of the
+## Homebrew server.
 dev-pg-backup: require-dev
 	./scripts/backup-pg-dev.sh
 
@@ -585,20 +587,29 @@ pg-sync-schema: require-dev
 firewall: require-prod
 	./scripts/firewall.sh
 
-## Interactive psql shell — works in both envs.
+## Interactive psql shell. Dev: the mini's Postgres (socket /tmp:5432, OS user, database `postgres`;
+## DB=<name> for another). Prod: the infra container.
 shell-postgres:
-	$(OP_RUN_ENV) sh -c 'docker exec -it postgres psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+	@if [ "$(ENV)" = "prod" ]; then \
+		$(OP_RUN) sh -c 'docker exec -it postgres psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'; \
+	else \
+		/opt/homebrew/opt/postgresql@18/bin/psql -h /tmp -p 5432 -d "$(or $(DB),postgres)"; \
+	fi
 
 ## Non-interactive psql: SQL on stdin, results on stdout (no TTY — usable over
-## plain ssh and from agents). Same env wrapper as shell-postgres.
+## plain ssh and from agents). Same targets as shell-postgres.
 ##   make sql-postgres <<< "SELECT schemaname, count(*) FROM pg_tables GROUP BY 1"
 sql-postgres:
-	@$(OP_RUN_ENV) sh -c 'docker exec -i postgres psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1'
+	@if [ "$(ENV)" = "prod" ]; then \
+		$(OP_RUN) sh -c 'docker exec -i postgres psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1'; \
+	else \
+		/opt/homebrew/opt/postgresql@18/bin/psql -h /tmp -p 5432 -d "$(or $(DB),postgres)" -v ON_ERROR_STOP=1; \
+	fi
 
 ## Exact per-table row counts (Postgres all schemas + MariaDB fpp). Read-only,
 ## both envs, diff-friendly — use to verify two DB states match after sync/restore.
 db-counts:
-	./scripts/db-counts.sh
+	ENV=$(ENV) ./scripts/db-counts.sh
 
 ## Reclaim disk: stopped containers, unused images, build cache. Both envs. Never touches volumes.
 prune:

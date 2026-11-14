@@ -1,14 +1,15 @@
 ---
-# Local dev infra — Postgres, Valkey, MariaDB, ClickStack for local app development.
+# Local dev infra — Valkey, MariaDB, ClickStack for local app development. Postgres is not here:
+# the mini's one Postgres is the Homebrew server (dotfiles config/postgres/cluster.yaml, applied
+# by `make -C ~/SourceRoot/dotfiles pg-apply`).
 # Injected via $(OP_RUN_DEV) (--env-file=.env.dev.tpl) in the Makefile — the narrow
 # dev template, NOT the prod .env.tpl. See that file's header.
 # Usage: make up (with ENV=dev in .env)
-#        make postgres-setup (provisions schemas/users)
 #
 # EVERY published port binds 127.0.0.1 explicitly. Docker's default is 0.0.0.0,
 # which on the Mac mini — the always-on dev host — means the tailnet interface too,
-# leaving a Tailscale ACL as the only thing between other machines and a Postgres
-# superuser or an unauthenticated Valkey. That is the wrong layer for it: an ACL is
+# leaving a Tailscale ACL as the only thing between other machines and an
+# unauthenticated Valkey. That is the wrong layer for it: an ACL is
 # a shared, remotely-editable document covering the whole tailnet, and the current
 # grant (tcp:7700-7799 between Macs) protects these ports only by not mentioning
 # them. Every other dev container on the mini already binds loopback.
@@ -20,34 +21,6 @@
 # change here — not a default nobody chose.
 
 services:
-
-  postgres:
-    image: postgres:18
-    container_name: postgres
-    # A maintained instance on the mini (agent_workflows lives here): survive a Colima/host
-    # restart. Backups, restore drill, upgrades: docs/mini-postgres.md.
-    restart: unless-stopped
-    # max_locks_per_transaction is a postmaster setting (restart-only). The nightly backup holds
-    # one REPEATABLE READ transaction that touches every table and index of a database, and
-    # agent_workflows has one agw_t_* schema per tenant. Why 1024 and how to resize:
-    # docs/mini-postgres.md#lock-table-sizing.
-    command: ["postgres", "-c", "max_locks_per_transaction=1024"]
-    # Parallel queries allocate their shared memory in /dev/shm. Docker's 64 MB default made a burst of
-    # dashboard aggregates fail with "could not resize shared memory segment": docs/mini-postgres.md#shared-memory.
-    shm_size: 1g
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "127.0.0.1:5432:5432"
-    volumes:
-      - postgres-dev-data:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
 
   valkey:
     image: valkey/valkey:9
@@ -117,6 +90,9 @@ services:
       CUSTOM_OTELCOL_CONFIG_FILE: /etc/otelcol-contrib/custom.config.yaml
 
 volumes:
+  # No service mounts it any more: the old dev Postgres container's data, kept as the rollback
+  # copy until dotfiles removes it (7 days after the 2026-11-14 cutover, after a proven HomeLab
+  # restore). Never `down -v` this stack and never `docker volume rm` it from here.
   postgres-dev-data:
   valkey-dev-data:
   mariadb-dev-data:
