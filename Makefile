@@ -72,7 +72,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
-        postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
+        postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove dev-pg-container-remove firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply dev-mariadb-up dev-mariadb-down dev-redis-up dev-redis-down clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
         check deploy verify version logs _deploy-affected sql-postgres \
         traefik-recreate clickstack-recreate cron-install fail2ban-install
@@ -580,6 +580,15 @@ dev-pg-launchd-remove: require-dev
 	@launchctl bootout gui/$$(id -u)/com.jkrumm.vps-pg-backup 2>/dev/null || true
 	@rm -f "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-pg-backup.plist" "$(HOME)/.local/state/jobs/com.jkrumm.vps-pg-backup.json"
 	@echo "  ✓ com.jkrumm.vps-pg-backup removed (plist and jobrun record)"
+
+## Dev — remove the stale `postgres` container of the retired compose.dev.yml service (the mini's
+## Postgres is the Homebrew server). Removes the container only: the volume vps_postgres-dev-data
+## stays as the rollback copy until dotfiles drops it. Idempotent; only acts on a container that
+## carries the vps compose-project label, never on one that merely shares the name.
+dev-pg-container-remove: require-dev
+	@id=$$(docker ps -aq --filter name='^/postgres$$' --filter label=com.docker.compose.project=vps --filter label=com.docker.compose.service=postgres); \
+	if [ -z "$$id" ]; then echo "  ✓ no stale postgres container (nothing to remove)"; exit 0; fi; \
+	docker rm -f "$$id" >/dev/null && echo "  ✓ stale postgres container removed (volume vps_postgres-dev-data kept)"
 
 ## Dev — DESTROY and re-initialize the local FPP MariaDB volume. Destructive.
 ## The only in-place way to change a root password whose volume predates the
