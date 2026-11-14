@@ -370,8 +370,8 @@ RollHook-managed `fpp-server` and `fpp-analytics`, and an unscoped `up -d`
 would recreate them off `:latest`, undoing the last deploy.
 
 The Mac mini's Postgres (`compose.dev.yml`) is a maintained instance with its
-own backup, restore drill and upgrade targets (`make dev-pg-upgrade`, backup
-first, major bumps refused): [docs/mini-postgres.md](docs/mini-postgres.md).
+own backup, restore drill and health probe, written against whichever server is
+live (the container, or the bare Homebrew server): [docs/mini-postgres.md](docs/mini-postgres.md).
 
 **Postgres major upgrade (e.g., 18 → 19):** Dump with current version, update image tag in `compose.infra.yml`, restore into new container via the gated `scripts/restore-pg.sh` (see `docs/disaster-recovery.md`). Always backup first.
 

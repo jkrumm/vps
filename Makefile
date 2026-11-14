@@ -72,7 +72,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
-        postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-upgrade dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
+        postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
         check deploy verify version logs _deploy-affected sql-postgres \
         traefik-recreate clickstack-recreate cron-install fail2ban-install
@@ -526,7 +526,8 @@ dev-db-passwords: require-dev
 
 ## Dev — back up the maintained Postgres on the mini to the HomeLab now (what the 03:15
 ## LaunchAgent runs). Globals + every database + a row-count manifest, checksum-verified
-## after upload, newest 14 kept. No secret needed: dumps via the container's socket.
+## after upload, newest 14 kept. No secret needed: dumps over the unix socket of whichever
+## server is live (the `postgres` container while it runs, else the bare Homebrew server).
 dev-pg-backup: require-dev
 	./scripts/backup-pg-dev.sh
 
@@ -535,11 +536,6 @@ dev-pg-backup: require-dev
 ## on any mismatch. Never touches a database it did not create.
 dev-pg-restore-drill: require-dev
 	./scripts/restore-drill-pg-dev.sh
-
-## Dev — Postgres image upgrade, backup first. Minor bumps (postgres:18 floats) pull and
-## recreate; a major bump is refused with a pointer to docs/mini-postgres.md.
-dev-pg-upgrade: require-dev
-	$(OP_RUN_DEV) ./scripts/upgrade-pg-dev.sh
 
 ## Dev — readiness probe of the mini Postgres (one line, exit 0/1). Fed to the devhost heartbeat.
 dev-pg-health: require-dev

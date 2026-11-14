@@ -70,9 +70,8 @@ make fpp-restore-local   # pull latest S3 backup into local mariadb (DR drill / 
 make firewall            # show UFW status and rules
 
 # Mac mini Postgres — a MAINTAINED instance (agent_workflows lives in it), dev-only, docs/mini-postgres.md
-make dev-pg-backup           # globals + every database + row-count manifest → HomeLab, checksum-verified; nightly via LaunchAgent
+make dev-pg-backup           # globals + every database + row-count manifest → HomeLab, checksum-verified; nightly via LaunchAgent; against the container while it runs, else the bare Homebrew server (socket /tmp:5432)
 make dev-pg-restore-drill    # newest backup → scratch DBs → exact counts vs the source at backup time → scratch dropped; non-zero on mismatch
-make dev-pg-upgrade          # backup first, then pull+recreate (minor); a major bump is refused
 make db-shared               # the `shared` database (role + schema + connection limit per writer) and read-only argo_agw_ro on agent_workflows; idempotent, ends with login/privilege assertions
 make dev-pg-health           # readiness probe (one line, exit 0/1) for the devhost heartbeat
 make dev-pg-launchd          # install the 03:15 backup LaunchAgent (from the main checkout, not a worktree)
@@ -249,7 +248,7 @@ scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make ta
 scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
 scripts/backup-pg-dev.sh      Mac mini Postgres → HomeLab nightly backup (globals, per-DB dumps, counts.tsv, SHA256SUMS; keep 14) — make dev-pg-backup
 scripts/restore-drill-pg-dev.sh  Restore drill of the newest mini backup into scratch DBs, counts vs source — make dev-pg-restore-drill
-scripts/upgrade-pg-dev.sh     Mini Postgres image upgrade, backup first, major bumps refused — make dev-pg-upgrade
+scripts/lib-pg-dev.sh         Shared by the dev-pg scripts: picks the live server per run (container `postgres`, else the bare Homebrew server) and runs the client binaries against it
 scripts/health-pg-dev.sh      Mini Postgres readiness probe for the devhost heartbeat — make dev-pg-health
 scripts/pg-counts.sh          Exact row counts + relation-kind counts of ONE database (drill); pg-counts.sql is the shared SQL the backup runs inside the dump's snapshot
 launchd/                      LaunchAgent template for the mini's nightly Postgres backup (make dev-pg-launchd)
