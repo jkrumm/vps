@@ -689,7 +689,7 @@ APP_SERVICE_weatherorb          := weatherorb-edge
 
 # PyYAML for the compose lint: the system python3 when it has it (CI installs it), else uv's.
 # No docker call anywhere in `check` — a check runs on the native toolchain (dotfiles rules/run-on-mini.md).
-PY_YAML := $(if $(shell python3 -c 'import yaml' 2>/dev/null && echo y),python3,uv run --no-project --with pyyaml python3)
+PY_YAML := $(if $(shell python3 -I -c 'import yaml' 2>/dev/null && echo y),python3,uv run --no-project --with pyyaml python3)
 
 ## Local validation: compose YAML + invariants + shell syntax — no server, no Docker, no secrets.
 check:
