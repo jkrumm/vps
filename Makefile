@@ -73,7 +73,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
         postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove firewall shell-postgres db-counts prune prune-cron-install \
-        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
+        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply dev-mariadb-up dev-mariadb-down dev-redis-up dev-redis-down clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
         check deploy verify version logs _deploy-affected sql-postgres \
         traefik-recreate clickstack-recreate cron-install fail2ban-install
 
@@ -484,6 +484,21 @@ hyperdx-export:
 ## observability/alerts/, into ENV.
 hyperdx-apply:
 	./scripts/hyperdx-sync.sh apply $(ENV) $(FILES)
+
+## Dev — one service only. `make up` / `make down` act on the whole dev project; these touch
+## nothing else (no removal, the volume and the other services stay as they are).
+## dev-redis-up does not skip on a held :6379 (unlike `make up`): asking for it by name means the dev valkey.
+dev-mariadb-up: require-dev
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d --wait mariadb
+
+dev-mariadb-down: require-dev
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml stop mariadb
+
+dev-redis-up: require-dev
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml up -d valkey
+
+dev-redis-down: require-dev
+	$(OP_RUN_DEV) docker compose -f compose.dev.yml stop valkey
 
 ## Dev — ClickStack is on demand (profile `observability`, ~4 GB): `make up` skips it.
 clickstack-up: require-dev
