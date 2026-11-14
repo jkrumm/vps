@@ -118,7 +118,7 @@ run sat wedged 19h, 2026-08-01). `secrets-run` fails closed in a second.
 `require-dev` targets get `.env.dev.tpl` (~12 refs, `$(OP_RUN_DEV)`);
 `fpp-shell` follows `$(ENV)` via
 `$(OP_RUN_ENV)`. Why the dev template is a stripped-down subset (three
-least-privilege choices — dev-only superuser passwords, no S3 credential,
+least-privilege choices — dev-only MariaDB root password, no S3 credential,
 `restore-local` staying MacBook-only) and the full rationale for the
 runner split: `docs/secrets-injection.md`.
 

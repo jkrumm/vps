@@ -3,8 +3,8 @@
 # Local Postgres restore from S3 — non-interactive, dev-only.
 #
 # Pulls the latest (or named) whole-DB backup from S3 and restores its schemas into
-# ${POSTGRES_DB} of the mini's Postgres (the Homebrew server on the unix socket
-# /tmp:5432 as the OS user, scripts/lib-pg-dev.sh). Used to:
+# ${POSTGRES_DB} of the Postgres of the machine it runs on (the Homebrew server on the unix
+# socket /tmp:5432 as the OS user, scripts/lib-pg-dev.sh; the database must already exist). Used to:
 #   - Validate the prod backup chain is replayable (DR drill from a clean Mac)
 #   - Seed local dev with a full prod mirror (all schemas at once)
 #
