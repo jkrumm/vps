@@ -56,6 +56,10 @@
 # 60 s and exits 2 (so the restart policy cannot hot-loop). Tests: `python3 -m unittest` in ./probe.
 # Key rotation: run `create-key`, rewrite the file in place (same inode, owner 65534, mode 0400),
 # then `make weatherorb-up`, which recreates the probe; revoke the old key with `revoke-key`.
+# DORMANT while weatherorb V1 is frozen (owner verdict 2026-11-12, weatherorb Issue 910): the mini's :8082
+# door has no listener, so every /v1 probe is a 502 and, against the edge's low traffic, held the
+# `VPS edge 5xx rate` alert red (Issue 1194). The service sits behind the `probe` profile; bring it back
+# with `make weatherorb-up WEATHERORB_PROBE=1` once the V2 /v1 origin answers.
 #
 # The two RollHook services roll independently. RollHook selects the container by image name
 # (precedent: apps/fpp/compose.yml fpp-analytics-updater, per-service
@@ -297,6 +301,7 @@ services:
   # ---------------------------------------------------------------------------
   weatherorb-probe:
     image: python:3.14-alpine
+    profiles: [probe]
     restart: unless-stopped
     command: python /app/probe.py
     user: "65534:65534"

@@ -314,13 +314,17 @@ shutterflow-key-broker-image: require-prod
 ## proxy.py does not change the compose config hash, so a plain `up -d` keeps the container running
 ## the old script: the last step force-recreates exactly those two services (also what applies a
 ## rotated probe key file).
+## The probe is dormant (compose profile `probe`) while weatherorb V1 is frozen: its 502s held the edge
+## 5xx alert red (Issue 1194). `make weatherorb-up` removes it; `WEATHERORB_PROBE=1` brings it back.
 ## `docker ps -a` (not `docker ps`): a stopped-but-present container must
 ## still be pinned, not mistaken for genesis and rolled back to a stale :latest.
 weatherorb-up: require-prod
 	@$(PIN_SH); PINS=$$(pin_all weatherorb-edge:WEATHERORB_EDGE_IMAGE weatherorb-account:WEATHERORB_ACCOUNT_IMAGE) || exit 1; \
 	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d && \
 	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env \
-	  up -d --no-deps --force-recreate weatherorb-probe weatherorb-egress
+	  $(if $(WEATHERORB_PROBE),--profile probe) up -d --no-deps --force-recreate $(if $(WEATHERORB_PROBE),weatherorb-probe) weatherorb-egress \
+	  $(if $(WEATHERORB_PROBE),,&& $(OP_RUN) docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env \
+	    --profile probe rm -sf weatherorb-probe)
 weatherorb-down: require-prod ; $(OP_RUN) docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env down
 
 ## Trigger a fresh RollHook deploy by pushing an empty commit to weatherorb's master.
