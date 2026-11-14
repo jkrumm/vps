@@ -687,17 +687,12 @@ APP_SERVICE_rollhook-marketing  := rollhook-marketing
 APP_SERVICE_shutterflow         := shutterflow-share
 APP_SERVICE_weatherorb          := weatherorb-edge
 
-## Local validation: compose config + shell syntax — no server, Docker mutation or secrets.
+# PyYAML for the compose lint: the system python3 when it has it (CI installs it), else uv's.
+# No docker call anywhere in `check` — a check runs on the native toolchain (dotfiles rules/run-on-mini.md).
+PY_YAML := $(if $(shell python3 -c 'import yaml' 2>/dev/null && echo y),python3,uv run --no-project --with pyyaml python3)
+
+## Local validation: compose YAML + invariants + shell syntax — no server, no Docker, no secrets.
 check:
-	@if command -v docker >/dev/null 2>&1; then \
-		for f in compose.*.yml apps/*/compose.yml; do \
-			printf "→ docker compose -f %s config\n" "$$f"; \
-			docker compose -f "$$f" config --no-interpolate --quiet || exit 1; \
-		done; \
-	else \
-		echo "→ docker not found — parsing compose YAML with pyyaml"; \
-		uv run --no-project --with pyyaml python3 -c "import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]" compose.*.yml apps/*/compose.yml || exit 1; \
-	fi
 	@echo "→ bash -n over shell scripts"; \
 	for f in scripts/*.sh apps/*/scripts/*.sh; do bash -n "$$f" || exit 1; done
 	@if command -v shellcheck >/dev/null 2>&1; then \
@@ -708,8 +703,8 @@ check:
 		echo "→ unittest $$d"; (cd "$$d" && python3 -I -m unittest) || exit 1; \
 	done
 	@echo "→ compose invariant lint + tests"; \
-	python3 scripts/lint-compose.py || exit 1; \
-	python3 -I -m unittest discover -s scripts -p 'test_lint_compose.py' || exit 1; \
+	$(PY_YAML) scripts/lint-compose.py || exit 1; \
+	$(PY_YAML) -I -m unittest discover -s scripts -p 'test_lint_compose.py' || exit 1; \
 	bash scripts/test_deploy_affected.sh || exit 1
 	@echo "OK: local validation passed"
 

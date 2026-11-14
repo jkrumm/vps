@@ -11,14 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # The runner's bundled Compose rejects `${VAR:-default}:/path:ro` volume specs under
-      # --no-interpolate; current Compose (what the repo runs on) accepts them.
-      - uses: docker/setup-compose-action@v2
-        with:
-          version: latest
       # The weatherorb tests run on the container's Python (asyncio Server.close_clients needs 3.13+).
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
       # shellcheck ships on ubuntu-latest; `make check` needs no secrets or op
+      # The compose lint parses YAML directly (no Docker); the Makefile picks up this PyYAML.
+      - run: python3 -m pip install pyyaml
       - run: make check

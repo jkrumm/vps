@@ -475,8 +475,7 @@ upgrade targets are scoped to their own services and wait for health (`up -d --w
 
 ## Validate
 
-`make check` is the single local gate — no server, no secrets, no Docker daemon
-mutation, so it is safe to run anywhere (the MacBook, the mini, CI):
+`make check` is the single local gate — no server, no secrets, no Docker, so it is safe to run anywhere (the MacBook, the mini, CI):
 
 ```bash
 make check
@@ -484,15 +483,12 @@ make check
 
 It runs:
 
-1. `docker compose -f <file> config --no-interpolate --quiet` over every
-   `compose.*.yml` and `apps/*/compose.yml`. `--no-interpolate` is deliberate:
-   `.env.tpl` holds `op://` references that cannot resolve locally, but the file
-   structure is still fully validated.
-2. If the Docker CLI is absent, a `uv run --no-project --with pyyaml` parse of
-   the same compose files instead.
-3. `bash -n` over `scripts/*.sh` and `apps/*/scripts/*.sh`.
+1. `scripts/lint-compose.py` parses every `compose.*.yml` and `apps/*/compose.yml` with PyYAML
+   (no Docker, no interpolation, so `op://` references stay as written) and enforces the
+   compose invariants. The system `python3` supplies PyYAML when it has it, else `uv run --with pyyaml`.
+2. `bash -n` over `scripts/*.sh` and `apps/*/scripts/*.sh`.
 
-CI (`.github/workflows/ci.yml`) runs the same `make check` on every push and PR; the target also covers the Python unit tests, `shellcheck`, and the compose-invariants linter `scripts/lint-compose.py`.
+CI (`.github/workflows/ci.yml`) runs the same `make check` on every push and PR; the target also covers the Python unit tests and `shellcheck`.
 
 A non-zero exit means the change is not ready.
 
