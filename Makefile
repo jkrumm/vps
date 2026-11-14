@@ -510,7 +510,8 @@ backup: require-prod
 # NOTE: restoring PROD Postgres from S3 has NO make target by design — it overwrites
 # production. It is a gated, human-only DR tool: scripts/restore-pg.sh
 # (see docs/disaster-recovery.md).
-## Dev — pull latest (or BACKUP_FILE=...) S3 pg backup → the mini's Postgres. Validates DR chain.
+## Dev — pull latest (or BACKUP_FILE=...) S3 pg backup → the Homebrew Postgres (socket /tmp:5432, OS user)
+## of the machine it runs on, which must already have ${POSTGRES_DB}. Validates DR chain.
 ## Drops and restores the dump's schemas in ${POSTGRES_DB}; the database itself stays.
 ## MacBook-only: keeps the full .env.tpl because it needs the S3 backup credential,
 ## which is deliberately not cached on the mini. To get prod DATA onto the mini use
@@ -518,7 +519,7 @@ backup: require-prod
 ## Every other database (agent_workflows, shared, …) is not touched.
 restore-local: require-dev
 	$(OP_RUN) ./scripts/restore-pg-local.sh
-## Dev — converge the local superuser passwords onto .env.dev.tpl. Idempotent.
+## Dev — converge the local MariaDB root password onto .env.dev.tpl. Idempotent.
 ## The MariaDB image applies its password variable ONLY when initializing an EMPTY data
 ## directory, so a volume created before the dev-only credentials existed keeps
 ## whatever password initialized it — silently, with a healthy container and a passing
