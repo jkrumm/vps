@@ -7,14 +7,16 @@
 # Prints stable-sorted `key|value` lines on stdout, see pg-counts.sql.
 #
 # Usage: pg-counts.sh <database>
-# No secrets: the superuser name comes from the container's own environment and
-# the connection is the in-container unix socket.
+# No secrets: the container's unix socket or the bare server's (scripts/lib-pg-dev.sh);
+# the target of the calling script is inherited through PG_DEV_TARGET.
 # =============================================================================
 set -euo pipefail
 
 DB="${1:?usage: pg-counts.sh <database>}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PGU=$(docker exec postgres printenv POSTGRES_USER)
+# shellcheck source=lib-pg-dev.sh
+source "${HERE}/lib-pg-dev.sh"
+pg_select_target || exit 1
 
-docker exec -i postgres psql -U "${PGU}" -d "${DB}" -At -F'|' -v ON_ERROR_STOP=1 < "${HERE}/pg-counts.sql" \
+pg_exec_i psql -d "${DB}" -At -F'|' -v ON_ERROR_STOP=1 < "${HERE}/pg-counts.sql" \
   | LC_ALL=C sort -t'|' -k1,1

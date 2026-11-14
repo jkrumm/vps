@@ -1,5 +1,23 @@
 # Mac mini Postgres — a maintained instance
 
+## Which server
+
+The mini ends up with **one** Postgres: the Homebrew `postgresql@18` server on `127.0.0.1:5432`
+(unix socket `/tmp/.s.PGSQL.5432`), run as the OS user, who is its superuser under local `trust` — no
+credential. Its roles, databases, grants and settings are declared in
+`~/SourceRoot/dotfiles/config/postgres/cluster.yaml` and applied with
+`make -C ~/SourceRoot/dotfiles pg-apply` (`docs/postgres.md` there); **nothing in this repo provisions
+it**. Until the cutover is done the `postgres` container of `compose.dev.yml` is still the dev
+instance described below, and the bare server (weatherorb's databases) runs beside it.
+
+The backup, restore drill and health probe do not care which of the two is live. Each run decides
+(`scripts/lib-pg-dev.sh`): the container `postgres` while it runs, else the bare server through
+Homebrew's client binaries (`/opt/homebrew/opt/postgresql@18/bin`) over the socket `/tmp:5432`.
+`PG_DEV_TARGET=container|bare` forces one (`PG_DEV_BIN`, `PG_DEV_SOCKDIR`, `PG_DEV_PORT` override the
+bare defaults). Output layout, snapshot-consistent counts and verify-by-restore are identical for both.
+The sections below that talk about the container (provisioning, lock-table sizing, shared memory)
+describe the instance as it was until the cutover.
+
 The `postgres` service in `compose.dev.yml` (`postgres:18`, bound to `127.0.0.1:5432`, volume
 `postgres-dev-data`) used to be a throwaway mirror of prod. Since P0b of agent-workflows it is a
 **maintained instance**: it holds `agent_workflows`' system of record (run records, journal), so it
@@ -8,11 +26,11 @@ Dev only: none of this runs on the VPS, which has its own cron backups (`scripts
 
 | Concern | Target / file |
 |-|-|
-| Roles, schemas, `agent_workflows` DB | `make postgres-setup ENV=dev` → `scripts/setup-postgres.sh` |
-| `shared` database, writer roles, `argo_agw_ro` | `make db-shared` → `scripts/setup-shared-db.sh` |
+| Roles, schemas, `agent_workflows` DB | container: `make postgres-setup ENV=dev`; bare server: dotfiles `cluster.yaml` |
+| `shared` database, writer roles, `argo_agw_ro` | container: `make db-shared`; bare server: dotfiles `cluster.yaml` |
 | Nightly backup | `launchd/com.jkrumm.vps-pg-backup.plist.template` → `scripts/backup-pg-dev.sh` (`make dev-pg-backup`) |
 | Restore drill | `make dev-pg-restore-drill` → `scripts/restore-drill-pg-dev.sh` |
-| Upgrade | `make dev-pg-upgrade` → `scripts/upgrade-pg-dev.sh` |
+| Upgrade | the container is gone after the cutover; the bare server is Homebrew's (below, "Upgrades") |
 | Heartbeat probe | `make dev-pg-health` → `scripts/health-pg-dev.sh` |
 
 ## `agent_workflows`
@@ -119,8 +137,9 @@ database mid-migration produced an archive with a valid checksum and a broken `C
 (`pg_dump`'s `pg_get_*def` calls ignore the dump snapshot, so concurrent DDL can corrupt a
 definition); only the restore showed it. A failed verify fails the job, which `jobs-grade` reports.
 
-No credential is involved: `pg_dump` runs inside the container over its unix socket and the upload
-is keyless Tailscale SSH.
+No credential is involved: `pg_dump` runs over the server's unix socket (inside the container, or
+Homebrew's `pg_dump` as the OS user on the bare server) and the upload is keyless Tailscale SSH.
+Scratch databases of a drill running at the same moment (`restore_drill_<ts>_<n>`) are never dumped.
 
 On a fully green run (upload, drill and retention) the script ends with an Uptime Kuma push (`up`, backup
 name + database count) via `dotfiles/scripts/lib/kuma-push.sh`. The push URL is read from the chmod-600
@@ -134,7 +153,46 @@ the dump reads**. A background `psql` holds a `REPEATABLE READ` transaction open
 snapshot, runs `scripts/pg-counts.sql`, and stays open until `pg_dump --snapshot=<id>` finishes; the
 manifest therefore describes the dump exactly, whatever writes concurrently.
 
+### Size, time and retention on the bare server
+
+Measured 2026-11-14 against the bare server (weatherorb 10 GB, weatherorb_dbos 0.8 GB, the test
+database, `postgres`): the backup holds **1.2 GB** (`weatherorb` dumps to ~1.2 GB at `--compress=6`);
+the exact counts of all four databases take seconds, the dumps 2 min 40 s, the upload to the HomeLab
+7.5 min. The container's four databases (`agent_workflows`, `postgres`, `shared`, `spike_s1`) were
+322 MB and uploaded in 8.7 min — the upload is bound by the HomeLab link (~1 MB/s for either size),
+not by the size. The verify drill restores from the **staged copy** (the upload already passed
+`sha256sum -c` on the HomeLab; a second pull took 10–16 min), which costs ~5 min for `weatherorb`
+and ~3 min for `agent_workflows` (14 000 tables).
+
+Expected nightly with everything in the bare server (weatherorb + `agent_workflows` + `shared` +
+`athena` + `spike_s1`): dump ~7 min, upload ~10 min, drill ~10 min, ~30 min against `jobrun
+--timeout 3600`. A run that approaches 45 min is the signal to look at the link, not to raise the
+timeout. Retention is 14 backups: ~17 GB at 1.2 GB each, on a 14 TB HomeLab disk that is 34 % used;
+restic covers the path from there. The snapshot holder keeps one `REPEATABLE READ` transaction open
+per database for the duration of its dump (~3 min for `weatherorb`), which holds back vacuum cleanup
+of that database for that long.
+
+### Restore from the HomeLab copy — proof record
+
+The drill restores into scratch databases `restore_drill_<ts>_<n>` and never over a live database.
+To prove a restore without touching the live server at all, point it at a scratch cluster:
+`initdb` into a temp dir, start it on its own socket, then
+`PG_DEV_TARGET=bare PG_DEV_SOCKDIR=<dir> PG_DEV_PORT=<port> make dev-pg-restore-drill`.
+
+| Date | Backup | Where restored | Result |
+|-|-|-|-|
+| 2026-11-14 | `20261114T103340Z` of the bare server, pulled from `homelab:/mnt/hdd/backups/vps-mini-postgres` layout (probe directory, deleted afterwards) | scratch cluster, PostgreSQL 18.7 | pass: `postgres` 0 tables / 0 rows, `weatherorb_accounts_test` 15 / 4, `weatherorb_dbos` 13 / 383 989, `weatherorb` 43 / 38 631 246 — every row count and relation-kind count equal to `counts.tsv`; fetch 16 min, restore+count 5 min |
+
+This record predates the cutover (the backup was taken while the bare server held weatherorb only).
+Every nightly run repeats the drill on its own backup; the first nightly after the cutover is the
+proof for the full database set — check `~/Library/Logs/vps-pg-backup.log` for
+`DRILL PASS: ... 7 database(s)` (`shared`, `agent_workflows`, `weatherorb`, `weatherorb_dbos`, `athena`,
+`postgres`, `spike_s1`).
+
 ### Lock-table sizing
+
+On the bare server the setting belongs to `cluster.yaml` (dotfiles) — the backup's error names it. The
+numbers below were measured on the container; the rule is the same.
 
 `max_locks_per_transaction` is `1024` (compose `command:`; the Postgres default of 64 gave 64 × 100 =
 6 400 slots). It is a postmaster setting, so it applies only after the postgres container is recreated.
@@ -174,28 +232,17 @@ two hours in `TMPDIR`. Run it after any change to the backup script and at least
 
 ## Upgrades
 
-`make dev-pg-upgrade` — backup first (aborts if it fails), `pull`, recreate, wait healthy, probe.
-
-- **Minor / patch** (`postgres:18` floats across 18.x): the above is all there is.
-- **Major (e.g. 18 → 19):** refused by the target, because the new image cannot start on the old
-  data directory. Procedure, with the old volume kept until the new one is proven:
-  1. `make dev-pg-backup` and `make dev-pg-restore-drill` — a drilled backup in hand.
-  2. Stop dependents (agent-workflows), then `make down` for the postgres service.
-  3. In `compose.dev.yml` change the image tag **and** the volume name (e.g. `postgres-dev-data-19`,
-     declared under `volumes:`). The old `postgres-dev-data` volume stays untouched as the rollback.
-  4. `make up`, `make postgres-setup ENV=dev` (recreates roles, `agent_workflows` DB).
-  5. Restore: roles first (`psql -f globals.sql` — "already exists" errors for roles that
-     `postgres-setup` just recreated are expected), then for each database
-     `pg_restore --no-owner -d <db>` into the empty database `postgres-setup` created
-     (`createdb` first for any other, e.g. the shared `${POSTGRES_DB}` when it is not `postgres`).
-  6. `make dev-pg-health`, `make db-counts` vs `counts.tsv`, then a fresh `make dev-pg-backup`.
-  7. Remove the old volume only after a week of green nightly backups.
+The container image upgrade path (`make dev-pg-upgrade`) is retired with the container. The bare
+server is Homebrew's `postgresql@18`: a minor/patch bump is `brew upgrade` through dotfiles; a major
+bump is a dump/restore or `pg_upgrade` and is documented in dotfiles `docs/postgres.md`. Before either:
+`make dev-pg-backup` and `make dev-pg-restore-drill` — a drilled backup in hand. Do not
+`brew services stop postgresql@18`: weatherorb and Athena run on it.
 
 ## Heartbeat
 
-`scripts/health-pg-dev.sh` prints one line and exits 0/1: container running+healthy, `SELECT 1`
-over the socket, `127.0.0.1:5432` accepting connections, `agent_workflows` present and owned by
-its own role. It pushes nothing itself. The mini's readiness heartbeat is
+`scripts/health-pg-dev.sh` prints one line and exits 0/1: container running+healthy (only while the
+container is the live server), `SELECT 1` over the socket, `127.0.0.1:5432` accepting connections,
+`agent_workflows` present and owned by its own role. It pushes nothing itself. The mini's readiness heartbeat is
 `dotfiles/scripts/devhost-health-check.sh` (`DEVHOST_SERVICES`, a push to the `MacMini Dev Host`
 monitor); the Postgres component is one entry there:
 
@@ -218,19 +265,14 @@ The gate path means a machine without the backup LaunchAgent skips the probe.
   `sync-from-prod` was retired: it dropped the entire local database.
 - `make restore-local` (the S3 DR drill) stays MacBook-only and replaces `${POSTGRES_DB}` only.
 - The `postgres-dev-data` volume is never removed or recreated by any target here.
-- **weatherorb's Postgres.** Homebrew's `postgresql@18` on `127.0.0.1:5433` (databases `weatherorb`,
-  `weatherorb_dbos`, test DBs; PostGIS 3.6, `shared_buffers=4GB`, loopback `trust`) is owned by the
-  weatherorb repo and deliberately left alone: this instance is `postgres:18` without PostGIS, and
-  the workload is a 7 GB live write path. Decided 2026-10-27 to leave it as is. If it moves, it moves
-  as a weatherorb change, most likely into its own container (e.g. `postgres-weatherorb` on a
-  PostGIS image, same backup/drill/upgrade scripts parameterised by container) rather than by
-  swapping this instance's image. Do not `brew services stop postgresql@18` — weatherorb and
-  the Athena cluster's binaries depend on it.
+- **weatherorb's Postgres is this server now.** The Homebrew `postgresql@18` (weatherorb databases,
+  PostGIS 3.6) is the one Postgres of the mini after the cutover. Do not
+  `brew services stop postgresql@18`: weatherorb and the Athena cluster depend on it.
 
 ## Shared memory
 
 Parallel query workers allocate their segments in the container's `/dev/shm`. Docker's default of 64 MB is too small for a
 dashboard's burst of aggregates: queries fail with `could not resize shared memory segment ... No space left on device`.
-`shm_size: 1g` in `compose.dev.yml` sets it when the container is created, so it needs a recreate (`make dev-pg-upgrade`); a
+`shm_size: 1g` in `compose.dev.yml` sets it when the container is created, so it needs a recreate of the container; a
 plain restart keeps the old size, and a live `mount -o remount` is refused. tmpfs only uses what is allocated. Check it with
 `docker inspect postgres --format '{{.HostConfig.ShmSize}}'`.

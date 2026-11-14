@@ -2,7 +2,9 @@
 # =============================================================================
 # Restore drill for the Mac mini's Postgres backups. Dev-host only, read-only
 # against the live instance (it only ever creates and drops its OWN scratch
-# databases). `make dev-pg-restore-drill`.
+# databases — on whichever server is live, scripts/lib-pg-dev.sh: the `postgres`
+# container while it runs, else the bare Homebrew server; never over a live
+# database). `make dev-pg-restore-drill`.
 #
 # 1. Fetches the newest COMPLETE backup from the HomeLab (or BACKUP=<name>),
 #    verifies SHA256SUMS — so the transfer path is part of the drill.
@@ -30,6 +32,8 @@ DEST_HOST="${DEST%%:*}"
 DEST_PATH="${DEST#*:}"
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib-pg-dev.sh
+source "${HERE}/lib-pg-dev.sh"
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 fail() { echo "DRILL FAIL: $*" >&2; FAILED=1; }
@@ -37,20 +41,18 @@ fail() { echo "DRILL FAIL: $*" >&2; FAILED=1; }
 export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}"
 FAILED=0
 
-[[ "$(docker inspect -f '{{.State.Status}}' postgres 2>/dev/null)" == "running" ]] || {
-  echo "ERROR: local 'postgres' container not running."; exit 1; }
-PGU=$(docker exec postgres printenv POSTGRES_USER)
+pg_select_target || exit 1
 
 # --- housekeeping: leftovers of crashed runs --------------------------------
 find "${TMPDIR:-/tmp}" -maxdepth 1 -type d \( -name 'pg-dev-drill.*' -o -name 'pg-dev-backup.*' \) -mmin +120 \
   -exec rm -rf {} + 2>/dev/null || true
 CUTOFF=$(date -v-2H +%Y%m%d%H%M%S 2>/dev/null || date -d '-2 hours' +%Y%m%d%H%M%S)
-STALE=$(docker exec postgres psql -U "${PGU}" -d postgres -At -c \
+STALE=$(pg_exec psql -d postgres -At -c \
   "SELECT datname FROM pg_database WHERE datname ~ '^restore_drill_[0-9]{14}_[0-9]+\$' ORDER BY 1")
 for old in ${STALE}; do
   stamp=${old#restore_drill_}; stamp=${stamp%%_*}
   if [[ "${stamp}" < "${CUTOFF}" ]]; then
-    docker exec postgres dropdb -U "${PGU}" --force "${old}" && log "dropped stale scratch database ${old}"
+    pg_exec dropdb --force "${old}" && log "dropped stale scratch database ${old}"
   fi
 done
 
@@ -61,21 +63,28 @@ fi
 [[ -n "${NAME}" ]] || { echo "ERROR: no complete backup found in ${DEST_HOST}:${DEST_PATH}"; exit 1; }
 [[ "${NAME}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || { echo "ERROR: BACKUP must look like 20260101T030000Z, got '${NAME}'"; exit 1; }
 
-STAGE=$(mktemp -d "${TMPDIR:-/tmp}/pg-dev-drill.XXXXXX")
+# PG_DEV_DRILL_LOCAL=<dir> (set by the backup's verify step) drills the staged copy the backup
+# just uploaded instead of fetching it again: the upload already ran `sha256sum -c` on the HomeLab,
+# so the transfer is covered, and a second pull of a multi-GB backup would cost ~10 minutes of the
+# nightly's hour. The dir is the caller's: read here, never deleted here.
+LOCAL="${PG_DEV_DRILL_LOCAL:-}"
+if [[ -n "${LOCAL}" ]]; then STAGE="${LOCAL}"; else STAGE=$(mktemp -d "${TMPDIR:-/tmp}/pg-dev-drill.XXXXXX"); fi
 SCRATCH=()
 cleanup() {
   local s
   # shellcheck disable=SC2048,SC2086
   for s in ${SCRATCH[@]+"${SCRATCH[@]}"}; do
-    docker exec postgres dropdb -U "${PGU}" --if-exists --force "${s}" >/dev/null 2>&1 \
+    pg_exec dropdb --if-exists --force "${s}" >/dev/null 2>&1 \
       && log "dropped scratch database ${s}" || echo "WARN: could not drop scratch database ${s}" >&2
   done
-  rm -rf "${STAGE}"
+  [[ -n "${LOCAL}" ]] || rm -rf "${STAGE}"
 }
 trap cleanup EXIT
 
-log "Drill against backup ${NAME}"
-"${SSH[@]}" "${DEST_HOST}" "tar -C '${DEST_PATH}/${NAME}' -cf - ." | tar -C "${STAGE}" -xf -
+log "Drill against backup ${NAME} on the $(pg_target_label)"
+if [[ -z "${LOCAL}" ]]; then
+  "${SSH[@]}" "${DEST_HOST}" "tar -C '${DEST_PATH}/${NAME}' -cf - ." | tar -C "${STAGE}" -xf -
+fi
 ( cd "${STAGE}" && shasum -a 256 -c --quiet SHA256SUMS ) || { echo "DRILL FAIL: checksum mismatch after download"; exit 1; }
 log "checksums verified"
 
@@ -87,11 +96,11 @@ for dump in "${STAGE}"/*.dump; do
   db=$(basename "${dump}" .dump)
   N=$((N + 1))
   scratch="restore_drill_${STAMP}_${N}"
-  docker exec postgres createdb -U "${PGU}" "${scratch}"
+  pg_exec createdb "${scratch}"
   SCRATCH+=("${scratch}")
 
   log "restore ${db} → ${scratch}"
-  if ! docker exec -i postgres pg_restore -U "${PGU}" -d "${scratch}" --no-owner --no-privileges --exit-on-error < "${dump}"; then
+  if ! pg_exec_i pg_restore -d "${scratch}" --no-owner --no-privileges --exit-on-error < "${dump}"; then
     fail "pg_restore of ${db} failed"
     continue
   fi

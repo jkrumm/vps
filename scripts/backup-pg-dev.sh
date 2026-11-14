@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Nightly backup of the Mac mini's Postgres (compose.dev.yml) → the HomeLab.
-# Dev-host only. Scheduled by the com.jkrumm.vps-pg-backup LaunchAgent
+# Nightly backup of the Mac mini's Postgres → the HomeLab. Dev-host only. Works
+# against whichever server is live, decided per run (scripts/lib-pg-dev.sh): the
+# `postgres` container while it runs, else the bare Homebrew server on the unix
+# socket /tmp:5432 as the OS user (local trust). Scheduled by the com.jkrumm.vps-pg-backup LaunchAgent
 # (launchd/, installed by `make dev-pg-launchd`) through `jobrun`, which writes
 # the run record that `jobs-grade` turns into a Slack alert on failure OR on a
 # missed night — that is the visibility, there is no log nobody reads. Manual:
@@ -22,8 +24,9 @@
 #
 # Retention: the newest ${PG_DEV_BACKUP_KEEP:-14} complete backups on the
 # HomeLab; older ones and stale .incomplete dirs are deleted at the end of a
-# successful run. No client credential: the dump runs inside the container over
-# its unix socket and the upload is keyless Tailscale SSH.
+# successful run. No client credential: the dump goes over the server's unix socket
+# (inside the container, or Homebrew's pg_dump on the bare server) and the upload is
+# keyless Tailscale SSH.
 #
 # On a fully green run it pushes an Uptime Kuma heartbeat (URL from the chmod-600 file
 # ~/.config/uptime-kuma/pg-backup-push-url; absent = logged and skipped, never a failure).
@@ -32,6 +35,7 @@
 #   PG_DEV_BACKUP_DEST  <ssh-host>:<absolute path>  (default homelab:/mnt/hdd/backups/vps-mini-postgres)
 #   PG_DEV_BACKUP_KEEP  backups to keep (default 14)
 #   PG_DEV_BACKUP_VERIFY  1 (default) restores the fresh backup into scratch DBs and fails the run on any mismatch
+#   PG_DEV_TARGET       auto (default) | container | bare — see scripts/lib-pg-dev.sh
 # =============================================================================
 set -euo pipefail
 umask 077
@@ -42,6 +46,8 @@ DEST_HOST="${DEST%%:*}"
 DEST_PATH="${DEST#*:}"
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib-pg-dev.sh
+source "${HERE}/lib-pg-dev.sh"
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
@@ -50,22 +56,21 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}"
 
 [[ "${DEST_PATH}" == /* && "${DEST_PATH}" != "/" ]] || { echo "ERROR: PG_DEV_BACKUP_DEST needs an absolute path, got '${DEST}'"; exit 1; }
 [[ "${KEEP}" =~ ^[0-9]+$ && "${KEEP}" -ge 3 ]] || { echo "ERROR: PG_DEV_BACKUP_KEEP must be an integer >= 3"; exit 1; }
-[[ "$(docker inspect -f '{{.State.Status}}' postgres 2>/dev/null)" == "running" ]] || {
-  echo "ERROR: local 'postgres' container not running."; exit 1; }
+pg_select_target || exit 1
 
-PGU=$(docker exec postgres printenv POSTGRES_USER)
 NAME=$(date -u +%Y%m%dT%H%M%SZ)
 STAGE=$(mktemp -d "${TMPDIR:-/tmp}/pg-dev-backup.XXXXXX")
 trap 'rm -rf "${STAGE}"' EXIT
 
-log "Backup ${NAME} → ${DEST_HOST}:${DEST_PATH}/"
+log "Backup ${NAME} of the $(pg_target_label) → ${DEST_HOST}:${DEST_PATH}/"
 
 log "roles (globals)"
-docker exec postgres pg_dumpall -U "${PGU}" --globals-only > "${STAGE}/globals.sql"
+pg_exec pg_dumpall --globals-only > "${STAGE}/globals.sql"
 grep -q 'CREATE ROLE' "${STAGE}/globals.sql" || { echo "ERROR: globals.sql has no roles — refusing to ship an empty dump"; exit 1; }
 
-DBS=$(docker exec postgres psql -U "${PGU}" -d postgres -At \
-  -c "SELECT datname FROM pg_database WHERE NOT datistemplate ORDER BY 1")
+# restore_drill_* are the scratch databases of a drill running right now; never dump them.
+DBS=$(pg_exec psql -d postgres -At \
+  -c "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname !~ '^restore_drill_[0-9]{14}_[0-9]+\$' ORDER BY 1")
 [[ -n "${DBS}" ]] || { echo "ERROR: no databases to back up"; exit 1; }
 
 # Dump one database and its exact counts from ONE snapshot. A background psql holds a
@@ -76,21 +81,22 @@ DBS=$(docker exec postgres psql -U "${PGU}" -d postgres -At \
 # + max_prepared_transactions)). Turn that bare psql error into one that names the setting.
 lock_exhaustion_hint() {
   local db="$1" rels settings
-  rels=$(docker exec postgres psql -U "${PGU}" -d "${db}" -At \
+  rels=$(pg_exec psql -d "${db}" -At \
     -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind IN ('r','i','p') AND n.nspname NOT IN ('pg_catalog','information_schema','pg_toast')" 2>/dev/null) || rels="?"
-  settings=$(docker exec postgres psql -U "${PGU}" -d postgres -At -F'=' \
+  settings=$(pg_exec psql -d postgres -At -F'=' \
     -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_locks_per_transaction','max_connections','max_prepared_transactions') ORDER BY name" 2>/dev/null | paste -sd' ' -) || settings="?"
+  local where="the postgres service in compose.dev.yml (sizing: docs/mini-postgres.md#lock-table-sizing), then restart the postgres container"
+  [[ "${PG_TARGET}" == "bare" ]] && where="the bare server's settings in dotfiles config/postgres/cluster.yaml, then 'make -C ~/SourceRoot/dotfiles pg-apply' (sizing: docs/mini-postgres.md#lock-table-sizing)"
   echo "ERROR: ${db} has ${rels} tables+indexes, more than the Postgres lock table holds (${settings};" \
     "slots = max_locks_per_transaction × (max_connections + max_prepared_transactions)). The snapshot holder and" \
-    "pg_dump each lock every relation at once. Raise max_locks_per_transaction on the postgres service in compose.dev.yml" \
-    "(sizing: docs/mini-postgres.md#lock-table-sizing), then restart the postgres container."
+    "pg_dump each lock every relation at once. Raise max_locks_per_transaction in ${where}."
 }
 
 dump_with_counts() {
   local db="$1" fifo="${STAGE}/hold.fifo" out="${STAGE}/holder.out" err="${STAGE}/holder.err" holder snap=""
   : > "${out}"; : > "${err}"
   mkfifo "${fifo}"
-  docker exec -i postgres psql -U "${PGU}" -d "${db}" -qAt -F'|' -v ON_ERROR_STOP=1 < "${fifo}" > "${out}" 2> "${err}" &
+  pg_exec_i psql -d "${db}" -qAt -F'|' -v ON_ERROR_STOP=1 < "${fifo}" > "${out}" 2> "${err}" &
   holder=$!
   exec 3> "${fifo}"
   {
@@ -112,7 +118,7 @@ dump_with_counts() {
   snap=$(sed -n 's/^SNAP|//p' "${out}")
   [[ -n "${snap}" ]] || { exec 3>&-; echo "ERROR: no snapshot id exported for ${db}"; return 1; }
 
-  docker exec postgres pg_dump -U "${PGU}" -d "${db}" --snapshot="${snap}" --format=custom --compress=6 > "${STAGE}/${db}.dump" || {
+  pg_exec pg_dump -d "${db}" --snapshot="${snap}" --format=custom --compress=6 > "${STAGE}/${db}.dump" || {
     exec 3>&-; wait "${holder}" 2>/dev/null || true; return 1; }
 
   # end the holder's transaction (EOF on stdin) and collect its output
@@ -137,15 +143,16 @@ COPYFILE_DISABLE=1 tar --no-xattrs -C "${STAGE}" -cf - . | "${SSH[@]}" "${DEST_H
 "${SSH[@]}" "${DEST_HOST}" "cd '${DEST_PATH}/${NAME}.incomplete' && sha256sum -c --quiet SHA256SUMS && mv '${DEST_PATH}/${NAME}.incomplete' '${DEST_PATH}/${NAME}'"
 log "uploaded and verified: $(du -sh "${STAGE}" | cut -f1) in $(echo "${DBS}" | wc -w | tr -d ' ') database(s)"
 
-# Verify the backup we just wrote by restoring it (the drill refetches it from the
-# HomeLab, so the transfer is covered too). Not optional by default: pg_dump's
+# Verify the backup we just wrote by restoring it (from the staged copy: the upload
+# already passed `sha256sum -c` on the HomeLab, so the transfer is covered; the
+# standalone `make dev-pg-restore-drill` fetches from the HomeLab). Not optional by default: pg_dump's
 # pg_get_*def calls do not honour the dump snapshot, so DDL running during a dump
 # (a migration) can leave a syntactically broken definition in an archive whose
 # checksum is perfectly fine. A failure here fails the run — and keeps retention
 # from pruning on the strength of a bad backup.
 if [[ "${PG_DEV_BACKUP_VERIFY:-1}" == "1" ]]; then
   log "verify: restore drill on ${NAME}"
-  BACKUP="${NAME}" "${HERE}/restore-drill-pg-dev.sh"
+  BACKUP="${NAME}" PG_DEV_DRILL_LOCAL="${STAGE}" "${HERE}/restore-drill-pg-dev.sh"
 fi
 
 # Retention — names are matched against the strict timestamp pattern, so
