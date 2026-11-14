@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Lint the compose files against the AGENTS.md invariants (Security Invariants, RollHook constraints).
 
-Parses with `docker compose config --no-interpolate --format json`, so no secrets or env are needed
-and ${VAR} references stay visible as written. Exit 1 with file:service messages on any violation.
+Parses the YAML directly (PyYAML, no Docker), so no secrets or env are needed and ${VAR} references
+stay visible as written. Exit 1 with file:service messages on any violation.
 """
 import glob
-import json
 import re
-import subprocess
 import sys
+
+import yaml
 
 # AGENTS.md → Security Invariants: only these (file, service) pairs may publish ports.
 # The Tailscale/loopback bind is still enforced unless the pair is in PUBLIC_PORTS.
@@ -79,13 +79,11 @@ def lint_compose(path, config):
 
 
 def load_compose(path):
-    out = subprocess.run(
-        ["docker", "compose", "-f", path, "config", "--no-interpolate", "--format", "json"],
-        capture_output=True, text=True,
-    )
-    if out.returncode != 0:
-        raise RuntimeError(f"{path}: docker compose config failed: {out.stderr.strip()}")
-    return json.loads(out.stdout)
+    with open(path) as f:
+        config = yaml.safe_load(f)
+    if not isinstance(config, dict):
+        raise RuntimeError(f"{path}: not a compose mapping")
+    return config
 
 
 def main():
@@ -94,6 +92,7 @@ def main():
     errors = []
     for path in files:
         errors += lint_compose(path, load_compose(path))
+    load_compose("compose.dev.yml")  # dev stack: syntax only, it mirrors prod and is not held to the prod invariants
     for line in errors:
         print(f"✗ {line}", file=sys.stderr)
     if errors:
