@@ -3,15 +3,13 @@
 # Readiness probe for the Mac mini's Postgres. Dev-host only. One line on stdout,
 # exit 0 healthy / 1 not. `make dev-pg-health`.
 #
-# Works against whichever server is live (scripts/lib-pg-dev.sh): the `postgres`
-# container while it runs, else the bare Homebrew server (unix socket /tmp:5432,
-# OS user). Built to be called by the mini's devhost heartbeat (a `probe_postgres`
+# Probes the Homebrew server (scripts/lib-pg-dev.sh: unix socket /tmp:5432, OS
+# user). Built to be called by the mini's devhost heartbeat (a `probe_postgres`
 # service entry — see docs/mini-postgres.md); it holds no Kuma URL itself, so a
 # probe failure and a missing heartbeat can never be confused. bash 3.2 compatible
 # (that heartbeat runs under Apple's /bin/bash).
 #
-# Checks: container running + healthy (container target only), SELECT 1 over the
-# unix socket, 127.0.0.1:5432 accepting connections (the path every host app
+# Checks: SELECT 1 over the unix socket, 127.0.0.1:5432 accepting connections (the path every host app
 # uses), and each database in PG_DEV_REQUIRE_DBS (default: agent_workflows)
 # present with its owning role.
 # =============================================================================
@@ -27,13 +25,8 @@ bad() { echo "postgres: $*"; exit 1; }
 
 errf=$(mktemp "${TMPDIR:-/tmp}/pg-dev-health.XXXXXX")
 trap 'rm -f "${errf}"' EXIT
-# not in $(...): it must set PG_TARGET and PGU in this shell
+# not in $(...): it must set PGU in this shell
 pg_select_target > "${errf}" 2>&1 || bad "$(sed 's/^ERROR: //' "${errf}")"
-if [[ "${PG_TARGET}" == "container" ]]; then
-  state=$(docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' postgres 2>/dev/null) \
-    || bad "container 'postgres' not found"
-  [[ "${state}" == "running healthy" ]] || bad "container is '${state}'"
-fi
 
 pg_exec psql -d postgres -Atc 'SELECT 1' >/dev/null 2>&1 || bad "SELECT 1 failed over the socket"
 nc -z -w 3 127.0.0.1 5432 >/dev/null 2>&1 || bad "127.0.0.1:5432 not accepting connections"

@@ -25,14 +25,14 @@ Prod targets get the full `.env.tpl`; `require-dev` targets get
 |-|-|-|
 | `$(OP_RUN)` | `.env.tpl` (~40 refs) | `require-prod` targets |
 | `$(OP_RUN_DEV)` | `.env.dev.tpl` (~12 refs) | `require-dev` targets |
-| `$(OP_RUN_ENV)` | follows `$(ENV)` | targets that work in both envs — `postgres-setup`, `shell-postgres`, `fpp-shell` |
+| `$(OP_RUN_ENV)` | follows `$(ENV)` | targets that work in both envs — `fpp-shell` |
 
 ## Why the dev stack needs its own template
 
 The dev stack belongs on the mini — it is the always-on dev host and every app
-repo lives there, so the local Postgres/MariaDB/Valkey/ClickStack those apps
-develop against has to run there too. Until 2026-08-02 it could not: `make up`
-in dev resolved the *entire* prod `.env.tpl` to start four throwaway
+repo lives there, so the local MariaDB/Valkey/ClickStack (and the Homebrew
+Postgres) those apps develop against has to run there too. Until 2026-08-02 it could not: `make up`
+in dev resolved the *entire* prod `.env.tpl` to start a handful of throwaway
 containers, so making it work headlessly would have meant caching the
 Cloudflare tunnel token, the bucket-wide B2 credential, the RollHook admin
 token and every FPP/Sentry secret on the mini. The split is what makes it
@@ -41,10 +41,11 @@ possible to cache only what the dev stack actually needs.
 Three least-privilege choices inside `.env.dev.tpl`, each explained at its
 line there — read that header before adding to it:
 
-- **Dev-only superuser passwords** (`op://mini/vps-dev/*`). Prod's postgres
-  superuser and mariadb root passwords stay off the mini. Only the role
-  *name* has to match prod (`restore-pg-local.sh` restores a dump carrying
-  `OWNER TO <role>`); the password does not.
+- **Dev-only MariaDB root password** (`op://mini/vps-dev/*`). Prod's postgres
+  superuser and mariadb root passwords stay off the mini. The mini's Postgres
+  has no superuser password at all: the OS user is trusted over its 0700 unix
+  socket, and every other role's password is declared in dotfiles
+  `config/postgres/cluster.yaml`.
 - **No S3 credential, because none is needed.** `pg-sync-schema SCHEMA=x`
   (one schema; the whole-DB `sync-from-prod` was retired when the mini's
   Postgres became a maintained instance) runs `pg_dump` *inside* the prod
@@ -58,7 +59,7 @@ line there — read that header before adding to it:
   a data path — they are the DR drill that proves the backup chain replays,
   which belongs on a clean machine. Don't cache an S3 credential to make them
   run on the mini; `pg-sync-schema` already covers the case that motivates it.
-- **`AGENT_WORKFLOWS_DB_PASSWORD`** (`op://mini/vps-dev/*`) is a fourth,
-  dev-only credential: the login of the role that owns the `agent_workflows`
-  database. Like the superuser passwords it has no prod counterpart. Activation
-  order (field → headless.refs → seed → this file): `docs/mini-postgres.md`.
+- Mini-only Postgres roles (`agent_workflows`, `shared` writers, `argo_agw_ro`)
+  and their `op://mini/vps-dev/*` passwords are declared in dotfiles
+  `config/postgres/cluster.yaml`, not in this template. Activation order
+  (field → headless.refs → seed → the declaration): `docs/mini-postgres.md`.

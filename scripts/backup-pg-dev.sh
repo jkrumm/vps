@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Nightly backup of the Mac mini's Postgres → the HomeLab. Dev-host only. Works
-# against whichever server is live, decided per run (scripts/lib-pg-dev.sh): the
-# `postgres` container while it runs, else the bare Homebrew server on the unix
-# socket /tmp:5432 as the OS user (local trust). Scheduled by the com.jkrumm.vps-pg-backup LaunchAgent
+# Nightly backup of the Mac mini's Postgres → the HomeLab. Dev-host only. Dumps the
+# Homebrew server over the unix socket /tmp:5432 as the OS user, local trust
+# (scripts/lib-pg-dev.sh). Scheduled by the com.jkrumm.vps-pg-backup LaunchAgent
 # (launchd/, installed by `make dev-pg-launchd`) through `jobrun`, which writes
 # the run record that `jobs-grade` turns into a Slack alert on failure OR on a
 # missed night — that is the visibility, there is no log nobody reads. Manual:
@@ -25,8 +24,7 @@
 # Retention: the newest ${PG_DEV_BACKUP_KEEP:-14} complete backups on the
 # HomeLab; older ones and stale .incomplete dirs are deleted at the end of a
 # successful run. No client credential: the dump goes over the server's unix socket
-# (inside the container, or Homebrew's pg_dump on the bare server) and the upload is
-# keyless Tailscale SSH.
+# (Homebrew's pg_dump) and the upload is keyless Tailscale SSH.
 #
 # On a fully green run it pushes an Uptime Kuma heartbeat (URL from the chmod-600 file
 # ~/.config/uptime-kuma/pg-backup-push-url; absent = logged and skipped, never a failure).
@@ -35,7 +33,6 @@
 #   PG_DEV_BACKUP_DEST  <ssh-host>:<absolute path>  (default homelab:/mnt/hdd/backups/vps-mini-postgres)
 #   PG_DEV_BACKUP_KEEP  backups to keep (default 14)
 #   PG_DEV_BACKUP_VERIFY  1 (default) restores the fresh backup into scratch DBs and fails the run on any mismatch
-#   PG_DEV_TARGET       auto (default) | container | bare — see scripts/lib-pg-dev.sh
 # =============================================================================
 set -euo pipefail
 umask 077
@@ -85,8 +82,7 @@ lock_exhaustion_hint() {
     -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind IN ('r','i','p') AND n.nspname NOT IN ('pg_catalog','information_schema','pg_toast')" 2>/dev/null) || rels="?"
   settings=$(pg_exec psql -d postgres -At -F'=' \
     -c "SELECT name, setting FROM pg_settings WHERE name IN ('max_locks_per_transaction','max_connections','max_prepared_transactions') ORDER BY name" 2>/dev/null | paste -sd' ' -) || settings="?"
-  local where="the postgres service in compose.dev.yml (sizing: docs/mini-postgres.md#lock-table-sizing), then restart the postgres container"
-  [[ "${PG_TARGET}" == "bare" ]] && where="the bare server's settings in dotfiles config/postgres/cluster.yaml, then 'make -C ~/SourceRoot/dotfiles pg-apply' (sizing: docs/mini-postgres.md#lock-table-sizing)"
+  local where="the server's settings in dotfiles config/postgres/cluster.yaml, then 'make -C ~/SourceRoot/dotfiles pg-apply' (sizing: docs/mini-postgres.md#lock-table-sizing)"
   echo "ERROR: ${db} has ${rels} tables+indexes, more than the Postgres lock table holds (${settings};" \
     "slots = max_locks_per_transaction × (max_connections + max_prepared_transactions)). The snapshot holder and" \
     "pg_dump each lock every relation at once. Raise max_locks_per_transaction in ${where}."

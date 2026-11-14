@@ -1,61 +1,27 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Converge the LOCAL dev superuser passwords onto .env.dev.tpl. Dev-only.
+# Converge the LOCAL dev MariaDB root password onto .env.dev.tpl. Dev-only.
 #
 # Why this is needed at all
 # -------------------------
-# Both images apply their password variable ONLY when initializing an empty data
-# directory. `POSTGRES_PASSWORD` / `MARIADB_ROOT_PASSWORD` are read by the
-# entrypoint on first init and ignored on every subsequent start. So a volume
-# created before the dev-only credentials existed keeps whatever password
-# initialized it — silently. Nothing warns, the containers come up healthy, the
-# healthchecks pass (they use the unix socket), and `make postgres-setup`
-# succeeds (also the socket). Only a TCP connection using the template's value
-# fails, which is every app.
+# The image applies MARIADB_ROOT_PASSWORD ONLY when initializing an empty data
+# directory; it is ignored on every subsequent start. So a volume created before the
+# dev-only credentials existed keeps whatever password initialized it — silently.
+# Nothing warns, the container comes up healthy, the healthcheck passes (it uses
+# the unix socket). Only a TCP connection using the template's value fails.
 #
-# Measured on the mini 2026-08-02: vps_postgres-dev-data and vps_mariadb-dev-data
-# were both created 2026-05-24, so both still held the values from the old
-# whole-.env.tpl era. Verified by recomputing the SCRAM verifier rather than
-# guessed.
-#
-# This is idempotent and safe to re-run: on a freshly-initialized volume it is a
-# no-op, because the password already matches.
+# Postgres is not part of this any more: the mini's Postgres is the Homebrew server, whose
+# superuser is the OS user over a 0700 socket (no password), and every app role's password
+# is declared in dotfiles config/postgres/cluster.yaml (`make -C ~/SourceRoot/dotfiles pg-apply`).
 #
 # Usage:  make dev-db-passwords
 #
 # Required env (resolved by secrets-run run --env-file=.env.dev.tpl):
-#   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, MARIADB_ROOT_PASSWORD
+#   MARIADB_ROOT_PASSWORD
 # =============================================================================
 set -euo pipefail
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
-
-docker inspect -f '{{.State.Status}}' postgres >/dev/null 2>&1 || {
-  echo "ERROR: local 'postgres' container not running. Run 'make up' first."; exit 1;
-}
-
-# --- Postgres ----------------------------------------------------------------
-# Reachable without the CURRENT password: the image's pg_hba.conf has
-# `local all all trust`, so a `docker exec` over the unix socket authenticates
-# unconditionally. That is what makes this convergeable in place, with no data
-# loss and without needing prod's credential anywhere.
-#
-# `-v pw=` + `:'pw'` has psql do the quoting, so a password containing a quote
-# or backslash cannot break out of the statement — and the password never appears
-# in argv, where `ps auxww` would show it.
-#
-# The statement goes in on STDIN, not `-c`: psql does not interpolate variables
-# into a `-c` string, it ships it to the server verbatim, and the server then
-# fails on the literal `:'pw'` with a syntax error. Interpolation only happens on
-# the script path.
-log "Converging the Postgres superuser password..."
-printf "%s\n" "ALTER ROLE CURRENT_USER WITH PASSWORD :'pw';" \
-  | docker exec -i \
-      -e PGOPTIONS=--client-min-messages=warning \
-      postgres psql -v ON_ERROR_STOP=1 -q \
-      -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
-      -v pw="${POSTGRES_PASSWORD}" >/dev/null
-log "  ✓ postgres superuser now matches .env.dev.tpl"
 
 # --- MariaDB -----------------------------------------------------------------
 # Deliberately NOT converged here, because it cannot be. MariaDB's root has no

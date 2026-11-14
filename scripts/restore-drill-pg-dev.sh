@@ -2,8 +2,7 @@
 # =============================================================================
 # Restore drill for the Mac mini's Postgres backups. Dev-host only, read-only
 # against the live instance (it only ever creates and drops its OWN scratch
-# databases — on whichever server is live, scripts/lib-pg-dev.sh: the `postgres`
-# container while it runs, else the bare Homebrew server; never over a live
+# databases — on the Homebrew server, scripts/lib-pg-dev.sh; never over a live
 # database). `make dev-pg-restore-drill`.
 #
 # 1. Fetches the newest COMPLETE backup from the HomeLab (or BACKUP=<name>),
