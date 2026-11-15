@@ -117,7 +117,7 @@ services:
     # for the name only, so the URL keeps the name (TLS server name) and this pins
     # it to the tailnet IP.
     extra_hosts:
-      - "${MINI_TAILNET_NAME:-}:${MINI_TAILSCALE_IP:-}"
+      - "${MINI_TAILNET_NAME:-mini.invalid}:${MINI_TAILSCALE_IP:-192.0.2.1}"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3003/health"]
       interval: 5s
