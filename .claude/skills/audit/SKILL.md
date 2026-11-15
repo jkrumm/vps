@@ -52,7 +52,7 @@ ssh vps "docker system df"
 - Infra: `postgres`, `redis`
 - FPP (`apps/fpp/compose.yml`): `mariadb`, `fpp-server`, `fpp-analytics`, `fpp-analytics-updater`
 - Monitoring: `clickstack`, `beszel-agent`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`, `umami`
-- Apps (RollHook-managed, auto-suffixed dynamic names — match by label, not name): `basalt-ui-marketing`, `email-gateway`, `imgproxy`, `weatherorb-edge`, `photo-gallery`, `rollhook-marketing`
+- Apps (RollHook-managed, auto-suffixed dynamic names — match by label, not name): `basalt-ui-marketing`, `jkrumm-com`, `email-gateway`, `imgproxy`, `shutterflow-share`, `shutterflow-imgproxy`, `weatherorb-edge`, `weatherorb-account`, `weatherorb-egress`, `photo-gallery`, `rollhook-marketing`
 
 ```bash
 ssh vps "docker ps --format '{{.Label \"com.docker.compose.service\"}}' | sort"
@@ -117,7 +117,7 @@ ssh vps "journalctl -p warning -n 100 --no-pager 2>/dev/null | grep -iE 'sudo|pa
 
 ### Phase 6: Backup Status
 
-Two daily backups, separate S3 prefixes:
+Three daily backups, separate S3 prefixes:
 
 ```bash
 ssh vps "cd ~/vps && op run --env-file=.env.tpl -- bash -c '
@@ -125,6 +125,8 @@ ssh vps "cd ~/vps && op run --env-file=.env.tpl -- bash -c '
   aws s3 ls \$AWS_S3_BUCKET/backups/vps/postgres/ --endpoint-url \$AWS_S3_ENDPOINT | sort | tail -2
   echo \"--- mariadb (cron 03:30):\"
   aws s3 ls \$AWS_S3_BUCKET/backups/vps/mariadb/ --endpoint-url \$AWS_S3_ENDPOINT | sort | tail -2
+  echo \"--- email-gateway (cron 03:45):\"
+  aws s3 ls \$AWS_S3_BUCKET/backups/vps/email-gateway/ --endpoint-url \$AWS_S3_ENDPOINT | sort | tail -2
 '"
 ```
 
@@ -135,7 +137,7 @@ ssh vps "cd ~/vps && op run --env-file=.env.tpl -- bash -c '
 If a backup looks stale, also check cron logs:
 
 ```bash
-ssh vps "grep -E 'pg-backup|fpp-mariadb-backup|fpp-cert-sync' /var/log/syslog 2>/dev/null | tail -10 || journalctl -u cron -n 20 --no-pager"
+ssh vps "grep -E 'pg-backup|fpp-mariadb-backup|email-gateway-backup|fpp-cert-sync' /var/log/syslog 2>/dev/null | tail -10 || journalctl -u cron -n 20 --no-pager"
 ```
 
 ### Phase 7: Pending Updates
