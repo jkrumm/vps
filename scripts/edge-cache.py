@@ -74,7 +74,8 @@ def cf(method, path, body=None):
     except urllib.error.HTTPError as e:
         text = e.read().decode(errors="replace")
         if e.code == 404:
-            raise Cf404(path)
+            # The path embeds zone/account/tunnel IDs — keep it out of the message.
+            raise Cf404(f"{method} request: Cloudflare resource not found")
         try:
             payload = json.loads(text)
         except json.JSONDecodeError:
