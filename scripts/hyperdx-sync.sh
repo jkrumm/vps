@@ -49,6 +49,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DASH_DIR="${REPO_ROOT}/observability/dashboards"
 ALERT_DIR="${REPO_ROOT}/observability/alerts"
+# `export` skips dashboards and alerts carrying one of these tags: another repo owns and applies
+# them (weatherorb: ops/clickstack/alerts.json; agw: agent-workflows packages/hyperdx, `make hyperdx-apply`).
+OWNED_ELSEWHERE_TAGS="weatherorb agw"
 
 usage() {
   echo "Usage: $0 export <dev|prod>" >&2
@@ -102,7 +105,7 @@ cmd_export() {
   source_resp=$(curl -fsS "${BASE}/api/api/v2/sources" -H "Authorization: Bearer ${KEY}")
   connection_resp=$(curl -fsS "${BASE}/api/api/v2/connections" -H "Authorization: Bearer ${KEY}")
 
-  HDX_RESP="$dash_resp" HDX_SOURCE="$source_resp" HDX_CONNECTION="$connection_resp" HDX_DIR="$DASH_DIR" python3 <<'PY'
+  HDX_OWNED_TAGS="$OWNED_ELSEWHERE_TAGS" HDX_RESP="$dash_resp" HDX_SOURCE="$source_resp" HDX_CONNECTION="$connection_resp" HDX_DIR="$DASH_DIR" python3 <<'PY'
 import json
 import os
 import re
@@ -118,6 +121,9 @@ STRIP_KEYS = {"id", "_id", "createdAt", "updatedAt", "team"}
 def slugify(name):
     s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return s or "dashboard"
+
+
+OWNED_ELSEWHERE_TAGS = set(os.environ["HDX_OWNED_TAGS"].split())
 
 
 def strip(dash):
@@ -182,6 +188,8 @@ out_dir = os.environ["HDX_DIR"]
 dashboards = resp.get("data", [])
 count = 0
 for dash in dashboards:
+    if OWNED_ELSEWHERE_TAGS & set(dash.get("tags") or []):
+        continue  # owned and applied by another repo (see OWNED_ELSEWHERE_TAGS)
     cleaned = strip(dash)
     cleaned = resolve_source_refs(cleaned, source_name_by_id, cleaned.get("name", "dashboard"))
     cleaned = resolve_connection_refs(cleaned, connection_name_by_id, cleaned.get("name", "dashboard"))
@@ -199,7 +207,7 @@ PY
   webhook_resp=$(curl -fsS "${BASE}/api/api/v2/webhooks" -H "Authorization: Bearer ${KEY}")
   alert_resp=$(curl -fsS "${BASE}/api/api/v2/alerts" -H "Authorization: Bearer ${KEY}")
 
-  HDX_DASH="$dash_resp" HDX_SEARCH="$search_resp" HDX_WEBHOOK="$webhook_resp" \
+  HDX_OWNED_TAGS="$OWNED_ELSEWHERE_TAGS" HDX_DASH="$dash_resp" HDX_SEARCH="$search_resp" HDX_WEBHOOK="$webhook_resp" \
     HDX_ALERT="$alert_resp" HDX_DIR="$ALERT_DIR" python3 <<'PY'
 import json
 import os
@@ -209,6 +217,7 @@ import sys
 # `channels` is the server-side mirror of `channel` (HyperDX >= 2.36) and carries a raw
 # webhook id; the request schema only takes `channel`, so it never round-trips.
 ALERT_STRIP_KEYS = {"id", "state", "teamId", "silenced", "executionErrors", "createdAt", "updatedAt"}
+OWNED_ELSEWHERE_TAGS = set(os.environ["HDX_OWNED_TAGS"].split())
 
 
 def slugify(name):
@@ -228,8 +237,8 @@ webhook_name_by_id = {w["id"]: w.get("name") for w in webhooks}
 
 count = 0
 for alert in alerts:
-    if "weatherorb" in (alert.get("tags") or []):
-        continue  # owned and applied by the weatherorb repo (ops/clickstack/alerts.json)
+    if OWNED_ELSEWHERE_TAGS & set(alert.get("tags") or []):
+        continue  # owned and applied by another repo (see OWNED_ELSEWHERE_TAGS)
     a = {k: v for k, v in alert.items() if k not in ALERT_STRIP_KEYS}
 
     dashboard_id = a.pop("dashboardId", None)

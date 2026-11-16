@@ -398,7 +398,9 @@ Every alert in this directory lists exactly one `channel` in `channels` (HyperDX
 sit next to it until warden was switched off (2026-10-27); it was deleted from HyperDX and
 the alert files. weatherorb's four alerts are not in this directory: that repo
 applies them with its own `WeatherOrb ops.alert` webhook, and `export` skips
-the `weatherorb` tag. `apply` always sends `channels` (+ the `channel` mirror):
+the `weatherorb` tag. The `agw` dashboard and its alerts belong to agent-workflows
+(`packages/hyperdx`, `make hyperdx-apply`); `export` skips the `agw` tag on dashboards
+and alerts. `apply` always sends `channels` (+ the `channel` mirror):
 a body with only `channel` would silently reduce an alert to one webhook.
 
 ### Per-app error alerts → factory Issues
