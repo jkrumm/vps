@@ -102,6 +102,14 @@ services:
       HOSTED_STORAGE_USER_IDS: ${SHUTTERFLOW_HOSTED_STORAGE_USER_IDS:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: shutterflow-share
+      # Desktop update feed (shutterflow 1653): latest.json + release files served from /releases.
+      # Unset = the routes answer 404 and the app boots as before.
+      RELEASES_DIR: /releases
+    volumes:
+      # App data owned by the mini's publish script (uploads as jkrumm over `ssh vps`, keeps the
+      # last five releases) — never prune by hand. `make shutterflow-up` creates it as jkrumm 755
+      # first: Docker would create a missing bind source root-owned.
+      - /home/jkrumm/shutterflow-releases:/releases:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:4100/health"]
       interval: 5s

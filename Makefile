@@ -268,6 +268,7 @@ email-gateway-env: require-prod
 ## jkrumm/shutterflow:master. shutterflow-up pins the running share image (never rolls back to a
 ## stale :latest); genesis start uses the bootstrap-seeded :latest.
 shutterflow-up: require-prod
+	@mkdir -p /home/jkrumm/shutterflow-releases && chmod 755 /home/jkrumm/shutterflow-releases
 	@$(PIN_SH); PINS=$$(pin_all shutterflow-share:SHUTTERFLOW_SHARE_IMAGE) || exit 1; \
 	$(OP_RUN) env $$PINS docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env up -d
 shutterflow-down: require-prod ; $(OP_RUN) docker compose -f apps/shutterflow/compose.yml --env-file apps/shutterflow/.env down
