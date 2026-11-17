@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Infra \u2014 Hosts",
+  "displayName": "Infra \u2014 Hosts - Unhealthy containers",
+  "interval": "5m",
+  "message": null,
+  "name": "Infra container unhealthy >= 1 (10m)",
+  "note": null,
+  "numConsecutiveWindows": 2,
+  "source": "tile",
+  "tags": [
+    "agent"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "Unhealthy containers"
+}

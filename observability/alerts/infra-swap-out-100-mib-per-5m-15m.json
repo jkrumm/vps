@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Infra \u2014 Hosts",
+  "displayName": "Infra \u2014 Hosts - Swap page-out (bytes per interval)",
+  "interval": "5m",
+  "message": null,
+  "name": "Infra swap-out >= 100 MiB per 5m (15m)",
+  "note": null,
+  "numConsecutiveWindows": 3,
+  "source": "tile",
+  "tags": [
+    "agent"
+  ],
+  "threshold": 104857600,
+  "thresholdType": "above",
+  "tile": "Swap page-out (bytes per interval)"
+}

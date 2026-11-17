@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Infra \u2014 Hosts",
+  "displayName": "Infra \u2014 Hosts - Load5 per core",
+  "interval": "5m",
+  "message": null,
+  "name": "Infra load5 per core >= 1.5 (15m)",
+  "note": null,
+  "numConsecutiveWindows": 3,
+  "source": "tile",
+  "tags": [
+    "agent"
+  ],
+  "threshold": 1.5,
+  "thresholdType": "above",
+  "tile": "Load5 per core"
+}

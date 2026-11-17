@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Infra \u2014 Hosts",
+  "displayName": "Infra \u2014 Hosts - Memory utilisation (%)",
+  "interval": "5m",
+  "message": null,
+  "name": "Infra memory >= 90% (15m)",
+  "note": null,
+  "numConsecutiveWindows": 3,
+  "source": "tile",
+  "tags": [
+    "agent"
+  ],
+  "threshold": 0.9,
+  "thresholdType": "above",
+  "tile": "Memory utilisation (%)"
+}

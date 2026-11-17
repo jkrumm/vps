@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Infra \u2014 Hosts",
+  "displayName": "Infra \u2014 Hosts - Container restarts (per interval)",
+  "interval": "15m",
+  "message": null,
+  "name": "Infra container restarts >= 1 (15m)",
+  "note": null,
+  "numConsecutiveWindows": 1,
+  "source": "tile",
+  "tags": [
+    "agent"
+  ],
+  "threshold": 1,
+  "thresholdType": "above",
+  "tile": "Container restarts (per interval)"
+}

@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Infra \u2014 Hosts",
+  "displayName": "Infra \u2014 Hosts - Filesystem utilisation per mount (%)",
+  "interval": "5m",
+  "message": null,
+  "name": "Infra filesystem >= 85% (15m)",
+  "note": null,
+  "numConsecutiveWindows": 3,
+  "source": "tile",
+  "tags": [
+    "agent"
+  ],
+  "threshold": 0.85,
+  "thresholdType": "above",
+  "tile": "Filesystem utilisation per mount (%)"
+}

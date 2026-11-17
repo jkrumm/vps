@@ -1,0 +1,530 @@
+{
+  "containers": [
+    {
+      "collapsed": false,
+      "id": "host",
+      "title": "Host"
+    },
+    {
+      "collapsed": false,
+      "id": "containers",
+      "title": "Containers"
+    },
+    {
+      "collapsed": false,
+      "id": "outside",
+      "title": "Outside view (HTTP and ICMP from the host)"
+    }
+  ],
+  "filters": [
+    {
+      "expression": "ResourceAttributes['host.name']",
+      "id": "6afca3f986da9b7a9c088adb",
+      "name": "Host",
+      "source": "Metrics",
+      "sourceMetricType": "gauge",
+      "type": "QUERY_EXPRESSION"
+    }
+  ],
+  "name": "Infra \u2014 Hosts",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "agent"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "formulas": [
+          {
+            "alias": "CPU busy",
+            "expression": "1 - A",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "percent"
+            }
+          }
+        ],
+        "groupBy": "ResourceAttributes['host.name']",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Idle",
+            "metricName": "system.cpu.utilization",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "Attributes['state'] = 'idle'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "showOperandSeries": false,
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088acb",
+      "name": "CPU utilisation (%)",
+      "w": 8,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "ResourceAttributes['host.name']",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Memory used",
+            "metricName": "system.memory.utilization",
+            "metricType": "gauge",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "percent"
+            },
+            "valueExpression": "",
+            "where": "Attributes['state'] = 'used'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088acc",
+      "name": "Memory utilisation (%)",
+      "w": 8,
+      "x": 8,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "formulas": [
+          {
+            "alias": "Load5 per core",
+            "expression": "A / B",
+            "numberFormat": {
+              "mantissa": 2,
+              "output": "number"
+            }
+          }
+        ],
+        "groupBy": "ResourceAttributes['host.name']",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Load5",
+            "metricName": "system.cpu.load_average.5m",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          },
+          {
+            "aggFn": "avg",
+            "alias": "Cores",
+            "metricName": "system.cpu.logical.count",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "showOperandSeries": false,
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088acd",
+      "name": "Load5 per core",
+      "w": 8,
+      "x": 16,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "concat(ResourceAttributes['host.name'], ' ', Attributes['mountpoint'])",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Used",
+            "metricName": "system.filesystem.utilization",
+            "metricType": "gauge",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "percent"
+            },
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088ace",
+      "name": "Filesystem utilisation per mount (%)",
+      "w": 8,
+      "x": 0,
+      "y": 6
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "ResourceAttributes['host.name']",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Swap used",
+            "metricName": "system.paging.utilization",
+            "metricType": "gauge",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "percent"
+            },
+            "valueExpression": "",
+            "where": "Attributes['state'] = 'used'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088acf",
+      "name": "Swap used (%)",
+      "w": 8,
+      "x": 8,
+      "y": 6
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "ResourceAttributes['host.name']",
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Swap-out bytes",
+            "metricName": "system.paging.operations",
+            "metricType": "sum",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "byte"
+            },
+            "valueExpression": "",
+            "where": "Attributes['direction'] = 'page_out' AND Attributes['type'] = 'major'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088ad0",
+      "name": "Swap page-out (bytes per interval)",
+      "w": 8,
+      "x": 16,
+      "y": 6
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "concat(ResourceAttributes['host.name'], ' ', Attributes['direction'])",
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Disk bytes",
+            "metricName": "system.disk.io",
+            "metricType": "sum",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "byte"
+            },
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088ad1",
+      "name": "Disk IO (bytes per interval)",
+      "w": 12,
+      "x": 0,
+      "y": 12
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "concat(ResourceAttributes['host.name'], ' ', Attributes['direction'])",
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Network bytes",
+            "metricName": "system.network.io",
+            "metricType": "sum",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "byte"
+            },
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088ad2",
+      "name": "Network IO (bytes per interval)",
+      "w": 12,
+      "x": 12,
+      "y": 12
+    },
+    {
+      "config": {
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Samples vps",
+            "metricName": "system.cpu.utilization",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['host.name'] = 'vps'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 3,
+      "id": "6afca3f986da9b7a9c088ad3",
+      "name": "host-agent samples: vps (10m silence alerts)",
+      "w": 24,
+      "x": 0,
+      "y": 18
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "ResourceAttributes['container.name']",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "CPU",
+            "metricName": "container.cpu.utilization",
+            "metricType": "gauge",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "number",
+              "unit": " %"
+            },
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "seriesLimit": 10,
+        "source": "Metrics"
+      },
+      "containerId": "containers",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088ad4",
+      "name": "Container CPU, top 10 (%)",
+      "w": 12,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "ResourceAttributes['container.name']",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Memory",
+            "metricName": "container.memory.usage.total",
+            "metricType": "sum",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "byte"
+            },
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "seriesLimit": 10,
+        "source": "Metrics"
+      },
+      "containerId": "containers",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088ad5",
+      "name": "Container memory, top 10",
+      "w": 12,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count_distinct",
+            "alias": "Containers",
+            "metricName": "container.cpu.utilization",
+            "metricType": "gauge",
+            "valueExpression": "ResourceAttributes['container.name']",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "containers",
+      "h": 4,
+      "id": "6afca3f986da9b7a9c088ad6",
+      "name": "Running containers",
+      "w": 6,
+      "x": 0,
+      "y": 6
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "concat(ResourceAttributes['host.name'], ' ', ResourceAttributes['container.name'])",
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Restarts",
+            "metricName": "container.restarts",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "containers",
+      "h": 4,
+      "id": "6afca3f986da9b7a9c088ad7",
+      "name": "Container restarts (per interval)",
+      "w": 9,
+      "x": 6,
+      "y": 6
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "concat(ResourceAttributes['host.name'], ' ', ResourceAttributes['container.name'])",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "Unhealthy",
+            "metricName": "container.state.health.status",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "Attributes['container.state.health.state'] = 'unhealthy'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "containers",
+      "h": 4,
+      "id": "6afca3f986da9b7a9c088ad8",
+      "name": "Unhealthy containers",
+      "w": 9,
+      "x": 15,
+      "y": 6
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "Attributes['http.url']",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Duration ms",
+            "metricName": "httpcheck.duration",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "outside",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088ad9",
+      "name": "HTTP check duration per site (ms)",
+      "w": 12,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "ResourceAttributes['net.peer.name']",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "RTT ms",
+            "metricName": "ping.rtt.avg",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "lucene"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "outside",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088ada",
+      "name": "Ping RTT avg per target (ms)",
+      "w": 12,
+      "x": 12,
+      "y": 0
+    }
+  ]
+}
