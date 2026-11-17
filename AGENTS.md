@@ -26,6 +26,7 @@ make monitoring-up / make monitoring-down
 make fpp-up      / make fpp-down
 make weatherorb-up    / make weatherorb-down   # the one static page at weatherorb.com (apps/weatherorb/site, nginx, no RollHook)
 make imgproxy-up / make imgproxy-down
+make telemetry-lint           # registry vs prod ClickHouse (the factory's hygiene probe, docs/observability.md → Telemetry lint); keyless, read-only; non-zero on findings
 make edge-cache-status HOST=example.com   # ✓/✗ checklist for the edge-cache pattern (docs/edge-cache.md)
 make edge-cache-apply HOST=example.com    # idempotent provision — DNS, tunnel ingress, Cache Rule; DRY_RUN=1 to preview
 
@@ -272,6 +273,7 @@ README.md → Secrets           All secret variable names with setup instruction
 Makefile                      Operational shortcuts (`PIN_SH`/`pin_all` = the one image-pin helper every RollHook `<app>-up` uses)
 .github/workflows/ci.yml      CI: `make check` on every push/PR
 scripts/lint-compose.py       Compose-invariants linter (part of `make check`)
+scripts/telemetry-lint.py     Telemetry registry vs prod ClickHouse + alert/dashboard drift (make telemetry-lint; rules unit-tested in test_telemetry_lint.py, part of `make check`)
 ```
 
 ---
