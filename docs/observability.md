@@ -34,7 +34,7 @@ MongoDB) at `clickstack`, exposed publicly only via Traefik on `hyperdx.${DOMAIN
 
 | Tier | Port | Auth | Trust boundary | Used by |
 |-|-|-|-|-|
-| Public | `:4318` (http) / `:4317` (grpc) | `bearertokenauth` | Public ingress via Traefik + ingestion key | Browser SDKs (any frontend), the Mac mini's services (argo-api, weatherorb workers, tileserver, watchdog, agent-workflows) via `otel.<domain>`, weatherorb-edge on `:4317` over `monitoring-net` (ngx_otel is gRPC-only, so it cannot use `:4319`) |
+| Public | `:4318` (http) / `:4317` (grpc) | `bearertokenauth` | Public ingress via Traefik + ingestion key | Browser SDKs (any frontend), the Mac mini's services (argo-api, weatherorb workers, tileserver, watchdog, agent-workflows) via `otel.<domain>` |
 | Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, imgproxy, fpp-server, fpp-analytics, rollhook |
 
 The `:4319` port has no host binding and no Traefik label — it's reachable only

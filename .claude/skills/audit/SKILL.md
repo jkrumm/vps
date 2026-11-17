@@ -52,7 +52,7 @@ ssh vps "docker system df"
 - Infra: `postgres`, `redis`
 - FPP (`apps/fpp/compose.yml`): `mariadb`, `fpp-server`, `fpp-analytics`, `fpp-analytics-updater`
 - Monitoring: `clickstack`, `beszel-agent`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`, `umami`
-- Apps (RollHook-managed, auto-suffixed dynamic names — match by label, not name): `basalt-ui-marketing`, `jkrumm-com`, `email-gateway`, `imgproxy`, `shutterflow-share`, `shutterflow-imgproxy`, `weatherorb-edge`, `weatherorb-account`, `weatherorb-egress`, `photo-gallery`, `rollhook-marketing`
+- Apps (RollHook-managed, auto-suffixed dynamic names — match by label, not name): `basalt-ui-marketing`, `jkrumm-com`, `email-gateway`, `imgproxy`, `shutterflow-share`, `shutterflow-imgproxy`, `weatherorb-site`, `photo-gallery`, `rollhook-marketing`
 
 ```bash
 ssh vps "docker ps --format '{{.Label \"com.docker.compose.service\"}}' | sort"

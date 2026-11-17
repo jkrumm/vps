@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # The weatherorb tests run on the container's Python (asyncio Server.close_clients needs 3.13+).
+      # Python for the compose lint (PyYAML) and its tests.
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
