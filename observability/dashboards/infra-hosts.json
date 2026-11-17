@@ -26,7 +26,7 @@
       "type": "QUERY_EXPRESSION"
     }
   ],
-  "name": "Infra \u2014 Hosts",
+  "name": "Infra — Hosts",
   "savedFilterValues": [],
   "savedQuery": null,
   "savedQueryLanguage": null,
@@ -130,11 +130,11 @@
             "whereLanguage": "lucene"
           },
           {
-            "aggFn": "avg",
+            "aggFn": "count_distinct",
+            "valueExpression": "Attributes['cpu']",
+            "metricType": "gauge",
+            "metricName": "system.cpu.utilization",
             "alias": "Cores",
-            "metricName": "system.cpu.logical.count",
-            "metricType": "sum",
-            "valueExpression": "",
             "where": "",
             "whereLanguage": "lucene"
           }

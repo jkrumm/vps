@@ -64,7 +64,9 @@ Internal networks — never exposed publicly:
   monitoring-net
     ├─ clickstack        all-in-one observability (ClickHouse + OTel + HyperDX UI)
     ├─ beszel-agent      pushes server + container metrics → Beszel hub
+    ├─ host-probe        container metrics, HTTP and ICMP checks → ClickStack
     └─ dozzle            streams container logs → Dozzle hub
+  host network (host-agent: host metrics → ClickStack over 127.0.0.1:4319)
 
 Homelab connectivity: Tailscale
   VPS → Beszel hub, Dozzle hub (Tailscale IPs, no public ports)
@@ -91,8 +93,10 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | mariadb | mariadb:11.4 | FPP-only DB, publicly exposed on 33306 — see FPP MariaDB exception | **manual only** |
 | clickstack | clickhouse/clickstack-all-in-one:2.45.0 | Observability — OTel + ClickHouse + HyperDX UI. See [docs/observability.md](docs/observability.md) | **manual only** (pinned, `mem_limit` 6g) |
 | beszel-agent | henrygd/beszel-agent | Server metrics agent | auto |
+| host-agent | built from `agent/` (OpenTelemetry Collector 0.165.0) | Host metrics (CPU, memory, load, swap, disk, filesystem, network) into ClickStack; host network namespace. See [docs/observability.md](docs/observability.md) → Host agent | built by `make monitoring-up`, Watchtower off |
+| host-probe | same image as host-agent | Container metrics via socket-proxy-monitoring, HTTP checks of the public sites, ICMP | built by `make monitoring-up`, Watchtower off |
 | dozzle | amir20/dozzle | Log streaming agent | auto |
-| socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | **manual only** (`lts` tag@digest, Watchtower off) |
+| socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle, Beszel + host-probe | **manual only** (`lts` tag@digest, Watchtower off) |
 | socket-proxy-watchtower | tecnativa/docker-socket-proxy | Write Docker API for Watchtower | **manual only** (`lts` tag@digest, Watchtower off) |
 | watchtower | nickfedor/watchtower:1.24.0 | Auto-updates containers, ntfy notification on failure | auto |
 | umami | ghcr.io/umami-software/umami:3 | Self-hosted analytics at `umami.<DOMAIN>` — see Integrating Umami below | auto |
@@ -387,7 +391,7 @@ All dashboards are Tailscale-only — no public routes.
 |-|-|-|
 | Beszel | homelab Beszel hub | CPU, RAM, disk, network per container |
 | Dozzle | homelab Dozzle hub | Live container logs |
-| HyperDX (ClickStack) | `https://hyperdx.<DOMAIN>` (tailscale-only) | Traces, metrics, logs |
+| HyperDX (ClickStack) | `https://hyperdx.<DOMAIN>` (tailscale-only) | Traces, metrics, logs; host and container metrics on `Infra — Hosts` |
 | Watchtower | ntfy `updates` (warn level) | Container update failures |
 | RollHook | ntfy `updates` | Deploy success/failure |
 | RollHook | HyperDX (ClickStack) | OTLP deploy markers, `service.name=rollhook` |

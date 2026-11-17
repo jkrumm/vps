@@ -164,7 +164,7 @@ External networks (pre-created by `setup.sh`, referenced as `external: true`):
 | `postgres-net` | Postgres access | Postgres, apps needing DB |
 | `mariadb-net` | FPP MariaDB access | MariaDB, FPP services, backup container |
 | `valkey-net` | Valkey/Redis access | Valkey, apps needing cache |
-| `monitoring-net` | Observability bus | ClickStack, Beszel, Dozzle, apps sending OTel |
+| `monitoring-net` | Observability bus | ClickStack, Beszel, Dozzle, host-probe, apps sending OTel |
 
 Internal networks (created by Docker Compose, not external):
 
@@ -173,7 +173,7 @@ Internal networks (created by Docker Compose, not external):
 | `socket-proxy-net` | Traefik → socket-proxy (read-only, POST=0) |
 | `socket-proxy-rollhook-net` | RollHook → socket-proxy-rollhook (POST=1, write access) |
 | `socket-proxy-watchtower-net` | Watchtower → socket-proxy-watchtower (POST=1, write access) |
-| `socket-proxy-monitoring-net` | Dozzle + Beszel → socket-proxy-monitoring (read-only, LOGS+STATS) |
+| `socket-proxy-monitoring-net` | Dozzle + Beszel + host-probe → socket-proxy-monitoring (read-only, LOGS+STATS) |
 
 **Traffic routing model:**
 
@@ -208,7 +208,7 @@ Internal networks (created by Docker Compose, not external):
 ```
 compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy, RollHook)
 compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no exposed ports
-compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
+compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, host-agent + host-probe built from agent/, Watchtower, Umami + two socket-proxy instances)
 compose.dev.yml               Local dev (Valkey + MariaDB + ClickStack with ports exposed; Postgres is the mini's Homebrew server, not here)
 apps/weatherorb/compose.yml        weatherorb-site — nginx:alpine serving `site/` read-only; apex + www routers (www → apex 301). No RollHook, no registry, no env file (V1's edge/account/egress/probe were removed 2026-11-17)
 apps/weatherorb/site/index.html   the page: the name and "WeatherOrb is being rebuilt."
@@ -422,7 +422,7 @@ See `~/SourceRoot/rollhook/README.md` for implementation details (shutdown patte
 
 Never violate these:
 
-- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), all bound to `${VPS_TAILSCALE_IP}` — **and the FPP MariaDB exception below**
+- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), all bound to `${VPS_TAILSCALE_IP}` — **plus `127.0.0.1:4319` (ClickStack's unauthed OTLP tier, loopback only, for host-agent in the host network namespace) and the FPP MariaDB exception below**
 - Zero inbound *public* ports — cloudflared is outbound-only, SSH via Tailscale only — **except 33306 (FPP MariaDB)**
 - UFW: default-deny inbound, only `tailscale0` allowed in; sshd may listen on all interfaces (never rebind it — boot-order lock-out). `make firewall` is the proof
 - Provider firewall: only TCP 33306 inbound (FPP MariaDB), nothing else
