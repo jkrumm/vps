@@ -29,7 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REGISTRY = os.path.join(ROOT, "observability", "services.yaml")
 
 ENVIRONMENTS = {"prod", "dev"}
-BAD_VERSIONS = {"local", "unknown", "latest", "0.0.0"}
+BAD_VERSIONS = {"local", "dev", "unknown", "latest", "0.0.0"}
 CONTAINER_ID = re.compile(r"^[0-9a-f]{12,64}$")
 SIGNALS = ("traces", "logs", "metrics")
 # The 1 % bound of the empty-Body rule and the silence window.
@@ -96,6 +96,10 @@ ALL_TABLES = (TRACES, LOGS) + METRIC_TABLES
 SESSIONS = ("hyperdx_sessions", "sessions", "TimestampTime")
 
 
+# Row limits of the three queries; the queries ask for one more, so a truncated result is an error, not a quiet gap.
+LIMITS = {"activity": 2000, "attrs": 20000, "logs": 2000}
+
+
 def union(selects):
     return " UNION ALL ".join(selects)
 
@@ -119,12 +123,12 @@ def build_queries():
     )
     return [
         "SELECT 'activity' AS q, signal, service, sum(rows7d) AS rows7d, sum(rows24h) AS rows24h, "
-        f"max(last) AS last FROM ({activity}) GROUP BY signal, service ORDER BY service, signal LIMIT 2000",
+        f"max(last) AS last FROM ({activity}) GROUP BY signal, service ORDER BY service, signal LIMIT {LIMITS['activity'] + 1}",
         "SELECT 'attrs' AS q, signal, service, env, ns, version, host, sum(rows) AS rows "
-        f"FROM ({attrs}) GROUP BY signal, service, env, ns, version, host ORDER BY service, signal LIMIT 20000",
+        f"FROM ({attrs}) GROUP BY signal, service, env, ns, version, host ORDER BY service, signal LIMIT {LIMITS['attrs'] + 1}",
         "SELECT 'logs' AS q, ServiceName AS service, count() AS total, countIf(Body = '') AS empty_body, "
         "countIf(TraceId = '') AS untraced FROM otel_logs WHERE TimestampTime > now() - INTERVAL 1 DAY "
-        "GROUP BY service ORDER BY service LIMIT 2000",
+        f"GROUP BY service ORDER BY service LIMIT {LIMITS['logs'] + 1}",
     ]
 
 
@@ -138,7 +142,14 @@ def clickhouse(ssh):
         raise ProbeError(f"ClickHouse unreachable ({ssh}): {exc}") from exc
     if proc.returncode != 0:
         raise ProbeError(f"ClickHouse query failed (exit {proc.returncode}): {proc.stderr.strip()[:300]}")
-    return parse_rows(proc.stdout)
+    try:
+        snap = parse_rows(proc.stdout)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise ProbeError(f"ClickHouse answered something unparseable: {exc}") from exc
+    for name, rows in snap.items():
+        if len(rows) > LIMITS[name]:
+            raise ProbeError(f"query {name} hit its limit of {LIMITS[name]} rows: raise LIMITS in scripts/telemetry-lint.py")
+    return snap
 
 
 COUNTS = ("rows7d", "rows24h", "last", "rows", "total", "empty_body", "untraced")

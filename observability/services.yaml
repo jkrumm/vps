@@ -64,9 +64,9 @@ services:
 
   # --- client code ---
   - { name: free-planning-poker, namespace: free-planning-poker, host: client, env: prod, repo: free-planning-poker, signals: [traces], budget: { traces: 52000 }, notes: "Next.js server (Vercel) and the browser SDK share this name; the browser also writes session replay to hyperdx_sessions. Environment comes from NODE_ENV, version from VERCEL_GIT_COMMIT_SHA (full SHA)." }
-  - { name: argo-dashboard, namespace: argo, host: client, env: prod, repo: argo, signals: [traces], budget: { traces: 3000 }, notes: "Browser SDK relayed by the mini. No namespace or version; deprecated environment key (production)." }
-  - { name: iris-ios, namespace: iris, host: client, env: prod, repo: iris, signals: [logs], budget: { logs: 4400, untraced_logs: 0.1 }, notes: "iPhone app. No namespace; deprecated environment key (production)." }
-  - { name: iris-macos, namespace: iris, host: macbook, env: prod, repo: iris, signals: [logs], budget: { logs: 150, untraced_logs: 1 }, notes: "service.version is `dev`: a local build in the prod project. Deprecated environment key (production)." }
+  - { name: argo-dashboard, namespace: argo, host: client, env: prod, repo: argo, signals: [traces], expected: none, budget: { traces: 3000 }, notes: "Browser SDK relayed by the mini. No namespace or version; deprecated environment key (production)." }
+  - { name: iris-ios, namespace: iris, host: client, env: prod, repo: iris, signals: [logs], expected: none, budget: { logs: 4400, untraced_logs: 0.1 }, notes: "iPhone app. No namespace; deprecated environment key (production)." }
+  - { name: iris-macos, namespace: iris, host: macbook, env: prod, repo: iris, signals: [logs], expected: none, budget: { logs: 150, untraced_logs: 1 }, notes: "service.version is `dev`: a local build in the prod project. Deprecated environment key (production)." }
 
   # --- retired: weatherorb V1 (replaced by one static page on 2026-11-17; V2 is being rebuilt) ---
   - { name: weatherorb-edge, namespace: weatherorb, host: vps, env: prod, repo: weatherorb, signals: [traces], status: retired, notes: "V1 container, removed from the VPS 2026-11-17." }

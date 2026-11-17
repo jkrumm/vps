@@ -120,6 +120,10 @@ class Parse(unittest.TestCase):
         self.assertEqual(snap["attrs"][0]["rows"], 7)
         self.assertEqual((snap["activity"][0]["rows7d"], snap["activity"][0]["last"]), (70, 1800000000))
 
+    def test_dev_version_is_bad_on_a_prod_service(self):
+        found = run([entry()], [act(), act(signal="logs")], [attr(version="dev")])
+        self.assertEqual(rules(found), [("version", "svc")])
+
     def test_owned_elsewhere_tags_come_from_hyperdx_sync(self):
         self.assertEqual(lint.owned_elsewhere_tags(), {"weatherorb", "agw"})
 

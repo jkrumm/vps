@@ -127,7 +127,7 @@ service.
 | `silent` | a signal the registry expects has no rows for more than 24 h (or none in 7 d) |
 | `environment` | `deployment.environment.name` is missing, not `prod`/`dev`, or differs from the registry's `env` |
 | `namespace` | `service.namespace` is missing |
-| `version` | `service.version` is missing or `local`, `unknown`, `latest`, `0.0.0`, on a `prod` service |
+| `version` | `service.version` is missing or `local`, `dev`, `unknown`, `latest`, `0.0.0`, on a `prod` service |
 | `host` | `host.name` is missing or a 12–64 character hex string (a container ID); skipped for registry `host: client` |
 | `body-empty` | more than 1 % of a service's log records have an empty `Body` |
 | `untraced-logs` | the share of logs without a `TraceId` is above `budget.untraced_logs` |
@@ -147,7 +147,7 @@ Never edit the script. Say it in the service's registry entry:
 | `expected: none` or `expected: [logs]` | which `signals` must not go silent; `none` for intermittent emitters (a job that logs once per deploy) and for services that by design emit nothing (`signals: []`) |
 | `budget: { traces, logs, metrics, untraced_logs }` | rows per day per signal, and the largest untraced share (0–1). A key left out is no check, so a new service is unchecked until it has one |
 
-Budgets were seeded on 2026-11-17 at 3× the 7-day daily average with a floor of 100 rows. `python3 scripts/telemetry-lint.py
+Budgets were seeded on 2026-11-17 at 3× the 7-day daily average with a floor of 100 rows (`host-agent` and `host-probe`, deployed 2026-11-14, from the 24 h rate). `python3 scripts/telemetry-lint.py
 --seed-budgets` prints the same numbers from live data for a new service. A budget that a real, wanted growth exceeds is
 raised in the same change that causes the growth.
 
