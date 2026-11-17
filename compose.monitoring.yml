@@ -139,7 +139,7 @@ services:
 
   # ---------------------------------------------------------------------------
   # ClickStack — all-in-one observability (ClickHouse + OTel Collector + HyperDX UI + MongoDB).
-  # Replaces standalone OTel Collector + SigNoz. Apps send OTLP to clickstack:4318.
+  # Replaces standalone OTel Collector + SigNoz. Apps on monitoring-net send OTLP to clickstack:4319 (unauthed, docker bridge).
   # UI accessible via Traefik at hyperdx.DOMAIN (Tailscale-only).
   # Pinned to an exact version and excluded from Watchtower: a ClickHouse/HyperDX/Mongo
   # bundle upgrade can migrate on-disk data, so bump the tag manually (backup first).
@@ -163,6 +163,13 @@ services:
       # ingress and argo-api (now on the mini) use the authed tier. See
       # clickstack/otel-custom.yaml for the merged-config rationale.
       CUSTOM_OTELCOL_CONFIG_FILE: /etc/otelcol-contrib/custom.config.yaml
+      # Retention tiers (docs/observability.md → Retention). Read by ClickStack's schema
+      # migration when it CREATES a table; existing tables keep their TTL until
+      # ALTER TABLE ... MODIFY TTL (the runbook there). Go durations or `<n>d`.
+      HYPERDX_OTEL_EXPORTER_LOGS_TTL: 30d
+      HYPERDX_OTEL_EXPORTER_TRACES_TTL: 30d
+      HYPERDX_OTEL_EXPORTER_SESSIONS_TTL: 14d    # session replay: the largest table
+      HYPERDX_OTEL_EXPORTER_METRICS_TTL: 400d    # host and line-quality history outlives 30 days
     volumes:
       - clickstack-db:/data/db
       - clickstack-ch-data:/var/lib/clickhouse

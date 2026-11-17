@@ -89,6 +89,9 @@ services:
       USAGE_STATS_ENABLED: "false"
       FRONTEND_URL: https://hyperdx.test
       CUSTOM_OTELCOL_CONFIG_FILE: /etc/otelcol-contrib/custom.config.yaml
+      # What the gateway stamps on :4319 telemetry and on its own (clickstack/otel-custom.yaml).
+      TELEMETRY_HOST_NAME: mini
+      TELEMETRY_ENVIRONMENT: dev
 
 volumes:
   # No service mounts it any more: the old dev Postgres container's data, kept as the rollback
