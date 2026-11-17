@@ -114,6 +114,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_SERVICE_NAME: imgproxy
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=vps,deployment.environment.name=prod
 
       # --- Source limits ---
       # 100 MP: a 40 MP Fuji frame fits with room for stitched panoramas.

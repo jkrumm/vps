@@ -95,6 +95,9 @@ services:
       # Traefik talks to ClickStack on the unauthed :4319 receiver (added in
       # clickstack/otel-custom.yaml, bound to docker bridge only).
       # No HYPERDX_API_KEY needed here.
+      # Resource identity (telemetry contract, docs/observability.md). Traefik reads the standard
+      # env var; host.name and container.id come from the ClickStack gateway.
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=vps,deployment.environment.name=prod
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
@@ -102,7 +105,7 @@ services:
     networks:
       - proxy
       - socket-proxy-net
-      - monitoring-net   # reach clickstack:4318 for OTLP traces + metrics
+      - monitoring-net   # reach clickstack:4319 for OTLP traces + metrics
     labels:
       # Traefik dashboard — Tailscale-only via DNS (A record → Tailscale IP, DNS-only/grey cloud).
       # Docker NAT rewrites source IPs, so ipAllowList is ineffective here.
