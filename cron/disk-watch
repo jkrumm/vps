@@ -1,0 +1,9 @@
+# Root-disk alert — every 15 minutes, ntfy `alerts` once / is at or above 80 %.
+# Fires before 85 % (issue_2033). Env from /etc/vps/disk-watch.env, seeded from
+# cron/disk-watch.env.tpl by `make cron-env-seed` (no `op` per run). If the file is not
+# seeded yet, sourcing it fails loudly into disk-watch.log below.
+# Install: `make cron-install` / `make deploy` (cron token) or scripts/setup.sh section 12.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+*/15 * * * * jkrumm /bin/bash -c 'set -a; . /etc/vps/disk-watch.env; set +a; /home/jkrumm/vps/scripts/disk-watch.sh' >> /home/jkrumm/disk-watch.log 2>&1

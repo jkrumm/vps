@@ -75,7 +75,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
         postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove dev-pg-container-remove firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply dev-mariadb-up dev-mariadb-down dev-redis-up dev-redis-down clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
         check deploy verify version logs _deploy-affected sql-postgres \
-        traefik-recreate clickstack-recreate cron-install fail2ban-install
+        traefik-recreate clickstack-recreate cron-install fail2ban-install journald-install
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
 help:
@@ -654,12 +654,12 @@ prune:
 	@echo ""
 	@echo "✓ Done. Volumes left intact — run 'docker volume prune' manually if you really mean it."
 
-## Install the weekly image + build-cache prune cron (cron/docker-prune → /etc/cron.d).
+## Install the daily image + build-cache prune cron (cron/docker-prune → /etc/cron.d).
 ## Prod-only, idempotent; setup.sh installs the same file on a fresh server. Prints
 ## what the next run would reclaim.
 prune-cron-install: require-prod
 	sudo install -o root -g root -m 644 cron/docker-prune /etc/cron.d/docker-prune
-	@echo "  ✓ /etc/cron.d/docker-prune installed (Sunday 04:30 — images + build cache, never volumes)"
+	@echo "  ✓ /etc/cron.d/docker-prune installed (daily 04:30/04:35/04:40 — images, size-capped build cache, runner leftovers; never prod volumes)"
 	@docker system df | awk 'NR==1 || /^Images|^Build Cache/'
 
 # Repo contract — the four targets every repo with a runtime ships.
@@ -778,6 +778,13 @@ cron-install: require-prod
 	  sudo install -o root -g root -m 644 "$$f" "/etc/cron.d/$${f#cron/}" || exit 1; \
 	  echo "  ✓ /etc/cron.d/$${f#cron/}"; \
 	done
+
+## Apply the journal size cap (config/journald-vps.conf) and trim the journal to it. Idempotent.
+journald-install: require-prod
+	sudo install -D -o root -g root -m 644 config/journald-vps.conf /etc/systemd/journald.conf.d/vps.conf
+	sudo systemctl restart systemd-journald
+	sudo journalctl --vacuum-size=1G
+	@journalctl --disk-usage
 
 ## Reinstall the MariaDB fail2ban filter + jail (paths from setup.sh) and reload fail2ban.
 fail2ban-install: require-prod

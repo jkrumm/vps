@@ -354,14 +354,19 @@ fi
 
 # =============================================================================
 # 12. Install cron jobs (Postgres backup, Postgres liveness, MariaDB backup,
-# MariaDB cert sync, weekly Docker image/build-cache prune, hourly weatherorb accounts dump)
+# MariaDB cert sync, daily Docker image/build-cache prune, hourly weatherorb accounts dump,
+# root-disk alert)
 # =============================================================================
 log "Installing cron jobs..."
-for cronfile in pg-backup pg-health email-gateway-backup fpp-mariadb-backup fpp-cert-sync docker-prune weatherorb-accounts-dump; do
+for cronfile in pg-backup pg-health email-gateway-backup fpp-mariadb-backup fpp-cert-sync docker-prune weatherorb-accounts-dump disk-watch; do
   cp "${REPO_DIR}/cron/${cronfile}" "/etc/cron.d/${cronfile}"
   chmod 644 "/etc/cron.d/${cronfile}"
   chown root:root "/etc/cron.d/${cronfile}"
 done
+
+# Journal size cap (config/journald-vps.conf; `make journald-install` re-applies it).
+install -D -o root -g root -m 644 "${REPO_DIR}/config/journald-vps.conf" /etc/systemd/journald.conf.d/vps.conf
+systemctl restart systemd-journald
 
 # =============================================================================
 # 13. fail2ban for MariaDB (auth failures via journald → DOCKER-USER chain)
@@ -407,5 +412,5 @@ log " 8. Start all stacks:     make up"
 log "                          (networking → infra → monitoring → fpp in order)"
 log " 9. Provision DBs:        make postgres-setup && make fpp-mariadb-setup"
 log "10. DNS A record:         db.free-planning-poker.com → VPS public IP (DNS-only / grey cloud)"
-log "11. Seed cron env:        make cron-env-seed   (pg-health cron stays broken until this runs)"
+log "11. Seed cron env:        make cron-env-seed   (pg-health and disk-watch crons stay broken until this runs)"
 log "============================================================"
