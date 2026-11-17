@@ -20,8 +20,9 @@
 # 2. Normalisation of resource attributes on EVERY pipeline (the telemetry
 #    contract, docs/observability.md → "Telemetry contract"):
 #    - deployment.environment.name is exactly `prod` or `dev`. Missing → copied
-#      from the deprecated deployment.environment; production → prod;
-#      development/test/staging → dev. Both keys are normalised.
+#      from the deprecated deployment.environment; production → prod; any other
+#      value (development, test, staging, an app version) → dev: a sender that is
+#      not saying `prod` is not prod. Both keys are normalised.
 #    - host.name is a machine (vps, mini, ...), never a container ID. On the
 #      internal :4319 receiver everything runs on this VPS, so host.name is set
 #      to it (a container-ID-looking value moves to container.id). On the authed
@@ -60,9 +61,9 @@ processors:
       - context: resource
         statements:
           - set(resource.attributes["deployment.environment"], "prod") where resource.attributes["deployment.environment"] == "production"
-          - set(resource.attributes["deployment.environment"], "dev") where IsMatch(resource.attributes["deployment.environment"], "^(development|test|staging)$")
+          - set(resource.attributes["deployment.environment"], "dev") where resource.attributes["deployment.environment"] != nil and resource.attributes["deployment.environment"] != "prod" and resource.attributes["deployment.environment"] != "dev"
           - set(resource.attributes["deployment.environment.name"], "prod") where resource.attributes["deployment.environment.name"] == "production"
-          - set(resource.attributes["deployment.environment.name"], "dev") where IsMatch(resource.attributes["deployment.environment.name"], "^(development|test|staging)$")
+          - set(resource.attributes["deployment.environment.name"], "dev") where resource.attributes["deployment.environment.name"] != nil and resource.attributes["deployment.environment.name"] != "prod" and resource.attributes["deployment.environment.name"] != "dev"
           - set(resource.attributes["deployment.environment.name"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment.name"] == nil and resource.attributes["deployment.environment"] != nil
     metric_statements: *env_statements
     log_statements: *env_statements

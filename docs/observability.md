@@ -34,7 +34,7 @@ MongoDB) at `clickstack`, exposed publicly only via Traefik on `hyperdx.${DOMAIN
 
 | Tier | Port | Auth | Trust boundary | Used by |
 |-|-|-|-|-|
-| Public | `:4318` (http) / `:4317` (grpc) | `bearertokenauth` | Public ingress via Traefik + ingestion key | Browser SDKs (any frontend), the Mac mini's services (argo-api, weatherorb workers, tileserver, watchdog, agent-workflows) via `otel.<domain>` |
+| Public | `:4318` (http) / `:4317` (grpc) | `bearertokenauth` | Public ingress via Traefik + ingestion key | Browser SDKs (any frontend), the Mac mini's services (argo-api, iris-server, agent-workflows, opencode) via `otel.<domain>` |
 | Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, imgproxy, fpp-server, fpp-analytics, email-gateway, shutterflow-*, rollhook |
 
 The `:4319` port has no host binding and no Traefik label — it's reachable only
@@ -92,7 +92,7 @@ it can reach, so a violation does not reach the tables ("Gateway normalisation",
 
 | Rule | App side | Gateway (`clickstack/otel-custom.yaml`) |
 |-|-|-|
-| environment | `OTEL_RESOURCE_ATTRIBUTES=...,deployment.environment.name=prod` in the service's compose env | `production`→`prod`, `development`/`test`/`staging`→`dev` on both keys; missing `.name` copied from the old key |
+| environment | `OTEL_RESOURCE_ATTRIBUTES=...,deployment.environment.name=prod` in the service's compose env | `production`→`prod`, any other value besides `prod`/`dev` (`development`, `test`, `staging`, `latest`)→`dev` on both keys; missing `.name` copied from the old key |
 | host | nothing | `:4319`: `host.name=vps`, a container-ID-looking value moves to `container.id`. Authed tier: the container ID moves to `container.id`, `host.name` is dropped |
 | namespace, version | `OTEL_RESOURCE_ATTRIBUTES=service.namespace=<product>`; version baked at build | not touched (a wrong version is the app's bug) |
 
@@ -179,7 +179,7 @@ signals; the schema processor is alpha and not used. The bundled collector (0.15
 
 | Processor | On | Does |
 |-|-|-|
-| `transform/env` | every pipeline | `production`→`prod`, `development`/`test`/`staging`→`dev` on `deployment.environment` and `deployment.environment.name`; copies the old key into `.name` when `.name` is missing |
+| `transform/env` | every pipeline | `production`→`prod`, any other value besides `prod`/`dev`→`dev` on `deployment.environment` and `deployment.environment.name`; copies the old key into `.name` when `.name` is missing |
 | `transform/internal` | `:4319` pipelines (`*/internal`) | container-ID-looking `host.name` (12–64 hex) → `container.id`; `host.name` = `${TELEMETRY_HOST_NAME:-vps}` (everything on the docker bridge runs on this VPS; the dev stack sets `mini`) |
 | `transform/authed` | the base `traces`, `metrics`, `logs/in` pipelines | container-ID-looking `host.name` → `container.id`, `host.name` dropped; for `otelcol-hyperdx` and `clickhouse` (nothing else sets their resource) `host.name`, `service.namespace=vps`, `deployment.environment.name` are stamped |
 
