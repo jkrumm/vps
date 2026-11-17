@@ -102,6 +102,7 @@ services:
       HOSTED_STORAGE_USER_IDS: ${SHUTTERFLOW_HOSTED_STORAGE_USER_IDS:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: shutterflow-share
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=shutterflow,deployment.environment.name=prod
       # Desktop update feed (shutterflow 1653): latest.json + release files served from /releases.
       # Unset = the routes answer 404 and the app boots as before.
       RELEASES_DIR: /releases
@@ -245,6 +246,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_SERVICE_NAME: shutterflow-imgproxy
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=shutterflow,deployment.environment.name=prod
 
       # --- Source limits: masters are full Finals (26 MP X-T4 today; 120 MP leaves room for any
       # 100 MP-class body). 50 MiB covers the largest synced Final (~43 MB with a baked original).
@@ -339,6 +341,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_SERVICE_NAME: shutterflow-imgproxy-small
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=shutterflow,deployment.environment.name=prod
 
       IMGPROXY_MAX_SRC_RESOLUTION: "120"
       IMGPROXY_MAX_SRC_FILE_SIZE: "52428800"
@@ -391,8 +394,9 @@ services:
       # The nightly usage report, HMAC-signed, over the internal network.
       USAGE_REPORT_URL: http://shutterflow-share:4100/api/v1/internal/storage/usage
       # Log events (key minted / deleted / mint rate-limited) over OTLP to ClickStack, unauthed
-      # tier, reached through monitoring-net. stdout stays. OTEL_SERVICE_NAME defaults in the image.
+      # tier, reached through monitoring-net. stdout stays.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: shutterflow-key-broker
     volumes:
       - shutterflow-key-broker-state:/var/lib/key-broker
     labels:

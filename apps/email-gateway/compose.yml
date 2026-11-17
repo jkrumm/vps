@@ -62,6 +62,7 @@ services:
       # Traces + logs -> ClickStack (HyperDX). Unset disables the exporter entirely.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: email-gateway
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=email-gateway,deployment.environment.name=prod
       DATA_DIR: /data
     volumes:
       - /var/lib/email-gateway:/data

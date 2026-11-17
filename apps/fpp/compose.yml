@@ -166,7 +166,8 @@ services:
       # authed and we don't ship an auth header from the Python exporter.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: fpp-analytics
-      OTEL_DEPLOYMENT_ENVIRONMENT: production
+      OTEL_DEPLOYMENT_ENVIRONMENT: prod
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=free-planning-poker,deployment.environment.name=prod
       EMAIL_GATEWAY_URL: https://email-gateway.${DOMAIN}
       EMAIL_GATEWAY_SECRET_KEY: ${FPP_EMAIL_GATEWAY_SECRET_KEY}
     volumes:
@@ -246,7 +247,8 @@ services:
       # flushes on exit.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: fpp-analytics-updater
-      OTEL_DEPLOYMENT_ENVIRONMENT: production
+      OTEL_DEPLOYMENT_ENVIRONMENT: prod
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=free-planning-poker,deployment.environment.name=prod
       UPTIMEKUMA_PUSH_URL: ${UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL}
     volumes:
       - fpp-analytics-data:/app/data
