@@ -37,7 +37,7 @@
         "source": "Traces"
       },
       "h": 3,
-      "id": "8ce482125547ea5b95516546",
+      "id": "6af05722806c09282b9e1987",
       "name": "fpp server errors (5xx or error spans; count)",
       "w": 6,
       "x": 0,
@@ -72,7 +72,7 @@
         "source": "Traces"
       },
       "h": 3,
-      "id": "e653ac128cea9307d0fe0e44",
+      "id": "6af05722806c09282b9e1988",
       "name": "argo-api server errors (HTTP 5xx; count)",
       "w": 6,
       "x": 6,
@@ -107,7 +107,7 @@
         "source": "Traces"
       },
       "h": 3,
-      "id": "6ab35ef90456fc41e255a586",
+      "id": "6af05722806c09282b9e1989",
       "name": "argo-dashboard browser errors (error spans, console.error; count)",
       "w": 6,
       "x": 0,
@@ -142,7 +142,7 @@
         "source": "Traces"
       },
       "h": 3,
-      "id": "edd59359f11815ee55f3e011",
+      "id": "6af05722806c09282b9e198a",
       "name": "iris-server errors (error spans; count)",
       "w": 6,
       "x": 6,
@@ -177,7 +177,7 @@
         "source": "Logs"
       },
       "h": 3,
-      "id": "2e8064ff75a9431bbbfb9217",
+      "id": "6af05722806c09282b9e198b",
       "name": "iris iOS and macOS app errors (error logs; count)",
       "w": 6,
       "x": 0,
@@ -212,7 +212,7 @@
         "source": "Traces"
       },
       "h": 3,
-      "id": "585a3a5302ff50da143aa6ec",
+      "id": "6af05722806c09282b9e198c",
       "name": "imgproxy 5xx (count; 4xx are scanners and dead sources)",
       "w": 6,
       "x": 6,
@@ -247,7 +247,7 @@
         "source": "Traces"
       },
       "h": 3,
-      "id": "8c16c4b25fb694763b877a9e",
+      "id": "6af05722806c09282b9e198d",
       "name": "shutterflow imgproxy 5xx (count; 4xx are bad signatures)",
       "w": 6,
       "x": 0,
@@ -282,7 +282,7 @@
         "source": "Traces"
       },
       "h": 3,
-      "id": "8c97e31066de7ad31b991f37",
+      "id": "6af05722806c09282b9e198e",
       "name": "shutterflow-share server errors (5xx or error spans; count)",
       "w": 6,
       "x": 6,
@@ -317,7 +317,7 @@
         "source": "Traces"
       },
       "h": 3,
-      "id": "2f6839f03fa76082672c7b27",
+      "id": "6af05722806c09282b9e198f",
       "name": "email-gateway errors (error spans; count)",
       "w": 6,
       "x": 0,
@@ -352,7 +352,7 @@
         "source": "Logs"
       },
       "h": 3,
-      "id": "63edda768eccc52278b2803a",
+      "id": "6af05722806c09282b9e1990",
       "name": "rollhook error logs (count)",
       "w": 6,
       "x": 6,

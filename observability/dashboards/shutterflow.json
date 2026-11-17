@@ -72,7 +72,7 @@
         "source": "Logs"
       },
       "h": 3,
-      "id": "8fa6b8aca5664cac89d20641",
+      "id": "6af05723806c09282b9e19bb",
       "name": "2. Master serving tripped (count \u2014 galleries offline until a manual clear; empty is healthy)",
       "w": 6,
       "x": 6,
@@ -107,7 +107,7 @@
         "source": "Logs"
       },
       "h": 3,
-      "id": "431e855da3291c8d00433bfb",
+      "id": "6af05723806c09282b9e19bc",
       "name": "3. Master serving cannot reach the images (count \u2014 CDN/imgproxy/B2 unreachable; empty is healthy)",
       "w": 6,
       "x": 0,
