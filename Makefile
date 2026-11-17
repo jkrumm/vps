@@ -2,7 +2,7 @@
 export
 
 ENV ?= dev
-# gid RollHook's container runs as (it re-runs compose and reads apps/*/.env); see weatherorb-env
+# gid RollHook's container runs as (it re-runs compose and reads apps/*/.env); see fpp-env
 ROLLHOOK_GID ?= 999
 
 # Compose derives volume names as <project>_<name>, project defaulting to this dir.
@@ -60,7 +60,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
 
 .DEFAULT_GOAL := help
 
-.PHONY: help require-prod require-dev weatherorb-up weatherorb-down weatherorb-env weatherorb-bootstrap-image weatherorb-account-bootstrap-image weatherorb-backup-user weatherorb-redeploy gh-runner-setup gh-runner-remove gh-runner-reapply gh-runner-sync \
+.PHONY: help require-prod require-dev weatherorb-up weatherorb-down gh-runner-setup gh-runner-remove gh-runner-reapply gh-runner-sync \
         up down networking-up networking-down infra-up infra-down infra-upgrade monitoring-up monitoring-down \
         rollhook-update \
         fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
@@ -205,7 +205,7 @@ fpp-bootstrap-images: require-prod
 ## Materialize apps/fpp/.env from apps/fpp/.env.tpl (via `op inject`). Required so
 ## RollHook's `docker compose up --scale` — which doesn't go through `op run` —
 ## can resolve ${VAR} interpolations in apps/fpp/compose.yml. Re-run after secret
-## rotation. The resulting .env is 0640 owner:ROLLHOOK_GID (like weatherorb's .env):
+## rotation. The resulting .env is 0640 owner:ROLLHOOK_GID:
 ## RollHook re-runs compose as uid/gid 999 and must read it; nobody else may.
 fpp-env: require-prod
 	op --account tkrumm inject -i apps/fpp/.env.tpl -o apps/fpp/.env -f
@@ -275,8 +275,8 @@ shutterflow-down: require-prod ; $(OP_RUN) docker compose -f apps/shutterflow/co
 
 ## Materialize apps/shutterflow/.env from .env.tpl (via `op inject`) plus the `proxy` network
 ## CIDR as SHUTTERFLOW_TRUSTED_PROXIES, and apps/shutterflow/key-broker.env (the key broker's own
-## item only). That one holds an account-wide B2 key, so it is 0640 owner:ROLLHOOK_GID like
-## weatherorb's .env: RollHook's compose run (uid/gid 999) must read every env_file of the stack.
+## item only). That one holds an account-wide B2 key, so it is 0640 owner:ROLLHOOK_GID:
+## RollHook's compose run (uid/gid 999) must read every env_file of the stack.
 ## Re-run after rotating any secret.
 shutterflow-env: require-prod
 	op --account tkrumm inject -i apps/shutterflow/.env.tpl -o apps/shutterflow/.env -f
@@ -302,52 +302,13 @@ shutterflow-key-broker-image: require-prod
 	@[ -n "$(TAG)" ] || { echo "  ✗ TAG=<shutterflow commit sha> required"; exit 1; }
 	$(OP_RUN) ./apps/shutterflow/scripts/key-broker-image.sh $(TAG)
 
-## weatherorb stack (nginx edge in front of the tileserver on the Mac mini + the account service,
-## both RollHook-managed) — apps/weatherorb/compose.yml. Public at weatherorb.com through the
-## cloudflared tunnel. The mini does all computation; the edge serves the built map, the basemap
-## archive under /var/lib/weatherorb/basemap, and a disk cache of proxied API responses, and
-## proxies /api/auth + /api/account to weatherorb-account (Bun + Better Auth, own database).
-## RollHook picks the container by image name, so the two services roll independently: this
-## target pins BOTH running images so neither is rolled back to a stale :latest by the other.
-## The stack also runs weatherorb-egress (CONNECT proxy for the forecast-alert webhooks, ADR 0023,
-## tailnet-only on :18443) and weatherorb-probe (external /v1 availability probe, ADR 0026):
-## public python images with the scripts mounted from the repo, so no pin. A changed probe.py or
-## proxy.py does not change the compose config hash, so a plain `up -d` keeps the container running
-## the old script: the last step force-recreates exactly those two services (also what applies a
-## rotated probe key file).
-## The probe is dormant (compose profile `probe`) while weatherorb V1 is frozen: its 502s held the edge
-## 5xx alert red (Issue 1194). `make weatherorb-up` removes it; `WEATHERORB_PROBE=1` brings it back.
-## `docker ps -a` (not `docker ps`): a stopped-but-present container must
-## still be pinned, not mistaken for genesis and rolled back to a stale :latest.
+## weatherorb.com — one static page (apps/weatherorb/site) served by nginx, no registry, no RollHook.
+## V1's edge, account, egress and probe are gone (2026-11-17). `--remove-orphans` is what stops a
+## leftover V1 service of the same compose project if one is still running.
 weatherorb-up: require-prod
-	@$(PIN_SH); PINS=$$(pin_all weatherorb-edge:WEATHERORB_EDGE_IMAGE weatherorb-account:WEATHERORB_ACCOUNT_IMAGE) || exit 1; \
-	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env up -d && \
-	$(OP_RUN) env $$PINS docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env \
-	  $(if $(WEATHERORB_PROBE),--profile probe) up -d --no-deps --force-recreate $(if $(WEATHERORB_PROBE),weatherorb-probe) weatherorb-egress \
-	  $(if $(WEATHERORB_PROBE),,&& $(OP_RUN) docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env \
-	    --profile probe rm -sf weatherorb-probe)
-weatherorb-down: require-prod ; $(OP_RUN) docker compose -f apps/weatherorb/compose.yml --env-file apps/weatherorb/.env down
+	$(OP_RUN) docker compose -f apps/weatherorb/compose.yml up -d --remove-orphans
+weatherorb-down: require-prod ; $(OP_RUN) docker compose -f apps/weatherorb/compose.yml down
 
-## Trigger a fresh RollHook deploy by pushing an empty commit to weatherorb's master.
-weatherorb-redeploy: require-dev
-	@if [ ! -d $$HOME/SourceRoot/weatherorb ]; then echo "  ✗ weatherorb repo not found at ~/SourceRoot/weatherorb"; exit 1; fi
-	@cd $$HOME/SourceRoot/weatherorb && \
-	  git commit --allow-empty -m "chore: redeploy (triggered via vps make weatherorb-redeploy)" && \
-	  git push && \
-	  echo "  ✓ pushed — watch the build at https://github.com/jkrumm/weatherorb/actions"
-## One-shot bootstrap — build the edge image from the context `make edge-bootstrap` (weatherorb
-## repo, on the mini) pushed to /tmp/weatherorb-bootstrap, push :initial + :latest to the registry.
-weatherorb-bootstrap-image: require-prod
-	$(OP_RUN) ./apps/weatherorb/scripts/bootstrap-image.sh
-## One-shot bootstrap — same for the account service, from the context pushed to
-## /tmp/weatherorb-account-bootstrap (deploy/account/Dockerfile). Both images must be seeded
-## before weatherorb-up.
-weatherorb-account-bootstrap-image: require-prod
-	$(OP_RUN) ./apps/weatherorb/scripts/bootstrap-account-image.sh
-## One-time (idempotent) — the wo-backup system user and /var/backups/weatherorb-accounts the
-## homelab pulls the hourly accounts dump from over Tailscale SSH (cron/weatherorb-accounts-dump).
-weatherorb-backup-user: require-prod
-	sudo ./scripts/setup-weatherorb-backup-user.sh
 ## Idempotent — self-hosted Actions runner for one private repo, REPO=jkrumm/<repo> [N=<instance>]
 ## (gh-runner user, rootless Docker, systemd, watchdog timer). Registration token on stdin; command
 ## + model in docs/gh-runner.md.
@@ -364,31 +325,6 @@ gh-runner-reapply: require-prod
 ## runner(s) (DRY_RUN=1 to preview). Workflows still need runs-on: [self-hosted, vps].
 gh-runner-sync:
 	./scripts/gh-runner-sync.sh
-## Materialize apps/weatherorb/.env: the account service's secrets from .env.tpl (via `op inject`,
-## so RollHook's `docker compose up` resolves them without op) plus this host's tailscale peer
-## list — the mini's tailnet IP and MagicDNS name are the two values the edge needs, and the
-## VPS's own tailnet IP (the value Traefik binds, from the root .env) is the third, for the egress
-## proxy's port publish. None is a secret. A fourth, WEATHERORB_PROBE_KEY_FILE, names the host-local
-## key file of weatherorb-probe (/etc/vps/weatherorb-probe-key) and is written only when that file exists.
-## The file holds secrets, so it is 0640 owner:ROLLHOOK_GID, not world-readable: RollHook re-runs
-## compose from inside its container as uid/gid 999 (apps dir bind-mounted), which must read it; the
-## deploy user reads it as owner. gid 999 has no host members (systemd-journal, empty).
-## Re-run after rotating a secret, a mini rename or a re-join.
-weatherorb-env: require-prod
-	@# Both halves go to one temp file that replaces .env atomically, so a failed second half
-	@# can never leave an .env with the secrets but no DOMAIN/MINI_* keys.
-	op --account tkrumm inject -i apps/weatherorb/.env.tpl -o apps/weatherorb/.env.tmp -f
-	@$(OP_RUN) sh -c 'ip=$$(tailscale ip -4 mini) && \
-	  host=$$(tailscale status --json | jq -r ".Peer[] | select(.HostName==\"mini\") | .DNSName") && host=$${host%.} && \
-	  printf "DOMAIN=%s\nMINI_TAILSCALE_IP=%s\nMINI_TAILNET_HOST=%s\nVPS_TAILSCALE_IP=%s\n" "$$DOMAIN" "$$ip" "$$host" "$${VPS_TAILSCALE_IP:?}" >> apps/weatherorb/.env.tmp && \
-	  if [ -f /etc/vps/weatherorb-probe-key ]; then printf "WEATHERORB_PROBE_KEY_FILE=/etc/vps/weatherorb-probe-key\n" >> apps/weatherorb/.env.tmp; fi && \
-	  proxy=$$(docker network inspect proxy --format "{{range .IPAM.Config}}{{.Subnet}} {{end}}") && \
-	  monitoring=$$(docker network inspect monitoring-net --format "{{range .IPAM.Config}}{{.Subnet}} {{end}}") && \
-	  [ -n "$${proxy% }" ] && [ -n "$${monitoring% }" ] && \
-	  printf "EDGE_TRUSTED_PROXY_CIDRS=\"%s\"\nEDGE_ALERT_ALLOW_CIDRS=\"%s\"\n" "$${proxy% }" "$${monitoring% }" >> apps/weatherorb/.env.tmp && \
-	  chmod 640 apps/weatherorb/.env.tmp && sudo chgrp $(ROLLHOOK_GID) apps/weatherorb/.env.tmp && mv -f apps/weatherorb/.env.tmp apps/weatherorb/.env && \
-	  echo "Wrote apps/weatherorb/.env (mini = $$host)"' || { rm -f apps/weatherorb/.env.tmp; exit 1; }
-
 ## photo-gallery stack — static Astro gallery served by nginx from a host volume.
 ## Content lives at /home/jkrumm/photo-gallery-dist on the VPS; photo-flow CLI on the
 ## developer laptop rsyncs the built dist/ there. No registry, no RollHook — the
@@ -695,7 +631,7 @@ APP_SERVICE_jkrumm-com          := jkrumm-com
 APP_SERVICE_photo-gallery       := photo-gallery
 APP_SERVICE_rollhook-marketing  := rollhook-marketing
 APP_SERVICE_shutterflow         := shutterflow-share
-APP_SERVICE_weatherorb          := weatherorb-edge
+APP_SERVICE_weatherorb          := weatherorb-site
 
 # PyYAML for the compose lint: the system python3 when it has it (CI installs it), else uv's.
 # No docker call anywhere in `check` — a check runs on the native toolchain (dotfiles rules/run-on-mini.md).
@@ -707,11 +643,8 @@ check:
 	for f in scripts/*.sh apps/*/scripts/*.sh; do bash -n "$$f" || exit 1; done
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		echo "→ shellcheck -S warning"; \
-		shellcheck -S warning scripts/*.sh apps/*/scripts/*.sh scripts/wo-backup-shell || exit 1; \
+		shellcheck -S warning scripts/*.sh apps/*/scripts/*.sh || exit 1; \
 	else echo "WARN: shellcheck not installed — skipping (CI runs it)"; fi
-	@for d in apps/weatherorb/egress apps/weatherorb/probe; do \
-		echo "→ unittest $$d"; (cd "$$d" && python3 -I -m unittest) || exit 1; \
-	done
 	@echo "→ compose invariant lint + tests"; \
 	$(PY_YAML) scripts/lint-compose.py || exit 1; \
 	$(PY_YAML) -I -m unittest discover -s scripts -p 'test_lint_compose.py' || exit 1; \
@@ -732,9 +665,6 @@ check:
 #   shutterflow → shutterflow-up · weatherorb → weatherorb-up
 #   rollhook-marketing has NO -up target: its image is built and rolled by CI
 #   (ghcr.io/jkrumm/rollhook-marketing), so deploy reports that and exits 0.
-# The dev-only -redeploy targets (weatherorb) push an
-# empty commit to trigger RollHook from a local clone — a dev convenience, not a
-# routine prod deploy, so deploy deliberately does not use them.
 #
 # With no APP (the repo-contract loop) deploy applies that same per-app dispatch
 # to whatever `git diff --name-only $(cat .deploy-sha) HEAD` reports (see

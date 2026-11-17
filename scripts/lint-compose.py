@@ -17,7 +17,6 @@ ALLOWED_PORTS = {
     ("compose.monitoring.yml", "clickstack"),  # 13133 OTel health
     ("compose.monitoring.yml", "beszel-agent"),
     ("compose.monitoring.yml", "dozzle"),
-    ("apps/weatherorb/compose.yml", "weatherorb-egress"),
     ("apps/fpp/compose.yml", "mariadb"),
 }
 # The one documented public exception: FPP MariaDB TCP 33306.

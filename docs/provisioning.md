@@ -27,9 +27,10 @@ sudo tailscale set --snat-subnet-routes=false       # keep tailnet source IPs on
 ```
 
 The last line is load-bearing: with SNAT on (the default; tailscale 1.104.5 applied it on 2026-11-06),
-tailnet traffic DNAT-ed into a container reaches it as the Docker bridge gateway (`172.x.0.1`), so the
-weatherorb worker door's Traefik `ipAllowList` (`100.64.0.0/10`) answers a bare 403 and the mini's alert
-delivery stops. The VPS advertises no subnet routes, so nothing needs the SNAT.
+tailnet traffic DNAT-ed into a container reaches it as the Docker bridge gateway (`172.x.0.1`), so a
+Traefik `ipAllowList` on the tailnet range (`100.64.0.0/10`) answers a bare 403 (weatherorb's worker door was
+the one such router; it was removed 2026-11-17, the setting stays). The VPS advertises no subnet routes, so
+nothing needs the SNAT.
 
 Do **not** bind sshd to the Tailscale IP — see `AGENTS.md` → Quick Reference for why. Verify instead:
 ```bash

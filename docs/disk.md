@@ -19,7 +19,7 @@ the next incident. `scripts/disk-watch.sh` pushes ntfy `alerts` at 80 %.
 | `~/factory-steps` | 7.2 GB | 7.2 GB (not ours, see below) |
 
 The one-day result is in the issue's report; this table is the same-day state after the manual runs
-of the new jobs. Untouched: `~/orb-*`, `/var/lib/weatherorb` (WeatherOrb's own).
+of the new jobs. Untouched: `~/orb-*` (WeatherOrb's own). `/var/lib/weatherorb` (the V1 basemap) was removed 2026-11-17.
 
 ## Per directory
 
@@ -34,7 +34,7 @@ of the new jobs. Untouched: `~/orb-*`, `/var/lib/weatherorb` (WeatherOrb's own).
 | `/var/lib/docker/volumes` | Data, never pruned. ClickHouse 30 d TTL (7 d system logs), RollHook registry 5 tags per repo, Postgres/MariaDB are the databases. |
 | `/var/log` | `journald` capped at 1 GB (`config/journald-vps.conf`, `make journald-install`); the rest is under 50 MB. |
 | `~/factory-steps` | software-factory's remote step host: one worktree per project and slot (reused, not growing) plus a shared bun cache. No retention of its own; filed as a signal to software-factory. |
-| `~/orb-*`, `/var/lib/weatherorb` | WeatherOrb's, its own Issue. Not touched here. |
+| `~/orb-*` | WeatherOrb's, its own Issue. Not touched here. |
 
 ## Why a size cap, not an age filter
 

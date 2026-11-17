@@ -16,7 +16,7 @@ All container operations go through the Makefile — never raw `docker`/`docker 
 ```bash
 make                     # show ENV-aware help (default target)
 # Primary operations — adapts to ENV automatically
-make up                  # dev: compose.dev.yml | prod: networking → infra → monitoring → fpp → email-gateway → photo-gallery → imgproxy (weatherorb, shutterflow, basalt-ui-marketing, jkrumm-com are NOT in it: own bootstrap + `make <app>-up`)
+make up                  # dev: compose.dev.yml | prod: networking → infra → monitoring → fpp → email-gateway → photo-gallery → imgproxy (weatherorb, shutterflow, basalt-ui-marketing, jkrumm-com are NOT in it: `make <app>-up`, the RollHook ones after their own bootstrap)
 make down                # dev: compose.dev.yml | prod: reverse order
 
 # Targeted restart (prod only — individual stacks)
@@ -24,8 +24,7 @@ make networking-up / make networking-down
 make infra-up    / make infra-down
 make monitoring-up / make monitoring-down
 make fpp-up      / make fpp-down
-make weatherorb-up    / make weatherorb-down   # nginx edge + account service for weatherorb.com; make weatherorb-env first, basemap under /var/lib/weatherorb
-make weatherorb-account-bootstrap-image / make weatherorb-backup-user   # prod one-time: seed the account image; wo-backup user + /var/backups/weatherorb-accounts
+make weatherorb-up    / make weatherorb-down   # the one static page at weatherorb.com (apps/weatherorb/site, nginx, no RollHook)
 make imgproxy-up / make imgproxy-down
 make edge-cache-status HOST=example.com   # ✓/✗ checklist for the edge-cache pattern (docs/edge-cache.md)
 make edge-cache-apply HOST=example.com    # idempotent provision — DNS, tunnel ingress, Cache Rule; DRY_RUN=1 to preview
@@ -166,7 +165,6 @@ External networks (pre-created by `setup.sh`, referenced as `external: true`):
 | `mariadb-net` | FPP MariaDB access | MariaDB, FPP services, backup container |
 | `valkey-net` | Valkey/Redis access | Valkey, apps needing cache |
 | `monitoring-net` | Observability bus | ClickStack, Beszel, Dozzle, apps sending OTel |
-| `weatherorb-account` | Account ↔ Traefik only (the tailnet-only worker door) | Traefik, weatherorb-account |
 
 Internal networks (created by Docker Compose, not external):
 
@@ -198,10 +196,10 @@ Internal networks (created by Docker Compose, not external):
   DNS: a grey-cloud A record to the Tailscale IP (CGNAT, unreachable from the
   internet). `ipAllowList` only sees a real client IP if the request reaches
   Traefik with its source address intact. Through cloudflared every request
-  arrives from a container address; the one router that uses it
-  (`weatherorb-worker`) treats that as a feature (a tunnel request fails the
-  allowlist) and relies on the `:443` publish keeping tailnet source addresses.
-  Unverified live: confirm with a tailnet request before building on it.
+  arrives from a container address, so a router that wants it as an allowlist
+  (a tunnel request fails it) relies on the `:443` publish keeping tailnet
+  source addresses. No router uses one today. Unverified live: confirm with a
+  tailnet request before building on it.
 
 ---
 
@@ -212,9 +210,8 @@ compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-pro
 compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no exposed ports
 compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, Watchtower, Umami + two socket-proxy instances)
 compose.dev.yml               Local dev (Valkey + MariaDB + ClickStack with ports exposed; Postgres is the mini's Homebrew server, not here)
-apps/weatherorb/compose.yml        weatherorb-edge (Tailscale-serve edge) + weatherorb-account (Bun + Better Auth, own DB weatherorb_accounts, edge-only, one tailnet-only worker router) — RollHook-managed, `make weatherorb-up` pins both images — + weatherorb-egress (stdlib CONNECT proxy for the alert webhooks, ADR 0023: tailnet-only :18443, own bridge network, `python:3.14-alpine`, bumped by hand) + weatherorb-probe (DORMANT, compose profile `probe`, while weatherorb V1 is frozen — Issue 1194; `make weatherorb-up WEATHERORB_PROBE=1` revives it; stdlib external /v1 availability probe, ADR 0026: once a minute, OTLP span to ClickStack, key from the host-local file `WEATHERORB_PROBE_KEY_FILE` = `/etc/vps/weatherorb-probe-key` (owner 65534, mode 0400), fails closed without it; no published port, public python image, no pin)
-apps/weatherorb/egress/        proxy.py (the egress proxy; IP-literal :443 CONNECT only, refuses non-public targets) + test_proxy.py (`python3 -m unittest`, stdlib only)
-apps/weatherorb/probe/         probe.py (the /v1 availability probe) + test_probe.py (`python3 -m unittest`, stdlib only)
+apps/weatherorb/compose.yml        weatherorb-site — nginx:alpine serving `site/` read-only; apex + www routers (www → apex 301). No RollHook, no registry, no env file (V1's edge/account/egress/probe were removed 2026-11-17)
+apps/weatherorb/site/index.html   the page: the name and "WeatherOrb is being rebuilt."
 apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
 apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
 apps/jkrumm-com/compose.yml   jkrumm.com portfolio site (Astro, repo-root Dockerfile) — managed by RollHook, edge cache pattern in docs/edge-cache.md
@@ -240,9 +237,6 @@ scripts/backup-pg.sh          pg_dump → S3 (verified before the Kuma push ping
 scripts/backup-email-gateway.sh  SQLite `.backup` snapshots of email-gateway.sqlite + mail.sqlite → tar.gz → S3 `backups/vps/email-gateway/`; optional Kuma push via `EMAIL_GATEWAY_BACKUP_KUMA_PUSH_URL` (not yet in any template)
 scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liveness)
 scripts/db-counts.sh          Exact per-table COUNT(*) (Postgres + MariaDB) — read-only, diff-friendly verification (make db-counts)
-scripts/dump-weatherorb-accounts.sh  Hourly pg_dump of weatherorb_accounts → /var/backups/weatherorb-accounts (48 kept, homelab pulls as wo-backup)
-scripts/setup-weatherorb-backup-user.sh  Idempotent wo-backup user + backup dir + forced-command shell — run via make weatherorb-backup-user
-scripts/wo-backup-shell  wo-backup login shell (installed to /usr/local/bin): only a read-only rsync (rrsync -ro) on the dump dir; Tailscale SSH ignores authorized_keys, so the shell is the forced command
 scripts/setup-gh-runner.sh    Idempotent per-repo Actions runner for private repos — gh-runner user, rootless Docker, systemd unit (make gh-runner-setup / gh-runner-remove REPO=…, docs/gh-runner.md)
 scripts/gh-runner-sync.sh     Registers the runner(s) of every private repo with workflows, per-repo count in instances() (make gh-runner-sync, runs where gh is authenticated)
 scripts/gh-runner-clean.sh    Trims a runner's old bin/externals and _work/_update left by self-updates (cron/docker-prune, root, daily)
@@ -270,7 +264,6 @@ cron/pg-health.env.tpl        op template for the seeded pg-health cron env (mat
 cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/email-gateway-backup     email-gateway SQLite backup, daily 03:45
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
-cron/weatherorb-accounts-dump  weatherorb_accounts dump, hourly at :15 (root) — sources /etc/vps/weatherorb-accounts-dump.env (seeded from cron/weatherorb-accounts-dump.env.tpl)
 cron/docker-prune             Daily prune: 04:30 prod daemon (images >48h unused, build cache capped 3 GB, never volumes), 04:35 gh-runner rootless daemon (images, volumes, cache capped 6 GB — `--filter until=` matches nothing on this engine), 04:40 scripts/gh-runner-clean.sh (make prune-cron-install; bounds per directory: docs/disk.md)
 cron/disk-watch               Root-disk alert every 15 min: ntfy `alerts` at >= 80 % (scripts/disk-watch.sh, env seeded from cron/disk-watch.env.tpl)
 config/journald-vps.conf      journald SystemMaxUse=1G (setup.sh, make journald-install)
@@ -428,7 +421,7 @@ See `~/SourceRoot/rollhook/README.md` for implementation details (shutdown patte
 
 Never violate these:
 
-- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), `18443` (weatherorb-egress CONNECT proxy), all bound to `${VPS_TAILSCALE_IP}` — **and the FPP MariaDB exception below**
+- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), all bound to `${VPS_TAILSCALE_IP}` — **and the FPP MariaDB exception below**
 - Zero inbound *public* ports — cloudflared is outbound-only, SSH via Tailscale only — **except 33306 (FPP MariaDB)**
 - UFW: default-deny inbound, only `tailscale0` allowed in; sshd may listen on all interfaces (never rebind it — boot-order lock-out). `make firewall` is the proof
 - Provider firewall: only TCP 33306 inbound (FPP MariaDB), nothing else
@@ -454,7 +447,7 @@ bash /home/jkrumm/vps/scripts/setup.sh
 5. Tunnel token already in 1Password (`vps/cloudflare-tunnel/TOKEN`)
 6. `cd ~/vps && make networking-up` → wait for Traefik to issue `*.${DOMAIN}` cert (1–2 min, check `docker logs traefik | grep -i acme`)
 7. `make fpp-cert-sync` → extracts wildcard cert into `apps/fpp/certs/`
-8. `make up` → starts networking, infra, monitoring, fpp, email-gateway, photo-gallery, imgproxy (idempotent — re-runs networking-up too). weatherorb, shutterflow, basalt-ui-marketing and jkrumm-com are not in it: bootstrap each (`<app>-env` / `<app>-bootstrap-image`, see its compose header), then `make <app>-up`
+8. `make up` → starts networking, infra, monitoring, fpp, email-gateway, photo-gallery, imgproxy (idempotent — re-runs networking-up too). weatherorb, shutterflow, basalt-ui-marketing and jkrumm-com are not in it: `make weatherorb-up`; bootstrap each of the others (`<app>-env` / `<app>-bootstrap-image`, see its compose header), then `make <app>-up`
 9. `make postgres-setup` → provision Postgres schemas/users (after a DR restore, run it again: roles/globals are not in the dump)
 10. `make fpp-mariadb-setup` → provision MariaDB fpp user + grants
 11. `make cron-env-seed` → materialize /etc/vps/*.env for cron jobs from 1Password (`make cron-install` re-installs `cron/*` into `/etc/cron.d` later)
@@ -520,11 +513,9 @@ make deploy APP=<name>      # run on the VPS, ENV=prod — applies the merged ch
 
 `make deploy APP=<name>` dispatches to that app's existing `<name>-up` target,
 which recreates it from `apps/<name>/compose.yml` while **pinning the currently
-running image**. Every RollHook app (fpp incl. the updater, email-gateway, shutterflow, weatherorb, basalt-ui-marketing, jkrumm-com) pins through one Makefile helper (`PIN_SH` / `pin_all SVC:VAR …`), so a config change can never roll an app back to a stale `:latest` (see `## RollHook`). A service with no container yet is a genesis start from the bootstrap-seeded `:latest`; a container whose image cannot be read fails the target. `rollhook-marketing` has no `-up` target and is
+running image**. Every RollHook app (fpp incl. the updater, email-gateway, shutterflow, basalt-ui-marketing, jkrumm-com) pins through one Makefile helper (`PIN_SH` / `pin_all SVC:VAR …`), so a config change can never roll an app back to a stale `:latest` (see `## RollHook`). A service with no container yet is a genesis start from the bootstrap-seeded `:latest`; a container whose image cannot be read fails the target. `rollhook-marketing` has no `-up` target and is
 CI-only: `make deploy APP=rollhook-marketing` prints `deployed by CI on push` and
-exits 0. The dev-only `-redeploy` targets (weatherorb)
-push an empty commit to trigger RollHook from a local clone; they are a dev
-convenience, not routine prod deploys, so `deploy` does not use them.
+exits 0. `weatherorb` is plain nginx over `apps/weatherorb/site` (no RollHook): `make deploy APP=weatherorb` recreates it.
 
 With no `APP`, `make deploy` drives the same flow off the diff: it reads the last
 deployed SHA from the gitignored `.deploy-sha` (seeding it with `HEAD` and

@@ -311,7 +311,7 @@ fi
 # 10. Create Docker external networks
 # =============================================================================
 log "Creating Docker networks..."
-for network in proxy postgres-net valkey-net monitoring-net mariadb-net weatherorb-account; do
+for network in proxy postgres-net valkey-net monitoring-net mariadb-net; do
   if docker network inspect "${network}" &>/dev/null; then
     skip "Network ${network} already exists"
   else
@@ -354,11 +354,11 @@ fi
 
 # =============================================================================
 # 12. Install cron jobs (Postgres backup, Postgres liveness, MariaDB backup,
-# MariaDB cert sync, daily Docker image/build-cache prune, hourly weatherorb accounts dump,
+# MariaDB cert sync, daily Docker image/build-cache prune,
 # root-disk alert)
 # =============================================================================
 log "Installing cron jobs..."
-for cronfile in pg-backup pg-health email-gateway-backup fpp-mariadb-backup fpp-cert-sync docker-prune weatherorb-accounts-dump disk-watch; do
+for cronfile in pg-backup pg-health email-gateway-backup fpp-mariadb-backup fpp-cert-sync docker-prune disk-watch; do
   cp "${REPO_DIR}/cron/${cronfile}" "/etc/cron.d/${cronfile}"
   chmod 644 "/etc/cron.d/${cronfile}"
   chown root:root "/etc/cron.d/${cronfile}"

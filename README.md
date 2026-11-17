@@ -8,7 +8,7 @@ Production Docker Compose stack for a VPS (12 vCPU · 24 GB · 180 GB SSD · Ubu
 
 ```bash
 make up              # prod: networking → infra → monitoring → fpp → email-gateway → photo-gallery → imgproxy
-                      # weatherorb, shutterflow, basalt-ui-marketing, jkrumm-com: own bootstrap, then `make <app>-up`
+                      # weatherorb, shutterflow, basalt-ui-marketing, jkrumm-com: `make <app>-up` (the RollHook ones after their own bootstrap)
 make down             # stop everything (reverse order)
 make ps               # container status
 
@@ -100,9 +100,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | imgproxy | ghcr.io/imgproxy/imgproxy:v4 | Image CDN — on-the-fly resize/convert over a private B2 bucket. See [docs/image-cdn.md](docs/image-cdn.md) | auto (v4.x) |
 | shutterflow-share | `rollhook.jkrumm.com/shutterflow-share` | Shutterflow share server (accounts, albums, share links) at `shutterflow.app` | RollHook |
 | shutterflow-imgproxy | ghcr.io/imgproxy/imgproxy:v4.0.20 | Shutterflow's **signed** derivative CDN at `cdn.shutterflow.app` over `shutterflow/prod/derivatives/` | **manual only** (exact pin, Watchtower off) |
-| weatherorb-edge | `.../weatherorb-edge` | Tailscale-serve edge for the weatherorb weather/wave service | RollHook |
-| weatherorb-account | `.../weatherorb-account` | Bun + Better Auth account service (own database `weatherorb_accounts`), reached only by the edge — its one Traefik router is the tailnet-only alert-worker door | RollHook |
-| weatherorb-egress | `python:3.14-alpine` + `apps/weatherorb/egress/proxy.py` | CONNECT-only egress proxy for the forecast-alert webhooks (weatherorb ADR 0023): tailnet-only `:18443`, IP-literal `:443` targets, non-public refused | `make weatherorb-up` (no pin, Watchtower off) |
+| weatherorb-site | nginx:alpine | The one static page at weatherorb.com (`apps/weatherorb/site`) | auto |
 | email-gateway | `.../email-gateway` | Bun + Resend — FPP contact-form + analytics + SY Serendipity charter-request emails | RollHook |
 | basalt-ui-marketing | `.../basalt-ui-marketing` | basalt-ui.com marketing/docs site (Astro) | RollHook |
 | jkrumm-com | `.../jkrumm-com` | jkrumm.com portfolio site (Astro) | RollHook |
@@ -222,15 +220,6 @@ keys are name-prefix-restricted to `shutterflow/prod/derivatives/` — they cann
 | `SHUTTERFLOW_B2_BUCKET` / `_ENDPOINT` / `_REGION` | | Reused from `op://common/backblaze-s3/*` |
 | `SHUTTERFLOW_TRUSTED_PROXIES` | `<cidr>` | Not a secret — `make shutterflow-env` reads the `proxy` network subnet from docker |
 
-**weatherorb (account service)**
-
-`op://vps/weatherorb-account/*` via `apps/weatherorb/.env.tpl` (`make weatherorb-env`); `WEATHERORB_ACCOUNT_DB_PASSWORD` is also in the root `.env.tpl` (for `make postgres-setup`) and in `cron/weatherorb-accounts-dump.env.tpl` (hourly dump).
-
-| Variable | Value | How to get |
-|-|-|-|
-| `WEATHERORB_ACCOUNT_DB_PASSWORD` | `<secret>` | `openssl rand -hex 32` |
-| `WEATHERORB_ACCOUNT_BETTER_AUTH_SECRET` | `<secret>` | `openssl rand -base64 48` |
-
 **Backups (S3-compatible object storage)**
 
 | Variable | Value | How to get |
@@ -334,7 +323,6 @@ Three daily backups, all stream to the same `jkrumm` B2 bucket under `backups/vp
 | `/etc/cron.d/fpp-mariadb-backup` | 03:30 | `apps/fpp/scripts/backup-mariadb.sh` | `backups/vps/mariadb/` | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` |
 | `/etc/cron.d/email-gateway-backup` | 03:45 | `scripts/backup-email-gateway.sh` (SQLite `.backup` of `email-gateway.sqlite` + `mail.sqlite`) | `backups/vps/email-gateway/` | `EMAIL_GATEWAY_BACKUP_KUMA_PUSH_URL` (optional, not yet in a template) |
 | `/etc/cron.d/pg-health` | every minute | `scripts/health-pg.sh` | n/a (liveness) | `UPTIME_KUMA_POSTGRES_PUSH_URL` |
-| `/etc/cron.d/weatherorb-accounts-dump` | hourly :15 | `scripts/dump-weatherorb-accounts.sh` | `/var/backups/weatherorb-accounts/` (48 kept; homelab pulls as `wo-backup`) | — |
 | `/etc/cron.d/docker-prune` | daily 04:30 / 04:35 / 04:40 | inline `docker image prune -af --filter until=48h` + `builder prune -af --max-used-space 3GB` (prod, never volumes); the runners' daemon pruned with a 6 GB cache cap; `scripts/gh-runner-clean.sh` — bounds in `docs/disk.md` | n/a (hygiene) | — |
 | `/etc/cron.d/disk-watch` | every 15 min | `scripts/disk-watch.sh` — ntfy `alerts` at >= 80 % of `/` (env `/etc/vps/disk-watch.env`, `make cron-env-seed`) | n/a (alert) | — |
 
