@@ -531,6 +531,88 @@ not desired configuration).
 sharing a fixed time window). `<id>` comes from a dashboard's REST v2 `id`
 field (`GET /api/api/v2/dashboards`).
 
+## Host agent
+
+`host-agent` and `host-probe` (`compose.monitoring.yml`) put the VPS's host and container metrics into ClickStack. Both run the same
+image, a slim OpenTelemetry Collector built from `agent/manifest.yaml` with ocb (`agent/README.md`: why it is built, how to bump it,
+how another machine runs it). Everything lands in `otel_metrics_*` with `host.name=vps`, `service.namespace=infra` and
+`deployment.environment.name=prod`.
+
+| Container | Network | Collects | Sends to |
+|-|-|-|-|
+| `host-agent` (`service.name=host-agent`) | host namespace | `system.*`: CPU (`utilization` per state), memory, load, swap, disk I/O, filesystem utilisation per mount, network I/O per interface, process counts, uptime | `http://127.0.0.1:4319` |
+| `host-probe` (`service.name=host-probe`) | bridge | `container.*` through `socket-proxy-monitoring` (CPU, memory, restarts, health), `httpcheck.*` for the public sites, `ping.*` (loss, RTT) to two public resolvers | `http://clickstack:4319` |
+
+**Why two containers.** The network scraper reads `/proc/net/dev`, which shows the namespace of the reading process: in a bridge
+container `system.network.io` would be the container's own eth0. So `host-agent` shares the host namespace, and cannot resolve
+`clickstack`; `compose.monitoring.yml` publishes ClickStack's unauthenticated :4319 on `127.0.0.1` for it (never a routable
+interface). Unprivileged ICMP needs the `ping_group_range` Docker sets in a bridge container (the host has `1 0`, which turns it
+off in the host namespace), and `docker_stats` reaches the read-only proxy by name, so `host-probe` stays on the bridge. The raw
+Docker socket is mounted nowhere. `host-agent` has no capability, a read-only root filesystem and the host filesystem mounted
+read-only; it needs the mount for filesystem and disk statistics.
+
+**Deliberately off:** the per-process scraper (one series per process), `system.cpu.time` (the utilisation gauge replaces it),
+per-container network and block I/O (the host half has both), per-interface series of `veth*`, `br-*` and `docker*`.
+
+**Queue.** The exporter queue is on a volume (`host-agent-queue`, `host-probe-queue`) and retries never give up, so samples
+collected while ClickStack is down arrive after it returns with the timestamps they were collected with.
+
+**Queue test (2026-11-17):** `docker stop clickstack` 19:41:03 → `docker start` 19:46:05 UTC. Afterwards `default.otel_metrics_gauge` held 40 `host-agent` rows in every minute of the gap (the same as before and after it) and 147–151 `host-probe` rows per minute (four fewer while the stopped `clickstack` container had no stats of its own): nothing was lost, and the rows carry the collection timestamps.
+
+**Footprint** (measured 2026-11-17 on the VPS, one hour after start):
+
+| | RSS after 1 h (peak, cgroup) | CPU over 1 h | Rows per day |
+|-|-|-|-|
+| `host-agent` | 27.6 MiB (24.1 MiB peak) | 10 s of CPU time, 0.27 % of one core | 57,600 gauge + 157,000 sum = 215,000 |
+| `host-probe` | 34.9 MiB (34.0 MiB peak) | 19 s of CPU time, 0.51 % of one core | 221,000 gauge + 525,000 sum = 746,000 |
+
+Both containers run with `mem_limit: 128m` (3.7 × the larger peak, which includes the catch-up after the five-minute ClickStack outage of the queue test) and a `memory_limiter` at 96 MiB; no OOM event. Together they add about 0.96 million rows a day to `otel_metrics_gauge` and `otel_metrics_sum` (the 25-minute window of 19:15 UTC, scaled), which at the measured 10 bytes per gauge row and 16 per sum row is about 13 MB a day and 0.4 GiB per 30 days, inside the metrics budget of the Retention table. `host-probe` is three quarters of it: `container.state.health.status` reports three states for each of the 22 containers with a healthcheck at every scrape (66 rows of 150). If the volume ever matters, that metric and `container.memory.usage.limit` are the first to drop.
+
+### Infra alerts
+
+All alerts are on `Infra — Hosts` (`observability/dashboards/infra-hosts.json`), go to the `Factory door` webhook, and are routed
+to this repo (`factory door route-set --source hyperdx --monitor "<name>" --repo vps`). Disk, memory, load, swap and container
+alerts group by `host.name` (and mount or container name), so a host that starts reporting is alerted on without an edit.
+The threshold is part of the name; changing one is a new monitor and needs a new route.
+
+| Alert | Fires when | Window |
+|-|-|-|
+| `Infra filesystem >= 85% (15m)` | any mount of any host is at least 85 % full | 3 × 5 m |
+| `Infra memory >= 90% (15m)` | `system.memory.utilization` state `used` (without cache) at least 90 % | 3 × 5 m |
+| `Infra load5 per core >= 1.5 (15m)` | `system.cpu.load_average.5m` divided by `system.cpu.logical.count` | 3 × 5 m |
+| `Infra swap-out >= 100 MiB per 5m (15m)` | the swap pages written out (`system.paging.operations`, direction `page_out`, type `major`) in each of three consecutive 5 m windows | 3 × 5 m |
+| `Infra container restarts >= 1 (15m)` | `container.restarts` increased | 15 m |
+| `Infra container unhealthy >= 1 (10m)` | a container with a healthcheck reports `unhealthy` | 2 × 5 m |
+| `<host> host silent < 1 sample (10m)` | no `system.cpu.utilization` sample of that host | 2 × 5 m |
+
+Each alert was proved once on 2026-11-17: its threshold lowered until it fired, the Issue arrived at the door (`incident` on the route's Issue), the threshold restored and the state back to OK. The first firing at 19:05 UTC went nowhere: HyperDX 2.45 refuses a webhook whose host resolves to a private or CGNAT address, which the door's tailnet name does, so every alert since the 2.45 pin failed with `WEBHOOK_ERROR` in its `executionErrors`. `WEBHOOK_HOSTNAME_ALLOWLIST` on the clickstack service names the door host; if alerts stop arriving, read `executionErrors` first (`agw hdx rest /alerts/<id>`).
+
+**Measured baseline.** The VPS runs CI and factory builds, and its load5 per core went 1.4 to 3.8 between 19:00 and 19:40 UTC with nothing wrong, so `Infra load5 per core >= 1.5 (15m)` will fire during long builds. That is the specified threshold (Beszel sent load to a digest, not an alert); raise it, or lengthen the window, if the Issues it files are noise.
+
+Swap is judged by activity, not by how full it is: the VPS keeps cold pages in swap at 94 % use without trouble, and paging that
+keeps going is what hurts.
+
+A grouped alert cannot notice a host whose series vanished entirely, so **host silent is one alert per host**. To add one: in
+`infra-hosts.json` copy the tile `host-agent samples: vps (10m silence alerts)` and change the host in its `where`; in
+`observability/alerts` copy `vps-host-silent-1-sample-10m.json`, change the name (`<host> host silent < 1 sample (10m)`) and the
+tile; add `host-agent` for that host to `observability/services.yaml`; `make hyperdx-apply ENV=prod`; `factory door route-set
+--source hyperdx --monitor "<name>" --repo <repo>`; `make hyperdx-export ENV=prod` and commit. The mini and homelab agents add theirs.
+
+**Against Beszel** (retired once ClickStack covers it): status → host silent, memory → memory, swap → swap-out, swap growth →
+swap-out, disk → filesystem, load → load5 per core. Beszel's CPU 80 % for 10 minutes was a digest, not an alert, and has a tile
+(`CPU utilisation`) but no alert here.
+
+### Docker metrics for the container alerts
+
+`docker_stats` exposes both: `container.restarts` (a counter per container, from the Docker restart count) and `container.state.health.status` (one series per health state for each container that has a healthcheck, `unhealthy` is the alert). Containers without a healthcheck cannot be unhealthy here; a container that exited disappears from the list, which the `Running containers` tile shows and no alert covers.
+
+### Verify
+
+```bash
+agw hdx query clickstack_query_tiles '{"dashboardId":"<Infra — Hosts id>","startTime":"<iso>","endTime":"<iso>"}'   # every tile returns rows
+ssh vps 'docker logs --tail 20 host-agent; docker stats --no-stream host-agent host-probe'
+```
+
 ## Retention
 
 Four tiers; ClickStack's default is 30 days for everything.
