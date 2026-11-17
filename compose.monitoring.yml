@@ -171,6 +171,10 @@ services:
       # What the collector gateway stamps on :4319 telemetry and on its own (clickstack/otel-custom.yaml).
       TELEMETRY_HOST_NAME: vps
       TELEMETRY_ENVIRONMENT: prod
+      # HyperDX >= 2.45 refuses webhook URLs that resolve to a private address; the Factory door is the mini's
+      # tailnet name (mapped to its CGNAT IP in extra_hosts below), so it is allowlisted by name. Without this every
+      # alert fails with WEBHOOK_ERROR and nothing reaches the door.
+      WEBHOOK_HOSTNAME_ALLOWLIST: ${MINI_TAILNET_HOST:-mini.invalid}
       HYPERDX_OTEL_EXPORTER_LOGS_TTL: 30d
       HYPERDX_OTEL_EXPORTER_TRACES_TTL: 30d
       HYPERDX_OTEL_EXPORTER_SESSIONS_TTL: 14d    # session replay: the largest table
