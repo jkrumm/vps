@@ -89,7 +89,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | postgres | postgres:18 | Primary DB — pinned major version | **manual only** |
 | valkey | valkey/valkey:9 | Cache + queues — `container_name: redis` | **manual only** |
 | mariadb | mariadb:11.4 | FPP-only DB, publicly exposed on 33306 — see FPP MariaDB exception | **manual only** |
-| clickstack | clickhouse/clickstack-all-in-one:2.43.1 | Observability — OTel + ClickHouse + HyperDX UI. See [docs/observability.md](docs/observability.md) | **manual only** (pinned, `mem_limit` 6g) |
+| clickstack | clickhouse/clickstack-all-in-one:2.45.0 | Observability — OTel + ClickHouse + HyperDX UI. See [docs/observability.md](docs/observability.md) | **manual only** (pinned, `mem_limit` 6g) |
 | beszel-agent | henrygd/beszel-agent | Server metrics agent | auto |
 | dozzle | amir20/dozzle | Log streaming agent | auto |
 | socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | **manual only** (`lts` tag@digest, Watchtower off) |
@@ -348,7 +348,7 @@ trust the sync/restore scripts' own summaries — only `db-counts` runs a real
 
 ## Upgrading Postgres, Valkey or MariaDB
 
-All three (and ClickStack, pinned `2.43.1`) are excluded from Watchtower auto-updates, and a restart alone does not
+All three (and ClickStack, pinned `2.45.0`) are excluded from Watchtower auto-updates, and a restart alone does not
 help — Docker reuses the image already on disk. They only move when `make
 infra-upgrade` / `make fpp-mariadb-upgrade` runs (`AGENTS.md` → Quick
 Reference), so check them periodically (`/audit` phase 8).

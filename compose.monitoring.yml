@@ -145,7 +145,7 @@ services:
   # bundle upgrade can migrate on-disk data, so bump the tag manually (backup first).
   # ---------------------------------------------------------------------------
   clickstack:
-    image: clickhouse/clickstack-all-in-one:2.43.1
+    image: clickhouse/clickstack-all-in-one:2.45.0
     container_name: clickstack
     restart: unless-stopped
     security_opt:

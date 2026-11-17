@@ -285,7 +285,7 @@ scripts/lint-compose.py       Compose-invariants linter (part of `make check`)
 
 **Watchtower** — `nickfedor/watchtower` (the `containrrr` image is archived), connects via `socket-proxy-watchtower` (`POST=1`, isolated network). Auto-updates everything except Postgres/Valkey/MariaDB/ClickStack and the four socket proxies (`com.centurylinklabs.watchtower.enable=false`; a proxy recreate drops Traefik's docker provider and strands the sweep, incident 2026-11-17). ntfy topic `updates` via shoutrrr, warn level only, daily at 04:00.
 
-**ClickStack** — all-in-one observability container (ClickHouse + OTel Collector + HyperDX UI + MongoDB). Pinned to `2.43.1`, excluded from Watchtower (an auto-bump orphans system-log tables, see `docs/observability.md`), `mem_limit: 6g`. Upgrade by hand: bump the tag, `make deploy` (→ `clickstack-recreate`). Two OTLP receivers: `:4318` authed (browser SDKs, cross-host ingest, reached via `otel.DOMAIN` / per-app same-origin routes) and `:4319` unauthed, docker-bridge-only (Traefik + every internal `monitoring-net` service; trust boundary is the network, not the token) — two tiers exist because Traefik 3.x has unfixed env-var substitution bugs in OTLP headers, see `docs/observability.md`.
+**ClickStack** — all-in-one observability container (ClickHouse + OTel Collector + HyperDX UI + MongoDB). Pinned to `2.45.0`, excluded from Watchtower (an auto-bump orphans system-log tables, see `docs/observability.md`), `mem_limit: 6g`. Upgrade by hand: bump the tag, `make deploy` (→ `clickstack-recreate`). Two OTLP receivers: `:4318` authed (browser SDKs, cross-host ingest, reached via `otel.DOMAIN` / per-app same-origin routes) and `:4319` unauthed, docker-bridge-only (Traefik + every internal `monitoring-net` service; trust boundary is the network, not the token) — two tiers exist because Traefik 3.x has unfixed env-var substitution bugs in OTLP headers, see `docs/observability.md`.
 
 HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only). Auth via first-visit account creation. Dev: `https://hyperdx.test` or `http://localhost:7707` direct.
 
@@ -460,7 +460,7 @@ bash /home/jkrumm/vps/scripts/setup.sh
 
 ## Upgrade Procedures
 
-Postgres, Valkey, MariaDB and ClickStack (pinned `2.43.1`; bump the tag, `make deploy`) opt out of Watchtower — a plain restart reuses
+Postgres, Valkey, MariaDB and ClickStack (pinned `2.45.0`; bump the tag, `make deploy`) opt out of Watchtower — a plain restart reuses
 the image already on disk, so they drift indefinitely until `make
 infra-upgrade` / `make fpp-mariadb-upgrade` runs (patch/minor) or the gated
 `scripts/restore-pg.sh` DR pattern runs for a major version. Full commands +
