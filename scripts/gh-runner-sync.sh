@@ -5,8 +5,9 @@
 # authenticated (the mini or the MacBook), NOT on the VPS:  make gh-runner-sync  [DRY_RUN=1]
 #
 # Registration only — each repo's workflows still need `runs-on: [self-hosted, vps]` (a commit in
-# that repo). Public repos are never touched here, and setup-gh-runner.sh refuses them again on
-# the VPS side. Model: docs/gh-runner.md.
+# that repo). Public repos are never registered here, and setup-gh-runner.sh refuses them again on
+# the VPS side. A public repo that still has a vps-* runner (it went public after registration) fails
+# the sync (check_public); nothing is removed automatically. Model: docs/gh-runner.md.
 # =============================================================================
 set -euo pipefail
 
@@ -77,6 +78,24 @@ sync_instance() {
   return 2
 }
 
+# A vps-* runner on a public repo lets that repo's fork PRs run code on this host. Never removed
+# here: it is an error, and the removal is the owner's call (docs/gh-runner.md → Remove a repo). A
+# listing that fails counts as a failure, so the check never passes on a read it could not make.
+check_public() {
+  local public name listed
+  public="$(gh repo list "${OWNER}" --visibility public --limit 500 --json name --jq '.[].name')"
+  while IFS= read -r name; do
+    [[ -n "${name}" ]] || continue
+    if ! listed="$(gh api "repos/${OWNER}/${name}/actions/runners" --jq '.runners[].name' 2>&1)"; then
+      echo "  ✗ ${OWNER}/${name} (public): could not list runners: ${listed}" >&2
+      failed=$((failed + 1))
+    elif grep -q '^vps-' <<<"${listed}"; then
+      echo "  ✗ ${OWNER}/${name} is PUBLIC and has a vps-* runner: fork PRs would run on the VPS. Remove it (docs/gh-runner.md → Remove a repo)" >&2
+      failed=$((failed + 1))
+    fi
+  done <<<"${public}"
+}
+
 while IFS= read -r name; do
   [[ -n "${name}" ]] || continue
   rc=0
@@ -88,6 +107,8 @@ while IFS= read -r name; do
     *) failed=$((failed + 1)) ;;
   esac
 done <<<"${repos}"
+
+check_public
 
 echo "repos: ${ok} complete, ${added} $([[ "${DRY_RUN}" == "1" ]] && echo "to register" || echo registered), ${failed} failed"
 [[ "${failed}" -eq 0 ]]

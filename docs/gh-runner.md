@@ -40,7 +40,9 @@ week) fits in the headroom next to prod.
 
 - **Private repos only.** Never register a runner on a public repo — a fork PR would run
   arbitrary code on the prod host. `setup-gh-runner.sh` refuses a repo the GitHub API reports as
-  public; `gh-runner-sync.sh` only lists private repos.
+  public; `gh-runner-sync.sh` registers only private repos and exits non-zero when a public repo
+  still has a `vps-*` runner (a repo that went public after registration). It removes nothing; see
+  Remove a repo.
 - **No prod Docker.** `gh-runner` is not in the `docker` group (membership is root-equivalent:
   every container and every injected secret). Jobs build against its rootless daemon; each
   runner's `.env` (loaded by the runner into every job) sets `DOCKER_HOST` to that socket. The
@@ -110,8 +112,12 @@ gh api -X POST repos/$R/actions/runners/remove-token --jq .token \
   | ssh vps "cd ~/vps && make gh-runner-remove ENV=prod REPO=$R"   # N=<n> for an instance
 ```
 
-Unregisters the runner and removes its systemd unit, drop-in and directory. The user and the
-rootless daemon stay for the other repos; to purge them after the last runner is gone:
+Unregisters the runner and removes its systemd unit, drop-in and directory. A repo that went
+public while it had a runner is reported by `make gh-runner-sync` (see Security model); remove
+each instance with the commands above (`N=<n>`).
+
+The user and the rootless daemon stay for the other repos; to purge them after the last runner is
+gone:
 
 ```bash
 sudo loginctl disable-linger gh-runner
