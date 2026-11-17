@@ -1,0 +1,97 @@
+# host-agent, probe half for the VPS: container metrics through the read-only Docker socket proxy, and the outside view
+# (HTTP checks of the public sites, ICMP to two public resolvers). It runs on the bridge network because
+# docker_stats reaches the proxy by name and unprivileged ICMP needs the ping_group_range Docker sets in a bridge
+# container (the VPS host sets it to "1 0", which disables it in the host namespace).
+# Host metrics are the other half (host.yaml). Per-host values come from the environment:
+#   AGENT_HOST_NAME, AGENT_ENVIRONMENT, AGENT_OTLP_ENDPOINT as in host.yaml
+#   DOCKER_ENDPOINT     the Docker API, tcp://socket-proxy-monitoring:2375 (never the raw socket)
+
+extensions:
+  file_storage/queue:
+    directory: /var/lib/host-agent/queue
+    create_directory: true
+
+receivers:
+  docker_stats:
+    endpoint: ${env:DOCKER_ENDPOINT}
+    collection_interval: 30s
+    metrics:
+      # The set the Infra dashboard and its alerts read. Network and block I/O per container are left out: the host
+      # half already reports both for the machine, and per-interface series per container multiply the row count.
+      container.restarts:
+        enabled: true
+      container.state.health.status:
+        enabled: true
+      container.blockio.io_service_bytes_recursive:
+        enabled: false
+      container.cpu.usage.kernelmode:
+        enabled: false
+      container.cpu.usage.usermode:
+        enabled: false
+      container.cpu.usage.total:
+        enabled: false
+      container.memory.file:
+        enabled: false
+      container.memory.total_cache:
+        enabled: false
+      container.network.io.usage.rx_bytes:
+        enabled: false
+      container.network.io.usage.tx_bytes:
+        enabled: false
+      container.network.io.usage.rx_dropped:
+        enabled: false
+      container.network.io.usage.tx_dropped:
+        enabled: false
+  http_check:
+    collection_interval: 60s
+    targets:
+      - { endpoint: "https://jkrumm.com/", method: GET }
+      - { endpoint: "https://basalt-ui.com/", method: GET }
+      - { endpoint: "https://rollhook.com/", method: GET }
+      - { endpoint: "https://weatherorb.com/", method: GET }
+      - { endpoint: "https://shutterflow.app/health", method: GET }
+  icmp_check:
+    collection_interval: 60s
+    targets:
+      - { host: "1.1.1.1", ping_count: 3 }
+      - { host: "8.8.8.8", ping_count: 3 }
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 96
+    spike_limit_mib: 24
+  batch:
+    timeout: 15s
+  resource:
+    attributes:
+      - { key: host.name, value: "${env:AGENT_HOST_NAME}", action: upsert }
+      - { key: service.name, value: host-probe, action: upsert }
+      - { key: service.namespace, value: infra, action: upsert }
+      - { key: deployment.environment.name, value: "${env:AGENT_ENVIRONMENT}", action: upsert }
+
+exporters:
+  otlphttp/clickstack:
+    endpoint: ${env:AGENT_OTLP_ENDPOINT}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 60s
+      max_elapsed_time: 0s
+    sending_queue:
+      enabled: true
+      storage: file_storage/queue
+      queue_size: 5000
+
+service:
+  extensions: [file_storage/queue]
+  telemetry:
+    metrics:
+      level: none
+    logs:
+      level: info
+  pipelines:
+    metrics:
+      receivers: [docker_stats, http_check, icmp_check]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlphttp/clickstack]

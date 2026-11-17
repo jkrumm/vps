@@ -1,0 +1,6 @@
+# The build context is this directory; the image needs manifest.yaml only.
+_build
+dist
+config
+README.md
+build.sh

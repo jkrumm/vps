@@ -25,3 +25,7 @@ traefik/acme.json
 .deploy-sha
 .deploy-apps
 __pycache__/
+
+# host-agent build output (agent/build.sh, ocb)
+agent/dist/
+agent/_build/
