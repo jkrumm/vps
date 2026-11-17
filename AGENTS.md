@@ -40,7 +40,7 @@ Read the one that matches the work before you change it:
 
 Never violate these:
 
-- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), all bound to `${VPS_TAILSCALE_IP}` — **plus `127.0.0.1:4319` (ClickStack's unauthed OTLP tier, loopback only, for host-agent in the host network namespace) and the FPP MariaDB exception below**. `scripts/lint-compose.py` enforces the allowed pairs.
+- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `8123` (ClickHouse HTTP, read-only `argo_ro`), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), all bound to `${VPS_TAILSCALE_IP}` — **plus `127.0.0.1:4319` (ClickStack's unauthed OTLP tier, loopback only, for host-agent in the host network namespace) and the FPP MariaDB exception below**. `scripts/lint-compose.py` enforces the allowed pairs.
 - Zero inbound *public* ports — cloudflared is outbound-only, SSH via Tailscale only — **except 33306 (FPP MariaDB)**
 - No actual IPs, secrets, tokens, or credentials in any tracked file
 - `traefik/acme.json` must remain chmod 600 (Traefik refuses to start otherwise)

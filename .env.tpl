@@ -48,6 +48,9 @@ SHUTTERFLOW_DB_PASSWORD=op://vps/shutterflow/DB_PASSWORD
 ROLLHOOK_SECRET=op://vps/rollhook/SECRET
 BESZEL_AGENT_KEY=op://vps/beszel/AGENT_KEY
 EXPRESS_SESSION_SECRET=op://vps/clickstack/EXPRESS_SESSION_SECRET
+# Read-only ClickHouse user for Argo's dashboards: ARGO_RO_PASSWORD is what Argo uses, the SHA256 of the same value
+# is what ClickHouse checks (clickstack/argo-ro-user.xml). Both written together, docs/observability.md → Dashboard read access.
+ARGO_RO_PASSWORD_SHA256=op://vps/clickstack/ARGO_RO_PASSWORD_SHA256
 # HyperDX ingestion key (public by design, same value browser bundles embed). Nothing
 # here sends it: Traefik and every VPS service use the unauthed :4319 receiver. Kept for
 # the cross-host / browser tier (op://vps/argo/HYPERDX_API_KEY_PROD, README → Secrets).

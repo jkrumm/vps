@@ -1,0 +1,45 @@
+<!--
+  Read-only ClickHouse user for Argo's dashboards (Argo runs on the Mac mini and
+  reads over the tailnet: VPS_TAILSCALE_IP:8123, compose.monitoring.yml).
+
+  Mounted at /etc/clickhouse-server/users.d/argo-ro.xml. Does not touch `default`,
+  the user HyperDX itself uses.
+
+  - readonly=1: SELECT only, and a client cannot change any setting, so it cannot
+    raise the limits below. Any `SET`, INSERT, DDL or setting in the request fails.
+  - GRANT SELECT ON default.* only: the otel_* and hyperdx_* tables. system.* is
+    not granted (no query_log, no users, no settings).
+  - Limits are throw, not break: a query over a limit fails and is cancelled
+    instead of returning a silently truncated result.
+  - Source: the Tailscale CGNAT range. Docker publishes 8123 with iptables DNAT,
+    which keeps the tailnet source address; the bind address in the compose file
+    is the first fence, this is the second.
+  - Password: the sha256 hex of op://vps/clickstack/ARGO_RO_PASSWORD, delivered as
+    ARGO_RO_PASSWORD_SHA256 through from_env. No secret and no hash is in the repo.
+-->
+<clickhouse>
+  <profiles>
+    <argo_ro>
+      <readonly>1</readonly>
+      <max_execution_time>15</max_execution_time>
+      <timeout_overflow_mode>throw</timeout_overflow_mode>
+      <max_result_rows>1000000</max_result_rows>
+      <result_overflow_mode>throw</result_overflow_mode>
+      <!-- 1 GB of the container's 6 GB, so one bad query cannot starve ingest. -->
+      <max_memory_usage>1000000000</max_memory_usage>
+    </argo_ro>
+  </profiles>
+  <users>
+    <argo_ro>
+      <password_sha256_hex from_env="ARGO_RO_PASSWORD_SHA256"/>
+      <networks>
+        <ip>100.64.0.0/10</ip>
+      </networks>
+      <profile>argo_ro</profile>
+      <quota>default</quota>
+      <grants>
+        <query>GRANT SELECT ON default.*</query>
+      </grants>
+    </argo_ro>
+  </users>
+</clickhouse>

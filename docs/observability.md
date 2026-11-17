@@ -785,6 +785,59 @@ docker exec clickstack clickhouse-client --query "
 A stale `newest` (weeks/months old) confirms an orphan — drop it with
 `DROP TABLE system.<table> SYNC`. Never drop the un-suffixed table itself.
 
+## Dashboard read access — ClickHouse over the tailnet
+
+Argo (on the Mac mini) renders its dashboards from ClickHouse directly, not from HyperDX.
+
+| | |
+|-|-|
+| Endpoint | `http://<VPS_TAILSCALE_IP>:8123` (ClickHouse HTTP, no TLS; WireGuard encrypts the tailnet hop) |
+| User | `argo_ro` |
+| Password | `op://vps/clickstack/ARGO_RO_PASSWORD` (what the Argo side requests) |
+| Hash ClickHouse checks | `op://vps/clickstack/ARGO_RO_PASSWORD_SHA256` (`.env.tpl` → `ARGO_RO_PASSWORD_SHA256` → `from_env` in `clickstack/argo-ro-user.xml`) |
+| Scope | `SELECT` on `default.*` (`otel_*`, `hyperdx_*`); `system.*` is not granted |
+| Limits | `readonly=1`, `max_execution_time` 15 s, `max_result_rows` 1,000,000, `max_memory_usage` 1 GB; all `throw`, so a query over a limit is cancelled |
+| Source | `100.64.0.0/10` (the tailnet) |
+
+Example (metrics are the 400-day table; always filter on `TimeUnix`, the sort key):
+
+```bash
+curl -sS --user "argo_ro:$ARGO_RO_PASSWORD" "http://<VPS_TAILSCALE_IP>:8123/" --data-binary "
+  SELECT toStartOfHour(TimeUnix) AS t, MetricName, avg(Value) AS v
+  FROM default.otel_metrics_gauge
+  WHERE TimeUnix >= now() - INTERVAL 24 HOUR
+  GROUP BY t, MetricName ORDER BY t FORMAT JSONEachRow"
+```
+
+**Why the bind address matters.** Docker publishes ports through its own iptables rules, which bypass ufw: a
+bare `8123:8123` would be open on the public address regardless of ufw's default-deny. The compose binding is
+`${VPS_TAILSCALE_IP}:8123:8123`, the same as the 13133 health port, and 8123 is never routed through Traefik or the
+Cloudflare tunnel. `lint-compose.py` rejects a port without that bind.
+
+**Client notes.** `readonly=1` forbids changing any setting, so a client must not send settings (`SET`, or
+URL parameters such as `max_execution_time`, `wait_end_of_query`): they fail with "Cannot modify ... in readonly mode".
+The limits above are the user's profile and apply as-is.
+
+**Known exposure.** The image ships two more users, `api` (password `api`) and `worker` (password `worker`), with full
+rights and `::/0` as source. Nothing uses them (the query log shows `default` only), but publishing 8123 on the tailnet makes them
+reachable from any tailnet device. This change does not touch them; tightening them (or removing them) is a
+separate change.
+
+### Rotation / first setup
+
+The VPS service account cannot write to 1Password, so both fields are written together from a machine with a
+signed-in `op` (a different password and its hash must never be set apart):
+
+```bash
+p=$(openssl rand -base64 32 | tr -d '/+=\n')
+h=$(printf %s "$p" | shasum -a 256 | cut -d' ' -f1)
+op item edit clickstack --vault vps --account tkrumm "ARGO_RO_PASSWORD[password]=$p" "ARGO_RO_PASSWORD_SHA256[password]=$h"
+```
+
+Then `make clickstack-recreate` on the VPS (the config is bind-mounted, a plain `up -d` keeps the old one) and refresh the
+Argo side's cached secret. Create the fields before pulling an `.env.tpl` that references them: one unresolvable
+reference breaks every make target.
+
 ## Deploy regression to know about
 
 **The `make <app>-up` targets pin the running image.** `${IMAGE_TAG:-...:latest}`

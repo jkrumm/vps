@@ -179,12 +179,16 @@ services:
       HYPERDX_OTEL_EXPORTER_TRACES_TTL: 30d
       HYPERDX_OTEL_EXPORTER_SESSIONS_TTL: 14d    # session replay: the largest table
       HYPERDX_OTEL_EXPORTER_METRICS_TTL: 400d    # host and line-quality history outlives 30 days
+      # sha256 hex of the argo_ro password (clickstack/argo-ro-user.xml). `:?` stops compose before a recreate,
+      # because ClickHouse refuses to start on an empty hash.
+      ARGO_RO_PASSWORD_SHA256: ${ARGO_RO_PASSWORD_SHA256:?ARGO_RO_PASSWORD_SHA256 must be set}
     volumes:
       - clickstack-db:/data/db
       - clickstack-ch-data:/var/lib/clickhouse
       - clickstack-ch-logs:/var/log/clickhouse-server
       - ./clickstack/otel-custom.yaml:/etc/otelcol-contrib/custom.config.yaml:ro
       - ./clickstack/system-log-ttl.xml:/etc/clickhouse-server/config.d/system-log-ttl.xml:ro
+      - ./clickstack/argo-ro-user.xml:/etc/clickhouse-server/users.d/argo-ro.xml:ro
     # The factory door on the mini: this host does not resolve the mini's MagicDNS name, so the name is mapped here, and the
     # HyperDX webhook's TLS still validates against it. Both values live in the untracked ~/vps/.env, same as weatherorb's.
     extra_hosts:
@@ -200,6 +204,9 @@ services:
       # The unauthed OTLP tier for host-agent, which runs in the host network namespace and cannot resolve
       # `clickstack`. Loopback only: reachable by processes on this host, never from the network.
       - "127.0.0.1:4319:4319"
+      # ClickHouse HTTP for Argo's dashboards (read-only user argo_ro, clickstack/argo-ro-user.xml). Docker publishes
+      # bypass ufw, so the bind address is the control: tailnet only, never routed via Traefik or the tunnel.
+      - "${VPS_TAILSCALE_IP:?VPS_TAILSCALE_IP must be set}:8123:8123"   # ClickHouse HTTP — Tailscale only
     labels:
       # Watchtower: excluded from auto-updates — bump the pinned tag manually
       - "com.centurylinklabs.watchtower.enable=false"

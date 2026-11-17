@@ -250,6 +250,7 @@ it after rotating any referenced secret.
 | `NTFY_TOKEN` | `tk_...` | `op read "op://common/ntfy/TOKEN" --account tkrumm` — one token for every ntfy publisher: Watchtower and RollHook (topic `updates`), the HyperDX webhook (topic `alerts`). |
 | `BESZEL_AGENT_KEY` | `ssh-ed25519 AAAA...` | Beszel hub UI → Add System → address `<tailscale-ip>:45876` → copy SSH public key shown |
 | `EXPRESS_SESSION_SECRET` | `<generated>` | Generate: `openssl rand -hex 32` — HyperDX session encryption |
+| `ARGO_RO_PASSWORD_SHA256` | `<sha256-hex>` | sha256 of the `ARGO_RO_PASSWORD` field next to it (what Argo connects with). ClickHouse read-only user `argo_ro`; both fields are written together, see `docs/observability.md` → Dashboard read access. |
 | `HYPERDX_API_KEY` | `<ingestion-key>` | HyperDX UI → Team Settings → API Keys → Ingestion API Key. No longer required by Traefik — browser SDKs still embed it (`op://vps/argo/HYPERDX_API_KEY_PROD`). See `docs/observability.md`. |
 
 **RollHook**
