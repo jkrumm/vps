@@ -1,0 +1,61 @@
+# Telemetry service registry — the one list of which services emit what to ClickStack.
+# The contract these entries are held to: docs/observability.md → "Telemetry contract".
+# Seeded 2026-11-17 from every service.name ClickHouse received in the previous 7 days
+# (otel_traces, otel_logs, otel_metrics_*, hyperdx_sessions); a new service.name is added here
+# in the same change that makes it emit. A lint reads this file (separate Issue).
+#
+# Fields
+#   name       service.name, <product>-<role>; a single-process product may use the bare product name
+#   namespace  service.namespace, the product (a group of services that ship together)
+#   host       where it runs, becomes host.name: vps | mini | homelab | home | macbook,
+#              or `client` for browser and phone code (host.name stays unset there)
+#   env        deployment.environment.name it must send: prod (dev only for a dev-only emitter)
+#   repo       the repo that owns the code (and fixes a contract violation)
+#   signals    what it emits today: traces | logs | metrics
+#   status     active (default) | retired (no longer deployed; kept until its rows age out)
+#   notes      the open gap against the contract, or what is not obvious
+#
+# service.version (short git SHA) and the non-empty log Body apply to every active entry; a
+# violation known at seeding time is named in `notes`.
+
+services:
+  # --- this VPS: platform ---
+  - { name: traefik, namespace: vps, host: vps, env: prod, repo: vps, signals: [traces, metrics], notes: "service.version is the Traefik release (3.x), not a deploy SHA: third-party image. No OTLP logs: access logs stay on stdout. Sampled at 0.1." }
+  - { name: otelcol-hyperdx, namespace: vps, host: vps, env: prod, repo: vps, signals: [metrics], notes: "The ClickStack collector's own scrape (authed tier); the gateway stamps host, namespace and environment (clickstack/otel-custom.yaml)." }
+  - { name: clickhouse, namespace: vps, host: vps, env: prod, repo: vps, signals: [metrics], notes: "Prometheus scrape of ClickHouse inside ClickStack; stamped like otelcol-hyperdx." }
+  - { name: imgproxy, namespace: vps, host: vps, env: prod, repo: vps, signals: [traces, logs, metrics], notes: "Third-party image: service.version is the imgproxy release." }
+  - { name: rollhook, namespace: rollhook, host: vps, env: prod, repo: rollhook, signals: [logs], notes: "One log record per deploy. The Go notifier hard-codes its resource: no service.namespace, no service.version, sets the deprecated deployment.environment only." }
+
+  # --- this VPS: apps ---
+  - { name: email-gateway, namespace: email-gateway, host: vps, env: prod, repo: email-gateway, signals: [traces, logs], notes: "Reads OTEL_RESOURCE_ATTRIBUTES. NODE_ENV=production feeds the deprecated key (the gateway maps it to prod); service.version is not set." }
+  - { name: fpp-server, namespace: free-planning-poker, host: vps, env: prod, repo: free-planning-poker, signals: [traces, logs, metrics], notes: "Ignores OTEL_RESOURCE_ATTRIBUTES: environment comes from NODE_ENV (production), service.version from OTEL_SERVICE_VERSION (defaults to local, compose cannot supply the SHA). Log records have an empty Body." }
+  - { name: fpp-analytics, namespace: free-planning-poker, host: vps, env: prod, repo: free-planning-poker, signals: [traces, logs, metrics], notes: "service.version defaults to local (OTEL_SERVICE_VERSION unset). The fpp-analytics-updater sidecar runs the same code under its own OTEL_SERVICE_NAME but has emitted nothing in 7 days." }
+  - { name: shutterflow-share, namespace: shutterflow, host: vps, env: prod, repo: shutterflow, signals: [traces, logs], notes: "service.version is not set. The log provider carries no resource." }
+  - { name: shutterflow-imgproxy, namespace: shutterflow, host: vps, env: prod, repo: shutterflow, signals: [traces, logs, metrics], notes: "Third-party image (imgproxy release as service.version)." }
+  - { name: shutterflow-imgproxy-small, namespace: shutterflow, host: vps, env: prod, repo: shutterflow, signals: [traces, logs, metrics], notes: "Third-party image (imgproxy release as service.version)." }
+  - { name: shutterflow-key-broker, namespace: shutterflow, host: vps, env: prod, repo: shutterflow, signals: [logs], notes: "Resource is service.name only: no namespace, environment or version. No traces." }
+
+  # --- Mac mini ---
+  - { name: argo-api, namespace: argo, host: mini, env: prod, repo: argo, signals: [traces, logs], notes: "Authed tier (otel.<domain>). No service.namespace; sets the deprecated environment key (production)." }
+  - { name: iris-server, namespace: iris, host: mini, env: prod, repo: iris, signals: [traces, logs], notes: "service.version is 0.1.0, not a SHA. No service.namespace; deprecated environment key (production)." }
+  - { name: agw, namespace: agw, host: mini, env: prod, repo: agent-workflows, signals: [traces, logs], notes: "No environment, namespace or host.name." }
+  - { name: agw-gateway, namespace: agw, host: mini, env: prod, repo: agent-workflows, signals: [traces, logs], notes: "No environment, namespace or host.name." }
+  - { name: agw-audio, namespace: agw, host: mini, env: prod, repo: agent-workflows, signals: [traces, logs], notes: "No environment, namespace or host.name." }
+  - { name: agw-logs-probe, namespace: agw, host: mini, env: prod, repo: agent-workflows, signals: [logs], notes: "A one-record probe of the log path; not a service." }
+  - { name: opencode, namespace: opencode, host: mini, env: prod, repo: dotfiles, signals: [traces, logs], notes: "Tooling started by the oc launcher, also on the MacBook. Sets environment `latest` (an app version in the environment key); service.version is the OpenCode release." }
+
+  # --- client code ---
+  - { name: free-planning-poker, namespace: free-planning-poker, host: client, env: prod, repo: free-planning-poker, signals: [traces], notes: "Next.js server (Vercel) and the browser SDK share this name; the browser also writes session replay to hyperdx_sessions. Environment comes from NODE_ENV, version from VERCEL_GIT_COMMIT_SHA (full SHA)." }
+  - { name: argo-dashboard, namespace: argo, host: client, env: prod, repo: argo, signals: [traces], notes: "Browser SDK relayed by the mini. No namespace or version; deprecated environment key (production)." }
+  - { name: iris-ios, namespace: iris, host: client, env: prod, repo: iris, signals: [logs], notes: "iPhone app. No namespace; deprecated environment key (production)." }
+  - { name: iris-macos, namespace: iris, host: macbook, env: prod, repo: iris, signals: [logs], notes: "service.version is `dev`: a local build in the prod project. Deprecated environment key (production)." }
+
+  # --- retired: weatherorb V1 (replaced by one static page on 2026-11-17; V2 is being rebuilt) ---
+  - { name: weatherorb-edge, namespace: weatherorb, host: vps, env: prod, repo: weatherorb, signals: [traces], status: retired, notes: "V1 container, removed from the VPS 2026-11-17." }
+  - { name: weatherorb-account, namespace: weatherorb, host: vps, env: prod, repo: weatherorb, signals: [traces, logs], status: retired, notes: "V1 container, removed from the VPS 2026-11-17." }
+  - { name: weatherorb-probe, namespace: weatherorb, host: vps, env: prod, repo: weatherorb, signals: [traces], status: retired, notes: "V1 container, removed from the VPS 2026-11-17." }
+  - { name: weatherorb-public, namespace: weatherorb, host: mini, env: prod, repo: weatherorb, signals: [traces, logs, metrics], status: retired, notes: "V1; last seen 2026-11-13." }
+  - { name: weatherorb-tileserver, namespace: weatherorb, host: mini, env: prod, repo: weatherorb, signals: [traces, logs, metrics], status: retired, notes: "V1; last seen 2026-11-13." }
+  - { name: weatherorb-worker-ingest, namespace: weatherorb, host: mini, env: prod, repo: weatherorb, signals: [traces, logs, metrics], status: retired, notes: "V1; last seen 2026-11-13." }
+  - { name: weatherorb-worker-round, namespace: weatherorb, host: mini, env: prod, repo: weatherorb, signals: [traces, logs, metrics], status: retired, notes: "V1; last seen 2026-11-13." }
+  - { name: weatherorb-watchdog, namespace: weatherorb, host: mini, env: prod, repo: weatherorb, signals: [traces, logs, metrics], status: retired, notes: "V1; last seen 2026-11-13." }

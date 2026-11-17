@@ -257,6 +257,7 @@ scripts/hyperdx-dev-bootstrap.sh  Dev — idempotent local HyperDX user + access
 scripts/hyperdx-webhook-setup.sh  Prod — idempotent ntfy webhook ("ntfy alerts", topic `alerts`) setup, token from op://common/ntfy/TOKEN (make hyperdx-webhook-setup)
 scripts/hyperdx-sync.sh       Dashboards + alerts-as-code over REST v2 — export/apply (make hyperdx-export / hyperdx-apply)
 observability/dashboards/     Dashboard JSON source of truth — see observability/README.md
+observability/services.yaml   Telemetry service registry — every service.name that emits, with namespace, host, env, repo, signals (contract: docs/observability.md)
 observability/alerts/         Alert JSON source of truth — same export/apply loop (docs/observability.md); every telemetry app has an error alert on the `Factory door` webhook, routed to its repo by a door route named after the alert (docs/observability.md → Per-app error alerts)
 cron/pg-backup                Postgres backup, daily 03:00
 cron/pg-health                Postgres liveness heartbeat, every minute — sources /etc/vps/pg-health.env (no op run — rate limits)
@@ -285,7 +286,7 @@ scripts/lint-compose.py       Compose-invariants linter (part of `make check`)
 
 **Watchtower** — `nickfedor/watchtower` (the `containrrr` image is archived), connects via `socket-proxy-watchtower` (`POST=1`, isolated network). Auto-updates everything except Postgres/Valkey/MariaDB/ClickStack and the four socket proxies (`com.centurylinklabs.watchtower.enable=false`; a proxy recreate drops Traefik's docker provider and strands the sweep, incident 2026-11-17). ntfy topic `updates` via shoutrrr, warn level only, daily at 04:00.
 
-**ClickStack** — all-in-one observability container (ClickHouse + OTel Collector + HyperDX UI + MongoDB). Pinned to `2.45.0`, excluded from Watchtower (an auto-bump orphans system-log tables, see `docs/observability.md`), `mem_limit: 6g`. Upgrade by hand: bump the tag, `make deploy` (→ `clickstack-recreate`). Two OTLP receivers: `:4318` authed (browser SDKs, cross-host ingest, reached via `otel.DOMAIN` / per-app same-origin routes) and `:4319` unauthed, docker-bridge-only (Traefik + every internal `monitoring-net` service; trust boundary is the network, not the token) — two tiers exist because Traefik 3.x has unfixed env-var substitution bugs in OTLP headers, see `docs/observability.md`.
+**ClickStack** — all-in-one observability container (ClickHouse + OTel Collector + HyperDX UI + MongoDB). Pinned to `2.45.0`, excluded from Watchtower (an auto-bump orphans system-log tables, see `docs/observability.md`), `mem_limit: 6g`. Upgrade by hand: bump the tag, `make deploy` (→ `clickstack-recreate`). Pipelines normalise `deployment.environment.name` (prod/dev) and `host.name` (clickstack/otel-custom.yaml); retention is tiered (sessions 14 d, metrics 400 d, logs/traces 30 d, env in `compose.monitoring.yml`). Two OTLP receivers: `:4318` authed (browser SDKs, cross-host ingest, reached via `otel.DOMAIN` / per-app same-origin routes) and `:4319` unauthed, docker-bridge-only (Traefik + every internal `monitoring-net` service; trust boundary is the network, not the token) — two tiers exist because Traefik 3.x has unfixed env-var substitution bugs in OTLP headers, see `docs/observability.md`.
 
 HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only). Auth via first-visit account creation. Dev: `https://hyperdx.test` or `http://localhost:7707` direct.
 
@@ -560,17 +561,19 @@ no app), it verifies every known app's live state instead of exiting 0.
 compares it with a shipped commit. `project.yaml` declares the factory manifest:
 `deploy.mode make`, target `vps` verified by `make verify`, ships by push.
 
-| App | Health URL | Kuma monitor | OTel `service.name` |
-|-|-|-|-|
-| basalt-ui-marketing | `https://basalt-ui.com/` | — | none |
-| email-gateway | `https://email-gateway.<your-domain>/health` | `EmailGateway - HTTP` | none |
-| fpp | `https://server.free-planning-poker.com/health` · `https://analytics.free-planning-poker.com/health` | `FPP - Server - HTTP` · `FPP - Analytics - HTTP` | `fpp-server` · `fpp-analytics` |
-| imgproxy | `https://img.<your-domain>/rs:fit:100/misc/monitor-probe.jpg` | `ImageCDN - HTTP` · `ImageCDN Origin - HTTP` | `imgproxy` |
-| jkrumm-com | `https://jkrumm.com/` | — | none |
-| photo-gallery | `https://photos.<your-domain>/` | `Photos - HTTP` | none |
-| rollhook-marketing | `https://rollhook.com/` | — | none |
-| shutterflow | `https://shutterflow.app/health` | — | `shutterflow-share` |
-| weatherorb | `https://weatherorb.com/` | `WeatherOrb - HTTP` | none |
+| App | Health URL | Kuma monitor |
+|-|-|-|
+| basalt-ui-marketing | `https://basalt-ui.com/` | — |
+| email-gateway | `https://email-gateway.<your-domain>/health` | `EmailGateway - HTTP` |
+| fpp | `https://server.free-planning-poker.com/health` · `https://analytics.free-planning-poker.com/health` | `FPP - Server - HTTP` · `FPP - Analytics - HTTP` |
+| imgproxy | `https://img.<your-domain>/rs:fit:100/misc/monitor-probe.jpg` | `ImageCDN - HTTP` · `ImageCDN Origin - HTTP` |
+| jkrumm-com | `https://jkrumm.com/` | — |
+| photo-gallery | `https://photos.<your-domain>/` | `Photos - HTTP` |
+| rollhook-marketing | `https://rollhook.com/` | — |
+| shutterflow | `https://shutterflow.app/health` | — |
+| weatherorb | `https://weatherorb.com/` | `WeatherOrb - HTTP` |
+
+OTel `service.name`, namespace and host per service: `observability/services.yaml` (the registry; contract in `docs/observability.md` → Telemetry contract).
 
 The shared stacks have their own Kuma monitors: `traefik.<your-domain>` →
 `Traefik - HTTP`, `rollhook.<your-domain>/ready` → `RollHook - Ready - HTTP`,
