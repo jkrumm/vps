@@ -75,7 +75,8 @@ make dev-pg-backup           # globals + every database + row-count manifest →
 make dev-pg-restore-drill    # newest backup → scratch DBs → exact counts vs the source at backup time → scratch dropped; non-zero on mismatch
 make dev-pg-health           # readiness probe (one line, exit 0/1) for the devhost heartbeat
 make dev-pg-launchd          # install the 03:15 backup LaunchAgent (from the main checkout, not a worktree)
-make prune-cron-install  # prod — install the weekly Sunday 04:30 image + build-cache prune (cron/docker-prune); never volumes
+make prune-cron-install  # prod — install the daily image + size-capped build-cache prune and the runner-leftover trim (cron/docker-prune); never prod volumes
+make journald-install    # prod — journal size cap (config/journald-vps.conf) + vacuum
 make gh-runner-setup REPO=jkrumm/<repo> [N=2]  # prod — self-hosted Actions runner (instance) for one private repo (token on stdin, docs/gh-runner.md); gh-runner-remove undoes it, gh-runner-reapply re-runs setup for all
 make gh-runner-sync      # mini/MacBook (needs gh) — register a VPS runner for every private repo with workflows; DRY_RUN=1 previews
 
@@ -244,6 +245,7 @@ scripts/setup-weatherorb-backup-user.sh  Idempotent wo-backup user + backup dir 
 scripts/wo-backup-shell  wo-backup login shell (installed to /usr/local/bin): only a read-only rsync (rrsync -ro) on the dump dir; Tailscale SSH ignores authorized_keys, so the shell is the forced command
 scripts/setup-gh-runner.sh    Idempotent per-repo Actions runner for private repos — gh-runner user, rootless Docker, systemd unit (make gh-runner-setup / gh-runner-remove REPO=…, docs/gh-runner.md)
 scripts/gh-runner-sync.sh     Registers the runner(s) of every private repo with workflows, per-repo count in instances() (make gh-runner-sync, runs where gh is authenticated)
+scripts/gh-runner-clean.sh    Trims a runner's old bin/externals and _work/_update left by self-updates (cron/docker-prune, root, daily)
 scripts/gh-runner-watchdog.sh Restarts runners stuck in reconnect back-off — installed by setup as a 5-min systemd timer
 scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
 scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
@@ -269,7 +271,9 @@ cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/email-gateway-backup     email-gateway SQLite backup, daily 03:45
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
 cron/weatherorb-accounts-dump  weatherorb_accounts dump, hourly at :15 (root) — sources /etc/vps/weatherorb-accounts-dump.env (seeded from cron/weatherorb-accounts-dump.env.tpl)
-cron/docker-prune             Image + build-cache prune: Sunday 04:30 (prod daemon, never volumes) + daily 04:35 (gh-runner rootless daemon, 48h cache, job volumes too) (make prune-cron-install)
+cron/docker-prune             Daily prune: 04:30 prod daemon (images >48h unused, build cache capped 3 GB, never volumes), 04:35 gh-runner rootless daemon (images, volumes, cache capped 6 GB — `--filter until=` matches nothing on this engine), 04:40 scripts/gh-runner-clean.sh (make prune-cron-install; bounds per directory: docs/disk.md)
+cron/disk-watch               Root-disk alert every 15 min: ntfy `alerts` at >= 80 % (scripts/disk-watch.sh, env seeded from cron/disk-watch.env.tpl)
+config/journald-vps.conf      journald SystemMaxUse=1G (setup.sh, make journald-install)
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts (`PIN_SH`/`pin_all` = the one image-pin helper every RollHook `<app>-up` uses)
 .github/workflows/ci.yml      CI: `make check` on every push/PR

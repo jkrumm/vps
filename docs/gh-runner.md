@@ -19,7 +19,7 @@ One runner shared by all repos would need the repos in a GitHub organization.
 | Watchdog | `gh-runner-watchdog.timer` (every 5 min) restarts a runner stuck in reconnect back-off |
 | Docker | one rootless daemon in `gh-runner`'s user systemd (`systemctl --user` + linger) |
 | Code | `scripts/setup-gh-runner.sh`, `scripts/gh-runner-sync.sh`, `scripts/gh-runner-watchdog.sh`, `make gh-runner-{setup,remove,sync}` |
-| Disk hygiene | `cron/docker-prune` (daily 04:35, images, 48h-old build cache and job volumes of the rootless daemon; weekly was too slow for ~40 GB/week of CI churn) |
+| Disk hygiene | `cron/docker-prune` (daily 04:35: unused images and job volumes of the rootless daemon, build cache capped at 6 GB; `scripts/gh-runner-clean.sh` 04:40: runner self-update leftovers). Per-directory bounds: `docs/disk.md` |
 
 Each runner takes one job at a time, so a repo's parallel jobs queue behind each other. A repo
 with several jobs per push gets more instances: the count lives in `instances()` in

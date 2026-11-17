@@ -1,20 +1,34 @@
-# Weekly Docker hygiene — Sunday 04:30 (after Watchtower's 04:00 sweep has pulled
-# the new images, so the superseded ones are unused by then).
-# Images (tagged + dangling, anything no container uses) and build cache older than
-# a week. An unfiltered `builder prune -a` would empty RollHook's whole layer cache
-# and make every app's first build after Sunday a cold one (bun install + every
-# layer for ~12 images); `--filter until=168h` keeps the warm entries.
+# Daily Docker hygiene — 04:30 prod daemon (after Watchtower's 04:00 sweep has pulled the new
+# images, so the superseded ones are unused by then), 04:35 the Actions runners' rootless
+# daemon, 04:40 the runners' self-update leftovers. Per-directory bounds: docs/disk.md.
+#
+# Prod daemon (images live in /var/lib/containerd — the containerd image store):
+# - Images no container uses and older than 48h. Weekly was too slow: 7.6 GB of superseded
+#   RollHook tags and factory step images piled up in the 2.4 days after the Sunday run
+#   (measured 2026-11-17, issue_2033); the 48h window keeps this week's rollback targets and
+#   the factory's fresh step image warm.
+# - Build cache capped at 3 GB (least recently used goes first), so RollHook's layer cache
+#   stays warm. `builder prune` WITHOUT `-a` removes only dangling records, and on this
+#   engine (29.x, containerd store) `--filter until=` matches nothing at all — a daily
+#   `until=48h` run reclaimed 0 B while 18 GB of 4-week-old cache sat there. Size caps work.
 # NEVER volumes — that is data (Postgres, ClickHouse, RollHook, fpp-analytics).
-# Stopped containers are left alone too: RollHook's rollout leaves none, and a
-# stopped one is evidence worth reading before it goes.
+# Stopped containers are left alone too: RollHook's rollout leaves none, and a stopped one is
+# evidence worth reading before it goes.
+# The log gets the totals only (the per-image `deleted:` lines were 57 KB of noise).
 # Install: make prune-cron-install   (copies to /etc/cron.d, or setup.sh section 12)
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-30 4 * * 0 jkrumm /bin/bash -c 'echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af && docker builder prune -f --filter until=168h' >> /home/jkrumm/docker-prune.log 2>&1
+30 4 * * * jkrumm /bin/bash -c 'echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af --filter until=48h | tail -n 1; docker builder prune -af --max-used-space 3GB | tail -n 1; docker system df' >> /home/jkrumm/docker-prune.log 2>&1
 # Same for the Actions runners' rootless daemon (docs/gh-runner.md) — every CI and deploy build
 # lands there. Volumes too, unlike above: on this daemon they are only what jobs' service
 # containers left behind, never data. A no-op until `make gh-runner-setup` has created the user.
-# DAILY with a 48h cache window, not weekly: CI churn is ~40 GB/week (images, job volumes, build
-# cache) and a weekly sweep let the 178 GB disk cross 90% on 2026-11-17 (incident issue_1842).
-35 4 * * * gh-runner /bin/bash -c 'export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock; echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af && docker builder prune -f --filter until=48h && docker volume prune -af' >> /home/gh-runner/docker-prune.log 2>&1
+# DAILY, and the cache capped by SIZE (6 GB): CI churn is ~40 GB/week (images, job volumes, build
+# cache), a weekly sweep let the 178 GB disk cross 90% on 2026-11-17 (incident issue_1842), and
+# the daily sweep that followed still left 18 GB of cache because its `--filter until=48h` matches
+# nothing here (see above). 6 GB holds weatherorb's 3 GB core-ci image layers plus the other
+# repos' builds; images and volumes go every day, so the day's peak is churn + 6 GB.
+35 4 * * * gh-runner /bin/bash -c 'export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock; echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af | tail -n 1; docker builder prune -af --max-used-space 6GB | tail -n 1; docker volume prune -af | tail -n 1; docker system df' >> /home/gh-runner/docker-prune.log 2>&1
+# Runners' self-update leftovers: old bin/externals and _work/_update (~8 GB measured), as root
+# because the repo is not readable by gh-runner. scripts/gh-runner-clean.sh explains the guards.
+40 4 * * * root /home/jkrumm/vps/scripts/gh-runner-clean.sh >> /var/log/gh-runner-clean.log 2>&1
