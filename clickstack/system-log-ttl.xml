@@ -2,7 +2,9 @@
   Caps ClickHouse's own system log tables (trace_log, part_log, query_log,
   metric_log, asynchronous_metric_log, processors_profile_log) at 7 days.
   These have no TTL by default and grow forever — unlike the actual OTel
-  data (otel_* / hyperdx_* tables), which already carries a 30-day TTL.
+  data (otel_* / hyperdx_* tables), which carries its own tiered TTL (logs
+  and traces 30 days, sessions 14, metrics 400; docs/observability.md →
+  "Retention").
 
   Mounted into the container at
   /etc/clickhouse-server/config.d/system-log-ttl.xml via compose.monitoring.yml.
