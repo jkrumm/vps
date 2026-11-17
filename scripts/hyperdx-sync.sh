@@ -373,11 +373,27 @@ PY
         continue
       fi
 
+      # Dashboard filters (variables) carry an id: the write endpoints require it, /validate rejects it.
+      # A file without one (hand-written) gets a slug of the filter's name.
+      local validate_body
+      validate_body=$(python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for f in d.get('filters', []):
+    f.pop('id', None)
+print(json.dumps(d))" <<<"$body")
+      body=$(python3 -c "
+import json, re, sys
+d = json.load(sys.stdin)
+for f in d.get('filters', []):
+    f.setdefault('id', re.sub(r'[^a-z0-9]+', '-', f.get('name', 'filter').lower()).strip('-'))
+print(json.dumps(d))" <<<"$body")
+
       local validate_resp valid
       validate_resp=$(curl -fsS -X POST "${BASE}/api/api/v2/dashboards/validate" \
         -H "Authorization: Bearer ${KEY}" \
         -H "Content-Type: application/json" \
-        --data-binary "$body")
+        --data-binary "$validate_body")
       valid=$(python3 -c "import json,sys; print(json.load(sys.stdin)['valid'])" <<<"$validate_resp")
 
       if [[ "$valid" != "True" ]]; then
