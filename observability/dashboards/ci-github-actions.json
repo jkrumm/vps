@@ -1,0 +1,427 @@
+{
+  "containers": [
+    {
+      "collapsed": false,
+      "id": "overview",
+      "title": "CI now (set the time picker to the last 24 h)"
+    },
+    {
+      "collapsed": false,
+      "id": "runs",
+      "title": "Runs and durations per repo (GitHub-hosted and VPS runners)"
+    },
+    {
+      "collapsed": false,
+      "id": "runners",
+      "title": "Queue time and VPS runner load"
+    },
+    {
+      "collapsed": false,
+      "id": "tables",
+      "title": "Tables"
+    }
+  ],
+  "filters": [],
+  "name": "CI \u2014 GitHub Actions",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "agent"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Runs",
+            "valueExpression": "",
+            "where": "SpanAttributes['ci.kind'] = 'run'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "overview",
+      "h": 4,
+      "id": "6afcd99bc162ceda14bdc105",
+      "name": "Runs (count in range)",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-red",
+        "displayType": "number",
+        "numberFormat": {
+          "mantissa": 0,
+          "output": "number",
+          "thousandSeparated": true
+        },
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Failed",
+            "valueExpression": "",
+            "where": "SpanAttributes['ci.kind'] = 'run' AND SpanAttributes['cicd.pipeline.result'] = 'failure'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "overview",
+      "h": 4,
+      "id": "6afcd99bc162ceda14bdc106",
+      "name": "Failed runs (count in range)",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "config": {
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95 queue",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "SpanAttributes['ci.kind'] = 'queue' AND SpanAttributes['ci.runner.kind'] = 'self-hosted'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "overview",
+      "h": 4,
+      "id": "6afcd99bc162ceda14bdc107",
+      "name": "p95 queue time, VPS runners",
+      "w": 6,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Busy",
+            "metricName": "ci.worker.busy",
+            "metricType": "gauge",
+            "numberFormat": {
+              "mantissa": 0,
+              "output": "percent"
+            },
+            "valueExpression": "",
+            "where": "Attributes['ci.runner.name'] LIKE 'vps-%'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "overview",
+      "h": 4,
+      "id": "6afcd99bc162ceda14bdc108",
+      "name": "VPS runner busy share (all runners)",
+      "w": 6,
+      "x": 18,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['vcs.repository.name']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Runs",
+            "valueExpression": "",
+            "where": "SpanAttributes['ci.kind'] = 'run'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "runs",
+      "h": 7,
+      "id": "6afcd99bc162ceda14bdc109",
+      "name": "Runs per repo (count per interval)",
+      "w": 12,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['vcs.repository.name']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Failed",
+            "valueExpression": "",
+            "where": "SpanAttributes['ci.kind'] = 'run' AND SpanAttributes['cicd.pipeline.result'] = 'failure'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "runs",
+      "h": 7,
+      "id": "6afcd99bc162ceda14bdc10a",
+      "name": "Failed runs per repo (count per interval)",
+      "w": 12,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['vcs.repository.name']",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "SpanAttributes['ci.kind'] = 'run'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "runs",
+      "h": 7,
+      "id": "6afcd99bc162ceda14bdc10b",
+      "name": "Run duration p95 per repo",
+      "w": 12,
+      "x": 0,
+      "y": 7
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['ci.runner']",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "SpanAttributes['ci.kind'] = 'job'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "runs",
+      "h": 7,
+      "id": "6afcd99bc162ceda14bdc10c",
+      "name": "Job duration p95 per runner",
+      "w": 12,
+      "x": 12,
+      "y": 7
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['ci.runner']",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "SpanAttributes['ci.kind'] = 'queue'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "runners",
+      "h": 7,
+      "id": "6afcd99bc162ceda14bdc10d",
+      "name": "Queue time p95 per runner (created to started)",
+      "w": 12,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "SpanAttributes['vcs.repository.name']",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "numberFormat": {
+              "factor": 1e-09,
+              "output": "duration"
+            },
+            "valueExpression": "Duration",
+            "where": "SpanAttributes['ci.kind'] = 'queue'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Traces"
+      },
+      "containerId": "runners",
+      "h": 7,
+      "id": "6afcd99bc162ceda14bdc10e",
+      "name": "Queue time p95 per repo",
+      "w": 12,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "formulas": [
+          {
+            "alias": "Busy",
+            "expression": "A",
+            "numberFormat": {
+              "mantissa": 0,
+              "output": "percent"
+            }
+          }
+        ],
+        "groupBy": "Attributes['ci.runner.name']",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Busy",
+            "metricName": "ci.worker.busy",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "Attributes['ci.runner.name'] LIKE 'vps-%'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "showOperandSeries": false,
+        "source": "Metrics"
+      },
+      "containerId": "runners",
+      "h": 7,
+      "id": "6afcd99bc162ceda14bdc10f",
+      "name": "VPS runner busy share (per runner)",
+      "w": 12,
+      "x": 0,
+      "y": 7
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "Attributes['vcs.repository.name']",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "Waiting",
+            "metricName": "ci.pipeline.run.active",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "Attributes['cicd.pipeline.run.state'] = 'pending'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "runners",
+      "h": 7,
+      "id": "6afcd99bc162ceda14bdc110",
+      "name": "Runs waiting for a runner, per repo",
+      "w": 12,
+      "x": 12,
+      "y": 7
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanAttributes['vcs.repository.name'] AS Repo, countIf(SpanAttributes['ci.kind'] = 'run') AS Runs, countIf(SpanAttributes['ci.kind'] = 'run' AND SpanAttributes['cicd.pipeline.result'] = 'failure') AS Failed, round(quantileIf(0.5)(Duration, SpanAttributes['ci.kind'] = 'run') / 1e9) AS `Run p50 (s)`, round(quantileIf(0.95)(Duration, SpanAttributes['ci.kind'] = 'run') / 1e9) AS `Run p95 (s)`, round(quantileIf(0.95)(Duration, SpanAttributes['ci.kind'] = 'queue') / 1e9) AS `Queue p95 (s)`, round(sumIf(Duration, SpanAttributes['ci.kind'] = 'job') / 1e9 / 60) AS `Job minutes`, countIf(SpanAttributes['ci.kind'] = 'job' AND SpanAttributes['ci.runner.kind'] = 'self-hosted') AS `Jobs on VPS` FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'ci-poller' AND $__filters GROUP BY Repo ORDER BY Runs DESC LIMIT 100"
+      },
+      "containerId": "tables",
+      "h": 9,
+      "id": "6afcd99bc162ceda14bdc111",
+      "name": "Per repo",
+      "w": 24,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT SpanAttributes['ci.runner'] AS Runner, countIf(SpanAttributes['ci.kind'] = 'job') AS Jobs, round(sumIf(Duration, SpanAttributes['ci.kind'] = 'job') / 1e9 / 3600, 2) AS `Busy hours`, round(quantileIf(0.5)(Duration, SpanAttributes['ci.kind'] = 'queue') / 1e9) AS `Queue p50 (s)`, round(quantileIf(0.95)(Duration, SpanAttributes['ci.kind'] = 'queue') / 1e9) AS `Queue p95 (s)`, round(maxIf(Duration, SpanAttributes['ci.kind'] = 'queue') / 1e9) AS `Queue max (s)` FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'ci-poller' AND $__filters GROUP BY Runner ORDER BY Jobs DESC LIMIT 30"
+      },
+      "containerId": "tables",
+      "h": 7,
+      "id": "6afcd99bc162ceda14bdc112",
+      "name": "Per runner",
+      "w": 24,
+      "x": 0,
+      "y": 9
+    },
+    {
+      "config": {
+        "configType": "sql",
+        "connection": "Local ClickHouse",
+        "displayType": "table",
+        "source": "Traces",
+        "sqlTemplate": "SELECT Timestamp AS Started, SpanAttributes['vcs.repository.name'] AS Repo, SpanAttributes['cicd.pipeline.name'] AS Workflow, SpanAttributes['vcs.ref.head.name'] AS Branch, round(Duration / 1e9) AS `Duration (s)`, SpanAttributes['cicd.pipeline.run.url.full'] AS Run FROM $__sourceTable WHERE $__timeFilter(Timestamp) AND ServiceName = 'ci-poller' AND SpanAttributes['ci.kind'] = 'run' AND SpanAttributes['cicd.pipeline.result'] = 'failure' AND $__filters ORDER BY Timestamp DESC LIMIT 30"
+      },
+      "containerId": "tables",
+      "h": 8,
+      "id": "6afcd99bc162ceda14bdc113",
+      "name": "Latest failed runs",
+      "w": 24,
+      "x": 0,
+      "y": 16
+    }
+  ]
+}
