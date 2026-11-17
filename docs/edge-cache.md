@@ -203,9 +203,10 @@ in one shot.
 
 `scripts/edge-cache.py` (stdlib-only Python, no dependency) replaces the old
 copy-paste API snippets in the `/cloudflare` skill for this one pattern.
-Both make targets are prod-only and go through `$(OP_RUN)`, so secrets come
-from `.env.tpl` (`CLOUDFLARE_MANAGE_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
-`CLOUDFLARE_TUNNEL_ID`) — never printed, and no zone/tunnel/account ID is
+Both make targets are prod-only and run through `$(SECRET_RUNNER) --no-masking --env-file=.env.tpl` (the same
+runner as `$(OP_RUN)`, with output masking off), so secrets come from
+`.env.tpl` (`CLOUDFLARE_MANAGE_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+`CLOUDFLARE_TUNNEL_ID`) and the script never prints them, and no zone/tunnel/account ID is
 ever printed either.
 
 ```bash
