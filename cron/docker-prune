@@ -15,4 +15,6 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # Same for the Actions runners' rootless daemon (docs/gh-runner.md) — every CI and deploy build
 # lands there. Volumes too, unlike above: on this daemon they are only what jobs' service
 # containers left behind, never data. A no-op until `make gh-runner-setup` has created the user.
-35 4 * * 0 gh-runner /bin/bash -c 'export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock; echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af && docker builder prune -f --filter until=168h && docker volume prune -af' >> /home/gh-runner/docker-prune.log 2>&1
+# DAILY with a 48h cache window, not weekly: CI churn is ~40 GB/week (images, job volumes, build
+# cache) and a weekly sweep let the 178 GB disk cross 90% on 2026-11-17 (incident issue_1842).
+35 4 * * * gh-runner /bin/bash -c 'export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock; echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af && docker builder prune -f --filter until=48h && docker volume prune -af' >> /home/gh-runner/docker-prune.log 2>&1

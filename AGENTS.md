@@ -269,7 +269,7 @@ cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/email-gateway-backup     email-gateway SQLite backup, daily 03:45
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
 cron/weatherorb-accounts-dump  weatherorb_accounts dump, hourly at :15 (root) — sources /etc/vps/weatherorb-accounts-dump.env (seeded from cron/weatherorb-accounts-dump.env.tpl)
-cron/docker-prune             Weekly image + build-cache prune, Sunday 04:30 (prod daemon, never volumes) + 04:35 (gh-runner rootless daemon, job volumes too) (make prune-cron-install)
+cron/docker-prune             Image + build-cache prune: Sunday 04:30 (prod daemon, never volumes) + daily 04:35 (gh-runner rootless daemon, 48h cache, job volumes too) (make prune-cron-install)
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)
 Makefile                      Operational shortcuts (`PIN_SH`/`pin_all` = the one image-pin helper every RollHook `<app>-up` uses)
 .github/workflows/ci.yml      CI: `make check` on every push/PR
