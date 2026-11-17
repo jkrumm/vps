@@ -579,7 +579,7 @@ The threshold is part of the name; changing one is a new monitor and needs a new
 |-|-|-|
 | `Infra filesystem >= 85% (15m)` | any mount of any host is at least 85 % full | 3 × 5 m |
 | `Infra memory >= 90% (15m)` | `system.memory.utilization` state `used` (without cache) at least 90 % | 3 × 5 m |
-| `Infra load5 per core >= 1.5 (15m)` | `system.cpu.load_average.5m` divided by `system.cpu.logical.count` | 3 × 5 m |
+| `Infra load5 per core >= 4 (15m)` | `system.cpu.load_average.5m` divided by `system.cpu.logical.count` | 3 × 5 m |
 | `Infra swap-out >= 100 MiB per 5m (15m)` | the swap pages written out (`system.paging.operations`, direction `page_out`, type `major`) in each of three consecutive 5 m windows | 3 × 5 m |
 | `Infra container restarts >= 1 (15m)` | `container.restarts` increased | 15 m |
 | `Infra container unhealthy >= 1 (10m)` | a container with a healthcheck reports `unhealthy` | 2 × 5 m |
@@ -587,7 +587,7 @@ The threshold is part of the name; changing one is a new monitor and needs a new
 
 Each alert was proved once on 2026-11-17: its threshold lowered until it fired, the Issue arrived at the door (`incident` on the route's Issue), the threshold restored and the state back to OK. The first firing at 19:05 UTC went nowhere: HyperDX 2.45 refuses a webhook whose host resolves to a private or CGNAT address, which the door's tailnet name does, so every alert since the 2.45 pin failed with `WEBHOOK_ERROR` in its `executionErrors`. `WEBHOOK_HOSTNAME_ALLOWLIST` on the clickstack service names the door host; if alerts stop arriving, read `executionErrors` first (`agw hdx rest /alerts/<id>`).
 
-**Measured baseline.** The VPS runs CI and factory builds, and its load5 per core went 1.4 to 3.8 between 19:00 and 19:40 UTC with nothing wrong, so `Infra load5 per core >= 1.5 (15m)` will fire during long builds. That is the specified threshold (Beszel sent load to a digest, not an alert); raise it, or lengthen the window, if the Issues it files are noise.
+**Measured baseline.** The VPS runs CI and factory builds, and its load5 per core sat at 1.4 to 3.8 for hours on 2026-11-17 with nothing wrong (load 19 to 23 on 12 cores while the weatherorb runners and factory steps ran). The filed 1.5 fired through all of it, so the threshold is 4 per core: above what CI produces, below a host that cannot keep up. Lower it once the builds move off this host; changing it is a new monitor and needs a new door route.
 
 Swap is judged by activity, not by how full it is: the VPS keeps cold pages in swap at 94 % use without trouble, and paging that
 keeps going is what hurts.

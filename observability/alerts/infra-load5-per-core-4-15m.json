@@ -9,14 +9,14 @@
   "displayName": "Infra \u2014 Hosts - Load5 per core",
   "interval": "5m",
   "message": null,
-  "name": "Infra load5 per core >= 1.5 (15m)",
+  "name": "Infra load5 per core >= 4 (15m)",
   "note": null,
   "numConsecutiveWindows": 3,
   "source": "tile",
   "tags": [
     "agent"
   ],
-  "threshold": 1.5,
+  "threshold": 4,
   "thresholdType": "above",
   "tile": "Load5 per core"
 }
