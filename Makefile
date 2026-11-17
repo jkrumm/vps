@@ -74,7 +74,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
         postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove dev-pg-container-remove firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply dev-mariadb-up dev-mariadb-down dev-redis-up dev-redis-down clickstack-up clickstack-down clickstack-restart clickstack-upgrade host-agent-recreate \
-        check deploy verify version logs _deploy-affected sql-postgres \
+        check telemetry-lint deploy verify version logs _deploy-affected sql-postgres \
         traefik-recreate clickstack-recreate cron-install fail2ban-install journald-install
 
 ## Show this help (default). Adapts to ENV — dims targets not available in the current env.
@@ -649,8 +649,15 @@ check:
 	@echo "→ compose invariant lint + tests"; \
 	$(PY_YAML) scripts/lint-compose.py || exit 1; \
 	$(PY_YAML) -I -m unittest discover -s scripts -p 'test_lint_compose.py' || exit 1; \
+	$(PY_YAML) -I -m unittest discover -s scripts -p 'test_telemetry_lint.py' || exit 1; \
 	bash scripts/test_deploy_affected.sh || exit 1
 	@echo "OK: local validation passed"
+
+## Telemetry lint (factory hygiene probe): observability/services.yaml against what prod ClickHouse
+## received — keyless over `ssh vps`, read-only. Exit 0 clean, 1 findings, 2 prod unreadable.
+## Rules and how to silence one: docs/observability.md → Telemetry lint.
+telemetry-lint:
+	@$(PY_YAML) scripts/telemetry-lint.py
 
 # deploy is the config-apply half of shipping: run it ON THE VPS (ENV=prod)
 # after `git pull`. It dispatches to the app's existing <app>-up target, which

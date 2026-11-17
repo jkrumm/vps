@@ -6,6 +6,10 @@ deploy:
   targets:
     - { name: vps, host: vps, verify: make verify }
   hold: 5m
+# The registry held against what prod ClickHouse received (docs/observability.md → Telemetry lint): read-only, keyless over ssh vps.
+hygiene:
+  probes:
+    - { name: telemetry-lint, target: telemetry-lint }
 ship:
   - { via: push }
 # One lead: the VPS is one host with one checkout that `make deploy` applies in place, and the shared infra stacks change under every app.

@@ -103,6 +103,54 @@ rollhook, shutterflow-key-broker) is not patched around here: the violation is i
 `notes` and filed as a signal on its repo. Confirm after any change that rows actually carry
 the attributes (see Verification commands); an SDK that ignores the variable fails silently.
 
+## Telemetry lint
+
+`make telemetry-lint` holds the registry (`observability/services.yaml`) and the contract above against what prod
+ClickHouse actually received. The factory runs it as the project's hygiene probe (`project.yaml` →
+`hygiene.probes`): any finding is a red probe, and the weekly pass files it as an Issue on the repo that owns the
+service.
+
+- **Reads.** Three read-only queries through `ssh vps` → `docker exec clickstack clickhouse-client` (Tailscale SSH, no
+  1Password prompt on the mini). Each has a `LIMIT` and a time filter on the partition column (`TimestampTime` for
+  `otel_logs` and `hyperdx_sessions`, `Timestamp` for `otel_traces`, `TimeUnix` for `otel_metrics_*`): 7 days for
+  existence and silence, 24 hours for attributes, bodies and volume. The drift rule reads the HyperDX REST API with the
+  agent key from `secrets-run` (offline cache) or `HYPERDX_PROD_ACCESS_KEY`. `TELEMETRY_LINT_SSH` replaces `ssh vps`.
+- **Exit.** 0 clean; non-zero with one line per finding (rule, service, measured value, owning repo) and a summary table.
+  The script itself exits 1 on findings and 2 when prod could not be read (a probe error, not a verdict); through
+  `make` both show as 2.
+- **Not Weaver.** OpenTelemetry Weaver (`registry check`, `live-check`) was considered and left out: at about 30
+  services a SQL lint against live data covers the need without a schema toolchain.
+
+| Rule | Finding when (last 24 h unless stated) |
+|-|-|
+| `unregistered` | a `service.name` emitted in 7 days that is not in the registry (add it in the change that makes it emit) |
+| `silent` | a signal the registry expects has no rows for more than 24 h (or none in 7 d) |
+| `environment` | `deployment.environment.name` is missing, not `prod`/`dev`, or differs from the registry's `env` |
+| `namespace` | `service.namespace` is missing |
+| `version` | `service.version` is missing or `local`, `unknown`, `latest`, `0.0.0`, on a `prod` service |
+| `host` | `host.name` is missing or a 12–64 character hex string (a container ID); skipped for registry `host: client` |
+| `body-empty` | more than 1 % of a service's log records have an empty `Body` |
+| `untraced-logs` | the share of logs without a `TraceId` is above `budget.untraced_logs` |
+| `volume` | rows in 24 h of a signal are above `budget.<signal>` |
+| `drift` | an alert or dashboard exists in prod but not in `observability/`, or the reverse (names compared; those tagged for another repo, `weatherorb` and `agw`, are left out as in `hyperdx-export`). Fix with `make hyperdx-export` or `make hyperdx-apply`, so it has no registry switch |
+
+Retired registry entries are skipped by every rule. A violation shows for up to 24 h after its fix shipped, until the old rows
+leave the window.
+
+### Silencing a rule
+
+Never edit the script. Say it in the service's registry entry:
+
+| Field | Effect |
+|-|-|
+| `ignore: { <rule>: "<reason>" }` | that rule stays quiet for that service; the reason is required (a test checks the rule name and that a reason exists) |
+| `expected: none` or `expected: [logs]` | which `signals` must not go silent; `none` for intermittent emitters (a job that logs once per deploy) and for services that by design emit nothing (`signals: []`) |
+| `budget: { traces, logs, metrics, untraced_logs }` | rows per day per signal, and the largest untraced share (0–1). A key left out is no check, so a new service is unchecked until it has one |
+
+Budgets were seeded on 2026-11-17 at 3× the 7-day daily average with a floor of 100 rows. `python3 scripts/telemetry-lint.py
+--seed-budgets` prints the same numbers from live data for a new service. A budget that a real, wanted growth exceeds is
+raised in the same change that causes the growth.
+
 ## ClickStack custom config — merge semantics
 
 ClickStack supports merging a custom collector config:
