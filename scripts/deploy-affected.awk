@@ -8,5 +8,7 @@ BEGIN { FS = "/" }
 /^compose\.infra\.yml$/ { print "infra"; next }
 /^compose\.monitoring\.yml$/ { print "monitoring"; next }
 /^clickstack\// { print "clickstack-conf"; next }
+/^agent\/config\// { print "host-agent-conf"; next }
+/^agent\// { print "monitoring"; next }
 /^observability\// { print "hyperdx"; next }
 /^cron\// && !/\.env\.tpl$/ { print "cron"; next }

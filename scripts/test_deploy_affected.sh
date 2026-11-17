@@ -15,6 +15,9 @@ check traefik/traefik.yml traefik-conf
 check traefik/dynamic/x ""
 check clickstack/x clickstack-conf
 check observability/x hyperdx
+check agent/config/host.yaml host-agent-conf
+check agent/Dockerfile monitoring
+check agent/manifest.yaml monitoring
 check cron/pg-backup cron
 check cron/x.env.tpl ""
 check compose.networking.yml networking

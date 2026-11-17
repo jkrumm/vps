@@ -26,6 +26,9 @@ services:
   - { name: imgproxy, namespace: vps, host: vps, env: prod, repo: vps, signals: [traces, logs, metrics], notes: "Third-party image: service.version is the imgproxy release." }
   - { name: rollhook, namespace: rollhook, host: vps, env: prod, repo: rollhook, signals: [logs], notes: "One log record per deploy. The Go notifier hard-codes its resource: no service.namespace, no service.version, sets the deprecated deployment.environment only." }
 
+  - { name: host-agent, namespace: infra, host: vps, env: prod, repo: vps, signals: [metrics], notes: "Host metrics (system.*) from the slim collector in agent/, host network namespace, exported to the loopback :4319 tier. One per machine; a host not listed here has no silent-host alert (docs/observability.md → Infra alerts)." }
+  - { name: host-probe, namespace: infra, host: vps, env: prod, repo: vps, signals: [metrics], notes: "Container metrics (container.*) through socket-proxy-monitoring, HTTP checks of the public sites (httpcheck.*) and ICMP to public resolvers (ping.*). Same agent image as host-agent." }
+
   # --- this VPS: apps ---
   - { name: email-gateway, namespace: email-gateway, host: vps, env: prod, repo: email-gateway, signals: [traces, logs], notes: "Reads OTEL_RESOURCE_ATTRIBUTES. NODE_ENV=production feeds the deprecated key (the gateway maps it to prod); service.version is not set." }
   - { name: fpp-server, namespace: free-planning-poker, host: vps, env: prod, repo: free-planning-poker, signals: [traces, logs, metrics], notes: "Ignores OTEL_RESOURCE_ATTRIBUTES: environment comes from NODE_ENV (production), service.version from OTEL_SERVICE_VERSION (defaults to local, compose cannot supply the SHA). Log records have an empty Body." }

@@ -7,6 +7,8 @@ volumes:
   clickstack-db:
   clickstack-ch-data:
   clickstack-ch-logs:
+  host-agent-queue:   # persistent exporter queue of host-agent
+  host-probe-queue:   # persistent exporter queue of host-probe
 
 networks:
   proxy:
@@ -191,6 +193,9 @@ services:
     # Health check exposed on Tailscale for Uptime Kuma monitoring.
     ports:
       - "${VPS_TAILSCALE_IP:?VPS_TAILSCALE_IP must be set}:13133:13133"   # OTel health check — Tailscale only
+      # The unauthed OTLP tier for host-agent, which runs in the host network namespace and cannot resolve
+      # `clickstack`. Loopback only: reachable by processes on this host, never from the network.
+      - "127.0.0.1:4319:4319"
     labels:
       # Watchtower: excluded from auto-updates — bump the pinned tag manually
       - "com.centurylinklabs.watchtower.enable=false"
@@ -236,6 +241,82 @@ services:
     networks:
       - monitoring-net
       - socket-proxy-monitoring-net
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # ---------------------------------------------------------------------------
+  # host-agent — host metrics (CPU, memory, load, swap, disk, filesystem, network) into ClickStack.
+  # A slim OpenTelemetry Collector built from agent/manifest.yaml (agent/README.md). It runs in the HOST network
+  # namespace because the network scraper reads /proc/net/dev, which shows the namespace of the reading process; the
+  # host filesystem is mounted read-only for the other scrapers. Exports to the loopback OTLP port of clickstack.
+  # The exporter queue is on a volume: samples survive a ClickStack restart and keep their original timestamps.
+  # Built on the VPS by `make monitoring-up` (--build); never touched by Watchtower.
+  # ---------------------------------------------------------------------------
+  host-agent:
+    build:
+      context: ./agent
+    image: host-agent:0.165.0
+    container_name: host-agent
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    environment:
+      AGENT_HOST_NAME: vps
+      AGENT_ENVIRONMENT: prod
+      AGENT_OTLP_ENDPOINT: http://127.0.0.1:4319
+    volumes:
+      - ./agent/config/host.yaml:/etc/host-agent/config.yaml:ro
+      - type: bind
+        source: /
+        target: /hostfs
+        read_only: true
+        bind:
+          propagation: rslave
+      - host-agent-queue:/var/lib/host-agent
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+  # ---------------------------------------------------------------------------
+  # host-probe — the same agent image, bridge network: container metrics through the read-only
+  # socket-proxy-monitoring (never the raw socket) and the outside view (HTTP checks of the public sites,
+  # ICMP to public resolvers). Unprivileged ICMP needs the ping_group_range Docker sets in a bridge container.
+  # ---------------------------------------------------------------------------
+  host-probe:
+    build:
+      context: ./agent
+    image: host-agent:0.165.0
+    container_name: host-probe
+    restart: unless-stopped
+    depends_on:
+      - socket-proxy-monitoring
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    environment:
+      AGENT_HOST_NAME: vps
+      AGENT_ENVIRONMENT: prod
+      AGENT_OTLP_ENDPOINT: http://clickstack:4319
+      DOCKER_ENDPOINT: tcp://socket-proxy-monitoring:2375
+    volumes:
+      - ./agent/config/vps-probe.yaml:/etc/host-agent/config.yaml:ro
+      - host-probe-queue:/var/lib/host-agent
+    networks:
+      - monitoring-net
+      - socket-proxy-monitoring-net
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }

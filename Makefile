@@ -73,7 +73,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
         postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove dev-pg-container-remove firewall shell-postgres db-counts prune prune-cron-install \
-        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply dev-mariadb-up dev-mariadb-down dev-redis-up dev-redis-down clickstack-up clickstack-down clickstack-restart clickstack-upgrade \
+        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply dev-mariadb-up dev-mariadb-down dev-redis-up dev-redis-down clickstack-up clickstack-down clickstack-restart clickstack-upgrade host-agent-recreate \
         check deploy verify version logs _deploy-affected sql-postgres \
         traefik-recreate clickstack-recreate cron-install fail2ban-install journald-install
 
@@ -157,7 +157,8 @@ networking-up:   require-prod ; $(OP_RUN) docker compose -f compose.networking.y
 networking-down: require-prod ; $(OP_RUN) docker compose -f compose.networking.yml down
 infra-up:        require-prod ; $(OP_RUN) docker compose -f compose.infra.yml up -d
 infra-down:      require-prod ; $(OP_RUN) docker compose -f compose.infra.yml down
-monitoring-up:   require-prod ; $(OP_RUN) docker compose -f compose.monitoring.yml up -d
+# --build: host-agent and host-probe are built from agent/ (BuildKit's cache makes an unchanged build a no-op).
+monitoring-up:   require-prod ; $(OP_RUN) docker compose -f compose.monitoring.yml up -d --build
 monitoring-down: require-prod ; $(OP_RUN) docker compose -f compose.monitoring.yml down
 
 ## Manual image upgrade for the stateful infra containers (Postgres + Valkey).
@@ -700,6 +701,9 @@ traefik-recreate: require-prod
 	$(OP_RUN) docker compose -f compose.networking.yml up -d --force-recreate --no-deps traefik
 clickstack-recreate: require-prod
 	$(OP_RUN) docker compose -f compose.monitoring.yml up -d --force-recreate --no-deps clickstack
+## Recreate host-agent and host-probe after a change to agent/config/*.yaml: the file is bind-mounted, so `up -d` alone keeps the old one running.
+host-agent-recreate: require-prod
+	$(OP_RUN) docker compose -f compose.monitoring.yml up -d --build --force-recreate --no-deps host-agent host-probe
 
 ## Reinstall cron/* (not the *.env.tpl seeds) into /etc/cron.d, same install as setup.sh. Idempotent.
 cron-install: require-prod
@@ -731,6 +735,7 @@ _deploy-affected:
 	    networking|infra|monitoring) $(MAKE) --no-print-directory $$a-up || exit 1 ;; \
 	    traefik-conf) $(MAKE) --no-print-directory traefik-recreate || exit 1 ;; \
 	    clickstack-conf) $(MAKE) --no-print-directory clickstack-recreate || exit 1 ;; \
+	    host-agent-conf) $(MAKE) --no-print-directory host-agent-recreate || exit 1 ;; \
 	    cron) $(MAKE) --no-print-directory cron-install || exit 1 ;; \
 	    fail2ban) $(MAKE) --no-print-directory fail2ban-install || exit 1 ;; \
 	    hyperdx) echo "  · observability/ changed — run 'make hyperdx-apply ENV=prod' (dashboards/alerts are not applied by deploy)" ;; \
@@ -755,7 +760,7 @@ ifeq ($(APP),)
 	failed=0; \
 	for a in $$apps; do \
 	  case "$$a" in \
-	    networking|infra|monitoring|traefik-conf|clickstack-conf|cron|fail2ban|hyperdx) echo "  · skip $$a (infra target — no app health check)"; continue ;; \
+	    networking|infra|monitoring|traefik-conf|clickstack-conf|host-agent-conf|cron|fail2ban|hyperdx) echo "  · skip $$a (infra target — no app health check)"; continue ;; \
 	  esac; \
 	  case " $(KNOWN_APPS) " in *" $$a "*) ;; *) echo "  · skip $$a (no longer in this repo)"; continue ;; esac; \
 	  $(MAKE) --no-print-directory verify APP=$$a || failed=1; \
