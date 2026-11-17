@@ -42,7 +42,7 @@ services:
   - { name: agw-gateway, namespace: agw, host: mini, env: prod, repo: agent-workflows, signals: [traces, logs], notes: "No environment, namespace or host.name." }
   - { name: agw-audio, namespace: agw, host: mini, env: prod, repo: agent-workflows, signals: [traces, logs], notes: "No environment, namespace or host.name." }
   - { name: agw-logs-probe, namespace: agw, host: mini, env: prod, repo: agent-workflows, signals: [logs], notes: "A one-record probe of the log path; not a service." }
-  - { name: opencode, namespace: opencode, host: mini, env: prod, repo: dotfiles, signals: [traces, logs], notes: "Tooling started by the oc launcher, also on the MacBook. Sets environment `latest` (an app version in the environment key); service.version is the OpenCode release." }
+  - { name: opencode, namespace: opencode, host: mini, env: prod, repo: dotfiles, signals: [traces, logs], notes: "Tooling started by the oc launcher, also on the MacBook. Sets environment `latest` (an app version in the environment key; the gateway maps it to dev, the launcher should say prod); service.version is the OpenCode release." }
 
   # --- client code ---
   - { name: free-planning-poker, namespace: free-planning-poker, host: client, env: prod, repo: free-planning-poker, signals: [traces], notes: "Next.js server (Vercel) and the browser SDK share this name; the browser also writes session replay to hyperdx_sessions. Environment comes from NODE_ENV, version from VERCEL_GIT_COMMIT_SHA (full SHA)." }

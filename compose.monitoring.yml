@@ -166,6 +166,9 @@ services:
       # Retention tiers (docs/observability.md → Retention). Read by ClickStack's schema
       # migration when it CREATES a table; existing tables keep their TTL until
       # ALTER TABLE ... MODIFY TTL (the runbook there). Go durations or `<n>d`.
+      # What the collector gateway stamps on :4319 telemetry and on its own (clickstack/otel-custom.yaml).
+      TELEMETRY_HOST_NAME: vps
+      TELEMETRY_ENVIRONMENT: prod
       HYPERDX_OTEL_EXPORTER_LOGS_TTL: 30d
       HYPERDX_OTEL_EXPORTER_TRACES_TTL: 30d
       HYPERDX_OTEL_EXPORTER_SESSIONS_TTL: 14d    # session replay: the largest table
