@@ -5,8 +5,10 @@
 # Prod daemon (images live in /var/lib/containerd — the containerd image store):
 # - Images no container uses and older than 48h. Weekly was too slow: 7.6 GB of superseded
 #   RollHook tags and factory step images piled up in the 2.4 days after the Sunday run
-#   (measured 2026-11-17, issue_2033); the 48h window keeps this week's rollback targets and
-#   the factory's fresh step image warm.
+#   (measured 2026-11-17, issue_2033); the 48h window keeps this week's rollback targets warm.
+#   The factory's step images carry the label factory.image=step (software-factory PR 458;
+#   images built earlier have none until rebuilt) and are never pruned here, so a step after
+#   two quiet days does not rebuild its 1.8 GB image; the factory owns their retention.
 # - Build cache capped at 3 GB (least recently used goes first), so RollHook's layer cache
 #   stays warm. `builder prune` WITHOUT `-a` removes only dangling records, and on this
 #   engine (29.x, containerd store) `--filter until=` matches nothing at all — a daily
@@ -19,7 +21,7 @@
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-30 4 * * * jkrumm /bin/bash -c 'echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af --filter until=48h | tail -n 1; docker builder prune -af --max-used-space 3GB | tail -n 1; docker system df' >> /home/jkrumm/docker-prune.log 2>&1
+30 4 * * * jkrumm /bin/bash -c 'echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af --filter until=48h --filter label!=factory.image | tail -n 1; docker builder prune -af --max-used-space 3GB | tail -n 1; docker system df' >> /home/jkrumm/docker-prune.log 2>&1
 # Same for the Actions runners' rootless daemon (docs/gh-runner.md) — every CI and deploy build
 # lands there. Volumes too, unlike above: on this daemon they are only what jobs' service
 # containers left behind, never data. A no-op until `make gh-runner-setup` has created the user.
