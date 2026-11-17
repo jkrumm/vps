@@ -474,9 +474,11 @@ copy with no TTL of its own — these accumulate forever until dropped by
 hand. First cleanup (2026-09-08) reclaimed ~47 GB this way.
 
 ClickStack is pinned at `2.45.0` (bundled ClickHouse 26.10; 2.43.1 shipped 26.8).
-The 2.45.0 bump moved `system.metric_log` to ClickHouse's bucketed schema and renamed
-the old rows to `metric_log_0`; the other TTL'd logs were renamed aside the same way.
-Each bump is followed by the check below, and the orphans are dropped.
+The 2.45.0 bump (2026-11-17) renamed every TTL'd log table aside (`trace_log_5`,
+`part_log_1`, `metric_log_4`, …; `metric_log` switched to the bucketed schema) and the
+renamed copies kept the old 7-day TTL. `query_views_log` and `opentelemetry_span_log`
+are not in `system-log-ttl.xml`, so their `_N` copies had none. All `_N` tables were
+dropped after the upgrade. Each bump is followed by the check below.
 
 Check for orphans and confirm the live table is the one being written:
 
