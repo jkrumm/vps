@@ -1,4 +1,4 @@
-# How the factory ships this project (software-factory docs/design.md §9).
+# How the factory ships this project (software-factory docs/project.md).
 apiVersion: factory/v2
 name: vps
 deploy:
@@ -6,9 +6,9 @@ deploy:
   targets:
     - { name: vps, host: vps, verify: make verify }
   hold: 5m
-  migrations: []
 ship:
-  - { paths: ["**"], via: push }
+  - { via: push }
+# One lead: the VPS is one host with one checkout that `make deploy` applies in place, and the shared infra stacks change under every app.
 leads: 1
 signals:
   github:
