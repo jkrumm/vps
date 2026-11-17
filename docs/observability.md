@@ -473,6 +473,11 @@ pinned and excluded from Watchtower, so only a manual version bump orphans anoth
 copy with no TTL of its own — these accumulate forever until dropped by
 hand. First cleanup (2026-09-08) reclaimed ~47 GB this way.
 
+ClickStack is pinned at `2.45.0` (bundled ClickHouse 26.10; 2.43.1 shipped 26.8).
+The 2.45.0 bump moved `system.metric_log` to ClickHouse's bucketed schema and renamed
+the old rows to `metric_log_0`; the other TTL'd logs were renamed aside the same way.
+Each bump is followed by the check below, and the orphans are dropped.
+
 Check for orphans and confirm the live table is the one being written:
 
 ```bash
