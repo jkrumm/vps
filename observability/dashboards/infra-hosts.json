@@ -167,8 +167,8 @@
               "output": "percent"
             },
             "valueExpression": "",
-            "where": "",
-            "whereLanguage": "lucene"
+            "where": "ResourceAttributes['host.name'] != 'mini'",
+            "whereLanguage": "sql"
           }
         ],
         "source": "Metrics"
@@ -328,6 +328,37 @@
       "w": 24,
       "x": 0,
       "y": 18
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "concat(ResourceAttributes['host.name'], ' ', Attributes['mountpoint'])",
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Used",
+            "metricName": "system.filesystem.utilization",
+            "metricType": "gauge",
+            "numberFormat": {
+              "mantissa": 1,
+              "output": "percent"
+            },
+            "valueExpression": "",
+            "where": "ResourceAttributes['host.name'] = 'mini'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 6,
+      "id": "6afca3f986da9b7a9c088ae1",
+      "name": "Filesystem utilisation: mini (%)",
+      "w": 12,
+      "x": 0,
+      "y": 21
     },
     {
       "config": {

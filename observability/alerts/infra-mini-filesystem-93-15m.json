@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Infra \u2014 Hosts",
+  "displayName": "Infra \u2014 Hosts - Filesystem utilisation: mini (%)",
+  "interval": "5m",
+  "message": null,
+  "name": "Infra mini filesystem >= 93% (15m)",
+  "note": null,
+  "numConsecutiveWindows": 3,
+  "source": "tile",
+  "tags": [
+    "agent"
+  ],
+  "threshold": 0.93,
+  "thresholdType": "above",
+  "tile": "Filesystem utilisation: mini (%)"
+}
