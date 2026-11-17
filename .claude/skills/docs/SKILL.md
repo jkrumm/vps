@@ -14,8 +14,8 @@ description: Documentation maintenance — sync compose files against README/AGE
 **What this skill does:**
 1. Diffs compose files against README.md and AGENTS.md service tables
 2. Verifies README.md Secrets section covers every `${VAR}` referenced in compose files and scripts
-3. Checks Makefile targets match what AGENTS.md Quick Reference documents
-4. Flags internal socket-proxy networks missing from AGENTS.md Networks section
+3. Checks Makefile targets match what docs/make-targets.md documents
+4. Flags internal socket-proxy networks missing from docs/networks.md
 5. Detects services with `com.centurylinklabs.watchtower.enable=false` not documented in upgrade procedures
 6. Scans for hardcoded real hostnames/domains/IPs in tracked files
 7. Updates stale documentation
@@ -47,15 +47,15 @@ grep -h '\${' compose*.yml scripts/*.sh | grep -oE '\$\{[A-Z_]+\}' | sort -u
 
 ### Network Documentation
 - [ ] All external networks in compose files match what `setup.sh` creates
-- [ ] All internal socket-proxy networks documented in AGENTS.md Networks section
+- [ ] All internal socket-proxy networks documented in docs/networks.md
 - [ ] New proxy consumers (services using socket-proxy via `DOCKER_HOST`) noted in service notes
 
 ### Middleware Consistency
-- [ ] Middleware names in AGENTS.md App Integration Pattern match `traefik/dynamic/middlewares.yml`
+- [ ] Middleware names in README.md Adding an App match `traefik/dynamic/middlewares.yml`
 - [ ] Same middleware names in README.md Adding an App section
 
-### Makefile ↔ AGENTS.md Sync
-- [ ] Every `make <target>` in AGENTS.md Quick Reference exists in Makefile
+### Makefile ↔ docs/make-targets.md Sync
+- [ ] Every `make <target>` in docs/make-targets.md exists in Makefile
 - [ ] No Makefile targets that should be documented but aren't
 
 ### Manually-Managed Containers
@@ -82,7 +82,7 @@ After updates:
 - [ ] README.md Secrets section covers all vars
 - [ ] No stale service names remain anywhere
 - [ ] Middleware names consistent across AGENTS.md, README.md, and compose examples
-- [ ] AGENTS.md Quick Reference matches Makefile
+- [ ] docs/make-targets.md matches Makefile
 
 ---
 

@@ -4,475 +4,64 @@ Infrastructure-as-code for a VPS (12 vCPU · 24 GB · 180 GB SSD · Ubuntu 24.04
 
 > **Public repo.** Never commit real IPs, hostnames, Tailscale IPs, passwords, tokens, or provider-specific details. Use `<placeholder>` in docs. All actual values in 1Password.
 
----
+## Reference docs
+
+Read the one that matches the work before you change it:
+
+- Anything under `apps/fpp/` (MariaDB, fpp-server, analytics, the open TCP 33306): Read `apps/fpp/AGENTS.md` first; an Edit or a shell command there does not load it.
+- Which Makefile target does what: `docs/make-targets.md`.
+- Networks, socket proxies, Traefik routing, tunnel ingress: `docs/networks.md`.
+- Cloudflared, Traefik, Valkey, Watchtower, ClickStack, Umami, imgproxy, gh runners, photo-gallery: `docs/service-notes.md`.
+- A new Postgres app, schema, role or migration journal: `docs/postgres-schema-model.md`.
+- Backups and what is not backed up: `docs/object-storage.md`. Which file owns what: `docs/file-map.md`.
+- A fresh server: `docs/deployment-order.md`. The `make deploy` path map, `make verify` details, shared-stack monitors: `docs/deploy.md`. The stopped argo containers: `docs/retired-argo.md`.
 
 ## Quick Reference
 
-Environment is controlled by `.env` (gitignored). Locally: `ENV=dev`. On server: `ENV=prod`.
-Secrets: `op run --env-file=.env.tpl` — 1Password vaults: `vps` + `common`.
+`ENV=dev` locally, `ENV=prod` on the server, set in `.env` (gitignored). All container operations go through the Makefile, never raw `docker` / `docker compose`: a raw call can miss `op run` and a required secret. Bare `make` prints an ENV-aware help; prod-only and dev-only targets refuse to run with the wrong ENV.
 
-All container operations go through the Makefile — never raw `docker`/`docker compose` (global rule `docker-makefile.md`). Bare `make` prints an ENV-aware help: targets available in the current ENV are highlighted, prod-only / dev-only targets are listed dimmed under "Requires ENV=…". Prod-only and dev-only targets are gated by `require-prod` / `require-dev` prerequisites and refuse to run with the wrong ENV.
-
-```bash
-make                     # show ENV-aware help (default target)
-# Primary operations — adapts to ENV automatically
-make up                  # dev: compose.dev.yml | prod: networking → infra → monitoring → fpp → email-gateway → photo-gallery → imgproxy (weatherorb, shutterflow, basalt-ui-marketing, jkrumm-com are NOT in it: `make <app>-up`, the RollHook ones after their own bootstrap)
-make down                # dev: compose.dev.yml | prod: reverse order
-
-# Targeted restart (prod only — individual stacks)
-make networking-up / make networking-down
-make infra-up    / make infra-down
-make monitoring-up / make monitoring-down
-make fpp-up      / make fpp-down
-make weatherorb-up    / make weatherorb-down   # the one static page at weatherorb.com (apps/weatherorb/site, nginx, no RollHook)
-make imgproxy-up / make imgproxy-down
-make telemetry-lint           # registry vs prod ClickHouse (the factory's hygiene probe, docs/observability.md → Telemetry lint); keyless, read-only; non-zero on findings
-make edge-cache-status HOST=example.com   # ✓/✗ checklist for the edge-cache pattern (docs/edge-cache.md)
-make edge-cache-apply HOST=example.com    # idempotent provision — DNS, tunnel ingress, Cache Rule; DRY_RUN=1 to preview
-
-# Manual image upgrades — Postgres/Valkey/MariaDB/ClickStack are excluded from Watchtower
-make infra-upgrade       # postgres + valkey (run make backup first)
-make fpp-mariadb-upgrade # mariadb only (run make fpp-backup first)
-
-# DB schema/user provisioning — idempotent
-make postgres-setup      # prod only: run after make infra-up, before make monitoring-up (the mini's Postgres: dotfiles config/postgres/cluster.yaml + make -C ~/SourceRoot/dotfiles pg-apply)
-make fpp-mariadb-setup   # run after make fpp-up
-make cron-env-seed       # materialize /etc/vps/*.env for cron jobs from 1Password (re-run after secret rotation)
-
-# FPP TLS cert sync (extracts *.free-planning-poker.com from traefik/acme.json into apps/fpp/certs/)
-make fpp-cert-sync       # run once after networking-up; cron does it every 6h
-
-# HyperDX agent access + dashboards/alerts-as-code (see docs/observability.md → "Agent access")
-make hyperdx-agent-setup       # prod — idempotent agent user + accessKey setup, MCP smoke test
-make hyperdx-dev-bootstrap     # dev — idempotent local user + accessKey bootstrap, MCP smoke test
-make hyperdx-webhook-setup     # prod — idempotent ntfy webhook ("ntfy alerts") setup
-make hyperdx-export ENV=dev    # export dashboards + alerts → observability/{dashboards,alerts}/*.json
-make hyperdx-apply ENV=dev     # validate + upsert (by name) dashboards, then alerts, from those directories
-make dev-mariadb-up / dev-mariadb-down  # dev — mariadb only (up waits healthy; down = stop, no removal); dev-redis-up / dev-redis-down: the same for valkey. `make up`/`down` act on the whole dev project
-make clickstack-up             # dev — start ClickStack on demand (profile `observability`; `make up` skips it, ~4 GB)
-make clickstack-down           # dev — stop it again
-make clickstack-restart        # dev — restart clickstack (fixes a dead local ClickHouse process)
-make traefik-recreate / clickstack-recreate   # prod — force-recreate one service after a bind-mounted config change (what `make deploy` runs)
-make cron-install / fail2ban-install          # prod — reinstall cron/* into /etc/cron.d, the MariaDB fail2ban filter + jail (what `make deploy` runs)
-
-# Status + ops
-make ps                  # docker ps with name/status/ports
-make db-counts           # exact per-table COUNT(*) (Postgres + MariaDB) — diff to verify a sync/restore matches prod
-make shell-postgres      # psql shell (dev: the mini's Postgres over /tmp:5432, DB=<name>; prod: op run + the container). make sql-postgres: SQL on stdin
-make fpp-shell           # mariadb shell (uses op run with .env.tpl)
-make backup              # manual pg_dump → S3 (prod only — guarded)
-make fpp-backup          # manual mariadb-dump → S3 (prod only — guarded)
-
-# Dev — local seeding / DR from prod (all dev-only, never touch prod)
-make restore-local       # pull latest (or BACKUP_FILE=) S3 pg backup → the mini's Postgres. Drops and restores the dump's schemas in ${POSTGRES_DB}, never the database.
-make pg-sync-schema SCHEMA=argo  # one schema only (least-priv, leaves other schemas intact)
-make fpp-sync-from-prod  # direct ssh+docker exec mariadb-dump from VPS → local (fresh, no S3)
-make fpp-restore-local   # pull latest S3 backup into local mariadb (DR drill / seed)
-make firewall            # show UFW status and rules
-
-# Mac mini Postgres — the one Homebrew server (agent_workflows lives in it), declared in dotfiles config/postgres/cluster.yaml, dev-only, docs/mini-postgres.md
-make dev-pg-backup           # globals + every database + row-count manifest → HomeLab, checksum-verified; nightly via LaunchAgent; the Homebrew server over the socket /tmp:5432
-make dev-pg-restore-drill    # newest backup → scratch DBs → exact counts vs the source at backup time → scratch dropped; non-zero on mismatch
-make dev-pg-health           # readiness probe (one line, exit 0/1) for the devhost heartbeat
-make dev-pg-launchd          # install the 03:15 backup LaunchAgent (from the main checkout, not a worktree)
-make prune-cron-install  # prod — install the daily image + size-capped build-cache prune and the runner-leftover trim (cron/docker-prune); never prod volumes
-make journald-install    # prod — journal size cap (config/journald-vps.conf) + vacuum
-make gh-runner-setup REPO=jkrumm/<repo> [N=2]  # prod — self-hosted Actions runner (instance) for one private repo (token on stdin, docs/gh-runner.md); gh-runner-remove undoes it, gh-runner-reapply re-runs setup for all
-make gh-runner-sync      # mini/MacBook (needs gh) — register a VPS runner for every private repo with workflows; DRY_RUN=1 previews
-
-# Restoring PROD from S3 has NO make target by design (it overwrites production).
-# Gated, human-only DR scripts: scripts/restore-pg.sh + apps/fpp/scripts/restore-mariadb.sh
-# → see docs/disaster-recovery.md
-
-# Deploy config changes to server
-git push && ssh vps "cd ~/vps && git pull"
-```
+- `make up` / `make down` — dev: compose.dev.yml. Prod: networking → infra → monitoring → fpp → email-gateway → photo-gallery → imgproxy (reverse for down). weatherorb, shutterflow, basalt-ui-marketing and jkrumm-com are not in it: `make <app>-up`, the RollHook ones after their own bootstrap.
+- Targeted restart (prod): `make <stack>-up` / `-down` for networking, infra, monitoring, fpp, weatherorb, imgproxy.
+- Restoring PROD from S3 has no make target by design (it overwrites production): the gated, human-only scripts `scripts/restore-pg.sh` and `apps/fpp/scripts/restore-mariadb.sh`, see `docs/disaster-recovery.md`.
+- Dev seeding from prod (`make pg-sync-schema SCHEMA=<app>`, `make fpp-sync-from-prod`, `make restore-local`) never touches prod. HyperDX, edge-cache, gh-runner, mini-Postgres and telemetry-lint targets: `docs/make-targets.md`.
 
 > **SSH:** Tailscale only — enforced by UFW (default-deny inbound, only `tailscale0` allowed in), **not** by sshd's bind address: sshd may listen on all interfaces. Never set `ListenAddress` to the Tailscale IP (sshd fails at boot when `tailscale0` is late — a lock-out). Proof: `make firewall`. `ssh vps` uses the Tailscale IP from `~/.ssh/config`.
 
----
-
-## Skills
-
-| Skill | Context | Purpose |
-|-|-|-|
-| `/audit` | main | 9-phase health audit: resources, containers, tunnel, Tailscale, errors, backup, updates, manual upgrades, FPP MariaDB exception |
-| `/docs` | main | Documentation maintenance — sync compose files against README/AGENTS.md, verify Secrets section coverage |
-| `/cloudflare` | main | Cloudflare API operations — DNS records, tunnel ingress, multi-domain. Global skill (dotfiles), shared with HomeLab |
-
----
-
 ## Secrets
 
-1Password vaults: `vps` + `common`. Full variable list + setup instructions:
-`README.md` → Secrets. **Never write actual values in this repo** —
-`<placeholder>` format in docs.
+1Password vaults: `vps` + `common`. Full variable list + setup instructions: `README.md` → Secrets. **Never write actual values in this repo**; use `<placeholder>` in docs.
 
-### Injection — two runners, two templates
+**Runner** (`SECRET_RUNNER`): `secrets-run` where it exists, plain `op run --account tkrumm` otherwise. Only the mini needs the shim: a bare `op` there has no human to answer its biometric prompt, so `make up` **blocks** instead of failing (one run sat wedged 19 h). `secrets-run` fails closed in a second.
 
-**Runner** (`SECRET_RUNNER`): `secrets-run` where it exists, plain `op run
---account tkrumm` otherwise — prod (VPS) and the MacBook are both unchanged;
-only the mini needs the shim, because a bare `op` there has no human to
-answer its biometric prompt and `make up` **blocks** instead of failing (one
-run sat wedged 19h, 2026-08-01). `secrets-run` fails closed in a second.
-
-**Template**: prod targets get the full `.env.tpl` (~40 refs, `$(OP_RUN)`);
-`require-dev` targets get `.env.dev.tpl` (~12 refs, `$(OP_RUN_DEV)`);
-`fpp-shell` follows `$(ENV)` via
-`$(OP_RUN_ENV)`. Why the dev template is a stripped-down subset (three
-least-privilege choices — dev-only MariaDB root password, no S3 credential,
-`restore-local` staying MacBook-only) and the full rationale for the
-runner split: `docs/secrets-injection.md`.
-
-Per-app schema passwords (`<APP>_DB_PASSWORD`) and every other variable name,
-source and setup step: `README.md` → Secrets.
-
----
-
-## Object Storage — Bucket Layout
-
-S3-compatible object storage, bucket `jkrumm`. All paths are prefixed to avoid collisions across sources:
-
-```
-jkrumm/
-├── backups/vps/
-│   ├── postgres/       ← backup-pg.sh (daily cron 03:00, 14-day retention)
-│   ├── mariadb/        ← apps/fpp/scripts/backup-mariadb.sh (daily cron 03:30)
-│   └── email-gateway/  ← scripts/backup-email-gateway.sh (daily cron 03:45, SQLite snapshots)
-└── img/                ← imgproxy origin — read-only, name-prefix-locked B2 key (docs/image-cdn.md)
-```
-
-**Not backed up** (know the gap before a rebuild):
-
-- **`shutterflow-key-broker-state`** (volume) holds only `purges.json` — closed accounts and their grace periods. Not rebuildable from git or 1Password; shutterflow's own docs recommend backing it up. **Known gap, open.**
-- **`/home/jkrumm/shutterflow-releases`** (host dir, mounted `:ro` at `/releases` into `shutterflow-share`) is the desktop app's update feed: app data owned by the mini's publish script (last five releases, ~300 MB). Never prune by hand; rebuildable by re-publishing. `make shutterflow-up` creates it (jkrumm, 755) before the mount — Docker would create a missing bind source root-owned.
-- **`rollhook-data`** holds the SQLite DB, job logs and registry images: deploy history only. Rebuildable by re-running each app's CI.
-- **Postgres roles/globals** are not in the dump; `make postgres-setup` recreates them (DR order: setup → restore → setup, `docs/disaster-recovery.md`).
-
-HomeLab backup scripts write their own `backups/homelab/<service>/` prefix
-using the same `AWS_*` credentials (`common` vault) — not enumerated here
-since none exist yet.
-
----
-
-## Networks
-
-External networks (pre-created by `setup.sh`, referenced as `external: true`):
-
-| Network | Purpose | Who connects |
-|-|-|-|
-| `proxy` | Traefik routing | Traefik, all apps |
-| `postgres-net` | Postgres access | Postgres, apps needing DB |
-| `mariadb-net` | FPP MariaDB access | MariaDB, FPP services, backup container |
-| `valkey-net` | Valkey/Redis access | Valkey, apps needing cache |
-| `monitoring-net` | Observability bus | ClickStack, Beszel, Dozzle, host-probe, apps sending OTel |
-
-Internal networks (created by Docker Compose, not external):
-
-| Network | Purpose |
-|-|-|
-| `socket-proxy-net` | Traefik → socket-proxy (read-only, POST=0) |
-| `socket-proxy-rollhook-net` | RollHook → socket-proxy-rollhook (POST=1, write access) |
-| `socket-proxy-watchtower-net` | Watchtower → socket-proxy-watchtower (POST=1, write access) |
-| `socket-proxy-monitoring-net` | Dozzle + Beszel + host-probe → socket-proxy-monitoring (read-only, LOGS+STATS) |
-
-**Traffic routing model:**
-
-| Traffic type | Path |
-|-|-|
-| Public apps + RollHook | Internet → Cloudflare edge → cloudflared (outbound) → Traefik → service |
-| Traefik dashboard | DNS-only A → Tailscale IP → Traefik (CGNAT unreachable from internet) |
-| OTel data from apps | app → clickstack:4319, unauthed (via monitoring-net) |
-| HyperDX UI | DNS-only A → Tailscale IP → Traefik → clickstack:8080 (CGNAT unreachable from internet) |
-| OTel from browsers | Cloudflare → Traefik → clickstack:4318 (public, otel.DOMAIN) |
-| Postgres / Valkey | Internal Docker networks only — zero exposure |
-
-**Key gotchas:**
-
-- `traefik.yml` static config does NOT support `${ENV_VAR}`. Workarounds: ACME
-  email via `TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL` env var on
-  the container; wildcard cert domains via `tls.domains` labels (Compose DOES
-  substitute `${DOMAIN}` in labels).
-- **No `ipAllowList` on the dashboard/HyperDX routers.** Their access control is
-  DNS: a grey-cloud A record to the Tailscale IP (CGNAT, unreachable from the
-  internet). `ipAllowList` only sees a real client IP if the request reaches
-  Traefik with its source address intact. Through cloudflared every request
-  arrives from a container address, so a router that wants it as an allowlist
-  (a tunnel request fails it) relies on the `:443` publish keeping tailnet
-  source addresses. No router uses one today. Unverified live: confirm with a
-  tailnet request before building on it.
-
----
-
-## File Map
-
-```
-compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy, RollHook)
-compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no exposed ports
-compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, host-agent + host-probe built from agent/, Watchtower, Umami + two socket-proxy instances)
-compose.dev.yml               Local dev (Valkey + MariaDB + ClickStack with ports exposed; Postgres is the mini's Homebrew server, not here)
-apps/weatherorb/compose.yml        weatherorb-site — nginx:alpine serving `site/` read-only; apex + www routers (www → apex 301). No RollHook, no registry, no env file (V1's edge/account/egress/probe were removed 2026-11-17)
-apps/weatherorb/site/index.html   the page: the name and "WeatherOrb is being rebuilt."
-apps/rollhook-marketing/compose.yml  rollhook.com marketing site — managed by RollHook
-apps/basalt-ui-marketing/compose.yml  basalt-ui.com marketing site (Astro docs) — managed by RollHook
-apps/jkrumm-com/compose.yml   jkrumm.com portfolio site (Astro, repo-root Dockerfile) — managed by RollHook, edge cache pattern in docs/edge-cache.md
-apps/email-gateway/compose.yml  email-gateway (Bun + Resend) — sends FPP contact-form + daily-analytics + SY Serendipity charter-request emails. RollHook-managed.
-apps/imgproxy/compose.yml     imgproxy — image CDN (resize/convert) over a private B2 bucket, served at img.DOMAIN
-apps/shutterflow/compose.yml  shutterflow-share (shutterflow.app) + signed shutterflow-imgproxy (cdn.shutterflow.app) — RollHook-managed; source repo is private, bootstrap via apps/shutterflow/scripts/bootstrap-image.sh. Plus the `/releases` update-feed mount (`RELEASES_DIR`) on shutterflow-share, and shutterflow-key-broker (internal only, own env file key-broker.env, built by `make shutterflow-key-broker-image TAG=<sha>`, tag pinned in the compose)
-apps/photo-gallery/compose.yml  photo-gallery — static Astro gallery served by nginx from /home/jkrumm/photo-gallery-dist (rsynced from laptop via photo-flow CLI)
-apps/fpp/compose.yml          FPP — MariaDB (port 33306 exposed for Vercel) + fpp-server + fpp-analytics + updater sidecar, all RollHook-managed
-apps/fpp/scripts/setup-mariadb.sh    Idempotent fpp user/grants — run via make fpp-mariadb-setup
-apps/fpp/scripts/backup-mariadb.sh   mariadb-dump → S3 (verified before the Kuma push ping)
-apps/fpp/scripts/restore-mariadb.sh  PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
-apps/fpp/scripts/restore-mariadb-local.sh  Dev — non-interactive S3 → local mariadb (DR validation + seeding)
-apps/fpp/scripts/sync-mariadb-from-vps.sh  Dev — ssh vps + docker exec mariadb-dump → local mariadb (fresh, no S3)
-apps/fpp/scripts/cert-sync.sh        Extract *.free-planning-poker.com cert from traefik/acme.json + FLUSH SSL
-apps/fpp/fail2ban/                   filter + jail configs installed by setup.sh
-apps/fpp/certs/                      gitignored — populated by cert-sync.sh, mounted RO into mariadb
-traefik/traefik.yml           Static config: entrypoints, ACME (DNS-01/Cloudflare)
-traefik/dynamic/middlewares.yml  rate-limit, security-headers
-traefik/acme.json             TLS certs — gitignored, chmod 600, auto-managed by Traefik
-scripts/setup.sh              Server provisioning (user, SSH, sysctl, UFW, Docker, networks, cron, fail2ban)
-scripts/setup-postgres.sh     Idempotent schema/user/grant setup (prod) — run via make postgres-setup
-scripts/backup-pg.sh          pg_dump → S3 (verified before the Kuma push ping)
-scripts/backup-email-gateway.sh  SQLite `.backup` snapshots of email-gateway.sqlite + mail.sqlite → tar.gz → S3 `backups/vps/email-gateway/`; optional Kuma push via `EMAIL_GATEWAY_BACKUP_KUMA_PUSH_URL` (not yet in any template)
-scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liveness)
-scripts/db-counts.sh          Exact per-table COUNT(*) (Postgres + MariaDB) — read-only, diff-friendly verification (make db-counts)
-scripts/setup-gh-runner.sh    Idempotent per-repo Actions runner for private repos — gh-runner user, rootless Docker, systemd unit (make gh-runner-setup / gh-runner-remove REPO=…, docs/gh-runner.md)
-scripts/gh-runner-sync.sh     Registers the runner(s) of every private repo with workflows, per-repo count in instances() (make gh-runner-sync, runs where gh is authenticated)
-scripts/gh-runner-clean.sh    Trims a runner's old bin/externals and _work/_update left by self-updates (cron/docker-prune, root, daily)
-scripts/gh-runner-watchdog.sh Restarts runners stuck in reconnect back-off — installed by setup as a 5-min systemd timer
-scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
-scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
-scripts/backup-pg-dev.sh      Mac mini Postgres → HomeLab nightly backup (globals, per-DB dumps, counts.tsv, SHA256SUMS; keep 14) — make dev-pg-backup
-scripts/restore-drill-pg-dev.sh  Restore drill of the newest mini backup into scratch DBs, counts vs source — make dev-pg-restore-drill
-scripts/lib-pg-dev.sh         Shared by the dev-pg scripts: picks the live server per run (container `postgres`, else the bare Homebrew server) and runs the client binaries against it
-scripts/health-pg-dev.sh      Mini Postgres readiness probe for the devhost heartbeat — make dev-pg-health
-scripts/pg-counts.sh          Exact row counts + relation-kind counts of ONE database (drill); pg-counts.sql is the shared SQL the backup runs inside the dump's snapshot
-launchd/                      LaunchAgent template for the mini's nightly Postgres backup (make dev-pg-launchd)
-scripts/sync-pg-schema-from-vps.sh  Dev — generic per-schema sync (SCHEMA=argo); least-priv, app role only
-scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel
-scripts/seed-cron-env.sh      Materializes cron/*.env.tpl → /etc/vps/*.env, chmod 600 — run via make cron-env-seed
-scripts/hyperdx-agent-setup.sh  Prod — idempotent HyperDX agent user + accessKey setup, MCP smoke test (make hyperdx-agent-setup)
-scripts/hyperdx-dev-bootstrap.sh  Dev — idempotent local HyperDX user + accessKey bootstrap, MCP smoke test (make hyperdx-dev-bootstrap)
-scripts/hyperdx-webhook-setup.sh  Prod — idempotent ntfy webhook ("ntfy alerts", topic `alerts`) setup, token from op://common/ntfy/TOKEN (make hyperdx-webhook-setup)
-scripts/hyperdx-sync.sh       Dashboards + alerts-as-code over REST v2 — export/apply (make hyperdx-export / hyperdx-apply)
-observability/dashboards/     Dashboard JSON source of truth — see observability/README.md
-observability/services.yaml   Telemetry service registry — every service.name that emits, with namespace, host, env, repo, signals (contract: docs/observability.md)
-observability/alerts/         Alert JSON source of truth — same export/apply loop (docs/observability.md); every telemetry app has an error alert on the `Factory door` webhook, routed to its repo by a door route named after the alert (docs/observability.md → Per-app error alerts)
-cron/pg-backup                Postgres backup, daily 03:00
-cron/pg-health                Postgres liveness heartbeat, every minute — sources /etc/vps/pg-health.env (no op run — rate limits)
-cron/pg-health.env.tpl        op template for the seeded pg-health cron env (materialized via make cron-env-seed)
-cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
-cron/email-gateway-backup     email-gateway SQLite backup, daily 03:45
-cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
-cron/docker-prune             Daily prune: 04:30 prod daemon (images >48h unused, build cache capped 3 GB, never volumes), 04:35 gh-runner rootless daemon (images, volumes, cache capped 6 GB — `--filter until=` matches nothing on this engine), 04:40 scripts/gh-runner-clean.sh (make prune-cron-install; bounds per directory: docs/disk.md)
-cron/disk-watch               Root-disk alert every 15 min: ntfy `alerts` at >= 80 % (scripts/disk-watch.sh, env seeded from cron/disk-watch.env.tpl)
-config/journald-vps.conf      journald SystemMaxUse=1G (setup.sh, make journald-install)
-README.md → Secrets           All secret variable names with setup instructions (no values in repo)
-Makefile                      Operational shortcuts (`PIN_SH`/`pin_all` = the one image-pin helper every RollHook `<app>-up` uses)
-.github/workflows/ci.yml      CI: `make check` on every push/PR
-scripts/lint-compose.py       Compose-invariants linter (part of `make check`)
-scripts/telemetry-lint.py     Telemetry registry vs prod ClickHouse + alert/dashboard drift (make telemetry-lint; rules unit-tested in test_telemetry_lint.py, part of `make check`)
-```
-
----
-
-## Service Notes
-
-**cloudflared** — all public ingress via Cloudflare Tunnel, outbound-only, no ports exposed. Remote-managed ingress (edit via the `/cloudflare` skill, or `scripts/edge-cache.py` for the edge-cache pattern below): `*.DOMAIN` → `https://traefik:443`, TLS verify disabled (internal cert), **plus one explicit entry per apex / other-zone host** (`DOMAIN`, `basalt-ui.com`, …) — a wildcard never matches its own apex, and a missing entry shows as a bodiless `404`. `--no-autoupdate` lets Watchtower manage the image. Static sites behind Cloudflare's edge cache (proxied CNAME + ingress entry + Cache Rule, verified live): `make edge-cache-status` / `edge-cache-apply` — full pattern in `docs/edge-cache.md`.
-
-**Traefik** — reads Docker labels via `socket-proxy` (TCP, not docker.sock), no ports exposed. Wildcard cert via DNS-01 (still required so cloudflared can verify the TLS handshake). Image pinned to `v3.7` (minor); upgrade by hand, then `make traefik-recreate`. Trace sampling `0.1`.
-
-**Valkey** — `container_name: redis` so apps reference it as `redis:6379`. Persistence enabled (`--save 60 1`). Major version pinned — update manually.
-
-**Watchtower** — `nickfedor/watchtower` (the `containrrr` image is archived), connects via `socket-proxy-watchtower` (`POST=1`, isolated network). Auto-updates everything except Postgres/Valkey/MariaDB/ClickStack and the four socket proxies (`com.centurylinklabs.watchtower.enable=false`; a proxy recreate drops Traefik's docker provider and strands the sweep, incident 2026-11-17). ntfy topic `updates` via shoutrrr, warn level only, daily at 04:00.
-
-**ClickStack** — all-in-one observability container (ClickHouse + OTel Collector + HyperDX UI + MongoDB). Pinned to `2.45.0`, excluded from Watchtower (an auto-bump orphans system-log tables, see `docs/observability.md`), `mem_limit: 6g`. Upgrade by hand: bump the tag, `make deploy` (→ `clickstack-recreate`). Pipelines normalise `deployment.environment.name` (prod/dev) and `host.name` (clickstack/otel-custom.yaml); retention is tiered (sessions 14 d, metrics 400 d, logs/traces 30 d, env in `compose.monitoring.yml`). Two OTLP receivers: `:4318` authed (browser SDKs, cross-host ingest, reached via `otel.DOMAIN` / per-app same-origin routes) and `:4319` unauthed, docker-bridge-only (Traefik + every internal `monitoring-net` service; trust boundary is the network, not the token) — two tiers exist because Traefik 3.x has unfixed env-var substitution bugs in OTLP headers, see `docs/observability.md`.
-
-HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only). Auth via first-visit account creation. Dev: `https://hyperdx.test` or `http://localhost:7707` direct.
-
-**Adding a service to the pipeline**: full runbook in `docs/observability.md`.
-
-**Umami** — analytics at `umami.DOMAIN`. Own schema + dedicated user in the main Postgres database (schema-only access; superuser can still JOIN across schemas). Default credentials `admin`/`umami` — change on first login. Embedding a new site: `docs/umami-integration.md`.
-
-**imgproxy** — image CDN at `img.DOMAIN` (public via Cloudflare), unsigned URLs, renders from the `img/` prefix of the **same bucket as the Postgres/MariaDB backups**. Stateless, no volumes/DB. Monitored with two Kuma checks (public edge + a Tailscale-only `img-origin.DOMAIN` bypass that forces a real B2 fetch); `/health` is liveness-only and stays green while every image 404s. Upload/URL tooling: the global `/img` skill (`imgcli`).
-
-> **Load-bearing invariant:** the B2 key must be created with `--name-prefix img/` — that server-side restriction, not `IMGPROXY_S3_ALLOWED_BUCKETS`, is what keeps this public unauthenticated service away from the database dumps in the same bucket. Never point it at `op://common/backblaze-s3/*` (bucket-wide, has `writeFiles`).
-
-Full design, URL/prefix conventions, the Cloudflare `Vary`/`Accept` caveat, and B2 provisioning: `docs/image-cdn.md`.
-
-**GitHub Actions runners** — one `vps-<repo>` registration per private jkrumm repo, more instances where a repo runs several jobs per push (labels `self-hosted`, `vps`), because the account's free hosted minutes run out and a personal account has no account-level runners. All run as `gh-runner` (no `docker`/`sudo` group) and build against its own rootless Docker daemon, never the prod one. Never on a public repo (fork-PR code execution on the prod host) — the setup script refuses. Install, remove, sync, security model: `docs/gh-runner.md`.
-
-**photo-gallery** — static Astro photo gallery at `photos.DOMAIN`. nginx:alpine serves a host-mounted directory (`/home/jkrumm/photo-gallery-dist:/usr/share/nginx/html:ro`). No image registry, no RollHook — content is built on the developer laptop and rsynced via SSH/Tailscale by the `photo-flow` CLI (`photoflow sync-gallery`). Watchtower auto-updates the nginx base image. The host directory must exist (and contain at least `index.html`) before `make photo-gallery-up`, otherwise the healthcheck fails.
-
----
-
-## FPP MariaDB (apps/fpp/)
-
-Single-tenant database for Free Planning Poker. Lives outside `compose.infra.yml` because **TCP 33306 is exposed publicly** for Vercel — Cloudflare Tunnel can't proxy raw MySQL (Spectrum is Enterprise-only). Quarantining the deviation in `apps/fpp/` keeps `compose.infra.yml`'s "no inbound ports" invariant intact.
-
-Defenses on the open port:
-
-- `--require-secure-transport=ON` and `REQUIRE SSL` on the `fpp@'%'` user — no plaintext, ever.
-- TLS cert is the wildcard `*.free-planning-poker.com` from Traefik's ACME — extracted by `apps/fpp/scripts/cert-sync.sh` (cron every 6h, `FLUSH SSL` on rotation, no restart).
-- fail2ban watches mariadb container's journald logs (`CONTAINER_TAG=mariadb`) and bans repeated auth failures at the iptables `DOCKER-USER` chain (UFW does NOT apply to Docker-published ports — `DOCKER-USER` is what works).
-- Schema-scoped user — `fpp@'%'` has `ALL PRIVILEGES` on `${MARIADB_DB}` only, no other DBs, no admin grants.
-- `mariadb-dump` backup runs on the internal `mariadb-net` (no public roundtrip).
-
-DNS: `db.free-planning-poker.com` is a **DNS-only A record** (grey cloud) → VPS public IP. Cloudflare can't proxy MySQL anyway, so DNS-only is correct — and CGNAT considerations don't apply since this hits the public IP, not the Tailscale IP.
-
-Vercel connection string:
-```
-mysql://fpp:<password>@db.free-planning-poker.com:33306/free-planning-poker?ssl={"rejectUnauthorized":true}
-```
-
-### FPP application services
-
-`apps/fpp/compose.yml` also defines the application services that consume this DB:
-
-| Service | Image | Network | Deploy |
-|-|-|-|-|
-| `fpp-server` | `rollhook.jkrumm.com/fpp-server:latest` | `proxy` | RollHook on push to master |
-| `fpp-analytics` | `rollhook.jkrumm.com/fpp-analytics:latest` | `proxy` | RollHook on push to master |
-| `fpp-analytics-updater` | `rollhook.jkrumm.com/fpp-analytics-updater:latest` (same content as fpp-analytics) | `mariadb-net` | RollHook on push to master |
-
-`fpp-server`, `fpp-analytics` and the updater follow the RollHook contract (no `container_name`, no `ports`, healthcheck, `IMAGE_TAG` env var, `rollhook.allowed_repos=jkrumm/free-planning-poker`). The updater is a sleep-loop sidecar that connects to MariaDB internally with TLS+no-verify (cert CN `*.free-planning-poker.com` doesn't match the `mariadb` hostname).
-
-`fpp-server` also forwards in-app feedback to the software-factory door on the mini (`FACTORY_FEEDBACK_URL` + `FACTORY_FEEDBACK_TOKEN`; unset → `POST /feedback` answers 503, wrong → 502). The VPS has no MagicDNS, so `extra_hosts` pins `${MINI_TAILNET_NAME}` to `${MINI_TAILSCALE_IP}`; the URL must keep the name because the door (`tailscale serve`) only has a cert for it. Needs the ACL grant `tag:vps → tag:devhost` on tcp:8796. The three vars live in the root `.env.tpl` (for `make fpp-up`) and `apps/fpp/.env.tpl` (for RollHook; re-run `make fpp-env` after changing them). They are `${X:-}`, never `${X:?}`: RollHook's validate step loads the compose file without `apps/fpp/.env` (only its rollout step passes it), so a `:?` var rejects every fpp deploy (Issue 1348). If the mini is renamed or re-joined, update `op://vps/config/MINI_*`.
-
----
-
-## Postgres Schema Model
-
-All apps share one database (`${POSTGRES_DB}`). Each app gets its own schema and a dedicated user with schema-only access. The superuser can JOIN across schemas natively.
-
-Pattern for new apps:
-1. Add `APP_DB_PASSWORD` to 1Password `vps` vault, and the matching `<APP>_DB_PASSWORD` line to `.env.tpl`
-2. Add a setup block to `scripts/setup-postgres.sh` (CREATE SCHEMA + ROLE + GRANTs)
-3. Run `make postgres-setup`
-4. In compose: `DATABASE_URL: postgresql://app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=app`
-
-**Migration journals — own schema, not the shared `drizzle` schema.** drizzle-kit
-(and Prisma) default the migration journal to a single `drizzle` schema owned by
-whichever app migrates first. On a shared cluster that's a cross-app collision
-*and* breaks after a whole-DB restore (`permission denied for schema drizzle`).
-Each Postgres app MUST keep its journal in its own schema: drizzle-kit →
-`migrations: { schema: '<app>' }` in `drizzle.config.ts` **and** `migrationsSchema`
-in the runtime `migrate()` call (Postgres-only option). Then the schema-owning
-role owns its journal — no extra grants needed here. Applied: argo
-(`argo.__drizzle_migrations`), basalt-ui-playground. N/A for FPP (own MariaDB).
-
-**Local dev seeding** (do not re-implement in the app repo — delegate to vps):
-`make pg-sync-schema SCHEMA=<app>` pulls just that schema from prod over SSH, using the
-app's own least-priv role. The convention is fixed: **role name == schema name**, and the
-password env var is **`UPPER(schema)_DB_PASSWORD`** (so `argo` → `ARGO_DB_PASSWORD`). App
-repos call `make -C ../vps pg-sync-schema SCHEMA=<app> ENV=dev` (argo's `bun db:sync` does
-exactly this). The local side is the mini's Homebrew Postgres (127.0.0.1:5432, as the schema's role). There is no
-whole-DB sync: that server is a maintained instance (`agent_workflows` lives in it), so `sync-from-prod` was
-retired. `make restore-local` (MacBook-only S3 DR drill) drops and restores the dump's schemas inside `${POSTGRES_DB}`
-and leaves every other database alone.
-
-Current schemas:
-
-| Schema | App | User |
-|-|-|-|
-| public | (main app / reserved) | ${POSTGRES_USER} |
-| umami | Umami analytics | umami |
-| basalt_ui_playground | basalt-ui-playground | basalt_ui_playground |
-| argo | retired (kept pending drop, see `## Retired: Argo`) | argo |
-| shutterflow | shutterflow-share | shutterflow |
-
-**Mac mini only — own databases, not schemas:** `agent_workflows`, `shared` and the rest are declared in dotfiles
-`config/postgres/cluster.yaml` and applied by `make -C ~/SourceRoot/dotfiles pg-apply`; nothing in this repo
-provisions the mini's Postgres. Prod has no such databases. Operations: `docs/mini-postgres.md`.
----
-
-## App Integration Pattern
-
-Minimal `compose.yml` for a new app (networks, no `ports`/`container_name`,
-healthcheck, Traefik labels, env): `README.md` → Adding an App. Hard
-constraints for RollHook-managed apps: below.
-
----
-
-## RollHook — Zero-Downtime Deployments
-
-RollHook (port 7700, behind Traefik, publicly accessible via Cloudflare at `rollhook.<DOMAIN>`) receives webhook calls from GitHub Actions to trigger rolling deployments. It pulls the new image and scales one container at a time, waiting for healthchecks before removing the old instance.
-
-### Hard constraints for RollHook-managed apps
-
-| Constraint | Why |
-|-|-|
-| No `ports:` | Docker DNS routes traffic; `ports` blocks scaling to 2 instances |
-| No `container_name:` | Fixed names prevent creating the second instance during rollout |
-| `healthcheck:` required | Rollout waits for healthy before removing old container |
-| Image: `${IMAGE_TAG:-<registry>/<image>:latest}` | RollHook passes `IMAGE_TAG=<full-uri>` as inline env var |
-| Graceful SIGTERM | Return `503` from `/health`, wait 2-3s, drain requests, exit cleanly |
-
-See `~/SourceRoot/rollhook/README.md` for implementation details (shutdown patterns, GitHub Actions step).
-
-### 1Password secrets (RollHook)
-
-| 1Password Path | Purpose |
-|-|-|
-| `vps/rollhook/SECRET` | RollHook webhook authentication |
-
----
+**Template**: prod targets get the full `.env.tpl` (`$(OP_RUN)`); `require-dev` targets get the stripped-down `.env.dev.tpl` (`$(OP_RUN_DEV)`); `fpp-shell` follows `$(ENV)` via `$(OP_RUN_ENV)`. Why the dev subset and the runner split: `docs/secrets-injection.md`. Per-app schema passwords (`<APP>_DB_PASSWORD`) and every other variable: `README.md` → Secrets.
 
 ## Security Invariants
 
 Never violate these:
 
-- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), all bound to `${VPS_TAILSCALE_IP}` — **plus `127.0.0.1:4319` (ClickStack's unauthed OTLP tier, loopback only, for host-agent in the host network namespace) and the FPP MariaDB exception below**
+- No `ports:` for any service except the Tailscale-bound monitoring/dashboard ports — `13133` (OTel health), `45876` (Beszel), `7007` (Dozzle), `443` (Traefik dashboard), all bound to `${VPS_TAILSCALE_IP}` — **plus `127.0.0.1:4319` (ClickStack's unauthed OTLP tier, loopback only, for host-agent in the host network namespace) and the FPP MariaDB exception below**. `scripts/lint-compose.py` enforces the allowed pairs.
 - Zero inbound *public* ports — cloudflared is outbound-only, SSH via Tailscale only — **except 33306 (FPP MariaDB)**
-- UFW: default-deny inbound, only `tailscale0` allowed in; sshd may listen on all interfaces (never rebind it — boot-order lock-out). `make firewall` is the proof
-- Provider firewall: only TCP 33306 inbound (FPP MariaDB), nothing else
 - No actual IPs, secrets, tokens, or credentials in any tracked file
 - `traefik/acme.json` must remain chmod 600 (Traefik refuses to start otherwise)
 - Postgres, Valkey, MariaDB, ClickStack and the four socket proxies (pinned `lts@sha256:…`; bump by hand, then `make deploy`): no auto-update via Watchtower — manual only
 
-**FPP MariaDB exception (TCP 33306 inbound):** rationale + mitigations in full — **FPP MariaDB** section above.
+**FPP MariaDB exception (TCP 33306 inbound):** Docker bypasses UFW for published ports, so 33306 is publicly reachable as soon as `make fpp-up` runs. Rationale and mitigations: `apps/fpp/AGENTS.md`.
 
----
+## RollHook — Zero-Downtime Deployments
 
-## Deployment Order (fresh server)
+RollHook (port 7700, behind Traefik, public at `rollhook.<DOMAIN>` via Cloudflare) receives webhook calls from GitHub Actions and rolls one container at a time, waiting for healthchecks. Webhook secret: `vps/rollhook/SECRET`. Implementation details (shutdown patterns, the Actions step): `~/SourceRoot/rollhook/README.md`. A new app's minimal `compose.yml`: `README.md` → Adding an App.
 
-```bash
-git clone https://github.com/jkrumm/vps /home/jkrumm/vps
-bash /home/jkrumm/vps/scripts/setup.sh
-```
+A RollHook-managed app has:
 
-1. `tailscale up` → complete browser auth → note Tailscale IP
-2. Create `/etc/vps/op.env` (one line `OP_SERVICE_ACCOUNT_TOKEN=<token>`, `chown jkrumm:jkrumm`, `chmod 600`) — cron jobs source it, `setup.sh` prints the commands and keeps its mode. Also add the token to `~/.bashrc` for interactive use → `source ~/.bashrc && op vault list`. Re-running `setup.sh` leaves ufw alone (`UFW_RESET=1` forces a reset)
-3. `ufw status verbose` → default deny incoming, only `tailscale0` allowed in (sshd stays on all interfaces — never rebind it)
-4. `tailscale set --ssh --accept-risk=lose-ssh` → enables SSH badge in Tailscale admin
-5. Tunnel token already in 1Password (`vps/cloudflare-tunnel/TOKEN`)
-6. `cd ~/vps && make networking-up` → wait for Traefik to issue `*.${DOMAIN}` cert (1–2 min, check `docker logs traefik | grep -i acme`)
-7. `make fpp-cert-sync` → extracts wildcard cert into `apps/fpp/certs/`
-8. `make up` → starts networking, infra, monitoring, fpp, email-gateway, photo-gallery, imgproxy (idempotent — re-runs networking-up too). weatherorb, shutterflow, basalt-ui-marketing and jkrumm-com are not in it: `make weatherorb-up`; bootstrap each of the others (`<app>-env` / `<app>-bootstrap-image`, see its compose header), then `make <app>-up`
-9. `make postgres-setup` → provision Postgres schemas/users (after a DR restore, run it again: roles/globals are not in the dump)
-10. `make fpp-mariadb-setup` → provision MariaDB fpp user + grants
-11. `make cron-env-seed` → materialize /etc/vps/*.env for cron jobs from 1Password (`make cron-install` re-installs `cron/*` into `/etc/cron.d` later)
-12. Add DNS-only A record `db.free-planning-poker.com` → VPS public IP (grey cloud — not proxied)
-13. `reboot` → verify kernel updated, all containers restart automatically
-
-**Note:** the provider has no panel firewall. UFW (deny inbound, allow `tailscale0`) is sufficient for everything except MariaDB. **Docker bypasses UFW for published ports**, so TCP 33306 is publicly reachable as soon as `make fpp-up` runs — no firewall change needed (rationale + mitigations: FPP MariaDB section above).
-
----
+- no `ports:` — Docker DNS routes traffic, `ports` blocks scaling to 2 instances
+- no `container_name:` — a fixed name prevents the second instance during rollout
+- a `healthcheck:` — the rollout waits for healthy before removing the old container
+- image `${IMAGE_TAG:-<registry>/<image>:latest}` — RollHook passes `IMAGE_TAG=<full-uri>` as inline env
+- graceful SIGTERM — `503` from `/health`, wait 2–3 s, drain, exit cleanly
 
 ## Upgrade Procedures
 
-Postgres, Valkey, MariaDB and ClickStack (pinned `2.45.0`; bump the tag, `make deploy`) opt out of Watchtower — a plain restart reuses
-the image already on disk, so they drift indefinitely until `make
-infra-upgrade` / `make fpp-mariadb-upgrade` runs (patch/minor) or the gated
-`scripts/restore-pg.sh` DR pattern runs for a major version. Full commands +
-verification: `README.md` → Upgrading. The one gotcha not to lose: both
-upgrade targets are scoped to their own services and wait for health (`up -d --wait`) — a bare `compose up -d` on
-`apps/fpp/compose.yml` would also recreate the RollHook-managed `fpp-server`
-/ `fpp-analytics` off `:latest` and revert the last deploy.
-
----
+Postgres, Valkey, MariaDB and ClickStack (pinned `2.45.0`; bump the tag, `make deploy`) opt out of Watchtower — a plain restart reuses the image on disk, so they drift until `make infra-upgrade` / `make fpp-mariadb-upgrade` runs (patch/minor) or the gated `scripts/restore-pg.sh` DR pattern runs for a major version. Full commands + verification: `README.md` → Upgrading. Both upgrade targets are scoped to their own services and wait for health (`up -d --wait`): a bare `compose up -d` on `apps/fpp/compose.yml` would also recreate the RollHook-managed `fpp-server` / `fpp-analytics` off `:latest` and revert the last deploy.
 
 ## Validate
 
@@ -499,69 +88,24 @@ no `.sh` extension and are not syntax-checked by this target.
 
 ## Deploy
 
-Off the VPS (e.g. on the mini), `make deploy` / `make verify` forward to the VPS: `ssh vps` → `git pull --ff-only` → `ENV=prod make <target>` there, where the `.deploy-sha` / `.deploy-apps` state lives.
-
-This repo ships **compose/config and ops scripts**, not app code. Two layers:
-
-- **App code** ships when its own repo is pushed to `master` — RollHook rolls the
-  new image (CI), or Watchtower for the few non-RollHook images (see `## RollHook`).
-  Nothing in this repo deploys app code.
-- **Config changes** (anything under `apps/<name>/compose.yml`, `traefik/`, …) ship
-  by pushing this repo and pulling on the server:
+This repo ships **compose/config and ops scripts**, not app code. App code ships when its own repo is pushed to `master`: RollHook rolls the new image (CI), or Watchtower for the few non-RollHook images. Config changes (`apps/<name>/compose.yml`, `traefik/`, …) ship by push, pull on the server, deploy:
 
 ```bash
 git push && ssh vps "cd ~/vps && git pull"
-make deploy APP=<name>      # run on the VPS, ENV=prod — applies the merged change
+make deploy APP=<name>      # on the VPS, ENV=prod
 ```
 
-`make deploy APP=<name>` dispatches to that app's existing `<name>-up` target,
-which recreates it from `apps/<name>/compose.yml` while **pinning the currently
-running image**. Every RollHook app (fpp incl. the updater, email-gateway, shutterflow, basalt-ui-marketing, jkrumm-com) pins through one Makefile helper (`PIN_SH` / `pin_all SVC:VAR …`), so a config change can never roll an app back to a stale `:latest` (see `## RollHook`). A service with no container yet is a genesis start from the bootstrap-seeded `:latest`; a container whose image cannot be read fails the target. `rollhook-marketing` has no `-up` target and is
-CI-only: `make deploy APP=rollhook-marketing` prints `deployed by CI on push` and
-exits 0. `weatherorb` is plain nginx over `apps/weatherorb/site` (no RollHook): `make deploy APP=weatherorb` recreates it.
+Off the VPS (e.g. on the mini), `make deploy` / `make verify` forward there: `ssh vps` → `git pull --ff-only` → `ENV=prod make <target>`, where `.deploy-sha` / `.deploy-apps` live.
 
-With no `APP`, `make deploy` drives the same flow off the diff: it reads the last
-deployed SHA from the gitignored `.deploy-sha` (seeding it with `HEAD` and
-deploying nothing on the first run), maps every file changed since to its app
-(`apps/<name>/**` → that app) or shared stack (`traefik/`,
-`compose.networking.yml` → `networking`; `compose.infra.yml` → `infra`;
-`compose.monitoring.yml` → `monitoring`, plus the tokens below), runs each affected
-target, and records the new `HEAD` plus the app list in `.deploy-sha` /
-`.deploy-apps` (both gitignored). A diff touching no app or stack prints
-`nothing to deploy` and exits 0.
+`make deploy APP=<name>` runs that app's `<name>-up` target, which recreates it from `apps/<name>/compose.yml` **pinning the currently running image** (one Makefile helper, `PIN_SH` / `pin_all SVC:VAR …`, for every RollHook app), so a config change never rolls an app back to a stale `:latest`. A service with no container yet starts from the bootstrap-seeded `:latest`; a container whose image cannot be read fails the target. `rollhook-marketing` is CI-only: the target prints `deployed by CI on push` and exits 0. `weatherorb` is plain nginx over `apps/weatherorb/site`: the target recreates it.
 
-| Changed path | Token | Action |
-|-|-|-|
-| `apps/<name>/**` | app | `deploy APP=<name>` |
-| `apps/fpp/fail2ban/**` | `fail2ban` | `make fail2ban-install` (install filter + jail, reload) |
-| `compose.networking.yml` / `compose.infra.yml` / `compose.monitoring.yml` | stack | `networking-up` / `infra-up` / `monitoring-up` |
-| `traefik/traefik.yml` | `traefik-conf` | `make traefik-recreate` (bind-mounted, `up -d` would keep the old config) |
-| `clickstack/**` | `clickstack-conf` | `make clickstack-recreate` |
-| `cron/*` (not `*.env.tpl`) | `cron` | `make cron-install` (to `/etc/cron.d`) |
-| `observability/**` | `hyperdx` | hint only: run `make hyperdx-apply ENV=prod` — deploy never applies dashboards/alerts |
+With no `APP`, `make deploy` deploys what changed since the last deployed SHA (`.deploy-sha`, gitignored; the first run seeds `HEAD` and deploys nothing) and records the apps in `.deploy-apps`. The path-to-action map is in `docs/deploy.md`. Bind-mounted config (`traefik/traefik.yml`, `clickstack/*`) needs a recreate, which the map covers; `observability/**` only prints a hint, so run `make hyperdx-apply ENV=prod` yourself.
 
-`traefik/dynamic/` is hot-reloaded (no token); `cron/*.env.tpl` needs `make cron-env-seed`. Infra tokens are skipped by `make verify`.
-
-Rollback: `git revert` the offending change, push, pull on the server, and re-run
-`make deploy APP=<name>`. A bad app **image** rolls back through RollHook to the
-prior image. Databases are only restored through the gated DR scripts
-(`docs/disaster-recovery.md`) — never by a Makefile target.
+Rollback: `git revert` the offending change, push, pull on the server, re-run `make deploy APP=<name>`. A bad app **image** rolls back through RollHook to the prior image. Databases are restored only through the gated DR scripts (`docs/disaster-recovery.md`), never by a Makefile target.
 
 ## Verify & Monitor
 
-`make verify APP=<name>` probes one app and exits non-zero if it is not live and
-healthy. Public endpoints are `curl -fsS`'d directly; apps reached only over
-Tailscale (or behind auth) are checked by their container healthcheck over SSH —
-no secrets or DNS lookup needed. `make logs APP=<name>` prints a bounded 200-line
-tail and exits (no `-f`). With no `APP`, `make verify` re-verifies every app
-recorded in `.deploy-apps` by the last `make deploy` and exits non-zero if any is
-unhealthy; infra entries (which have no app health check) are skipped. When no
-deploy is recorded (`.deploy-apps` missing or empty, e.g. the last deploy touched
-no app), it verifies every known app's live state instead of exiting 0.
-
-`make version` prints the VPS checkout's `HEAD` (one line, read-only); the factory
-compares it with a shipped commit. `project.yaml` declares the factory manifest:
-`deploy.mode make`, target `vps` verified by `make verify`, ships by push.
+`make verify APP=<name>` probes one app and exits non-zero if it is not live and healthy: public endpoints by `curl -fsS`, Tailscale-only or authed apps by their container healthcheck over SSH. `make logs APP=<name>` prints a bounded 200-line tail and exits. With no `APP`, `make verify` re-verifies the apps recorded in `.deploy-apps` by the last deploy (every known app when none is recorded). Details and `make version`: `docs/deploy.md`.
 
 | App | Health URL | Kuma monitor |
 |-|-|-|
@@ -575,47 +119,15 @@ compares it with a shipped commit. `project.yaml` declares the factory manifest:
 | shutterflow | `https://shutterflow.app/health` | — |
 | weatherorb | `https://weatherorb.com/` | `WeatherOrb - HTTP` |
 
-OTel `service.name`, namespace and host per service: `observability/services.yaml` (the registry; contract in `docs/observability.md` → Telemetry contract).
-
-The shared stacks have their own Kuma monitors: `traefik.<your-domain>` →
-`Traefik - HTTP`, `rollhook.<your-domain>/ready` → `RollHook - Ready - HTTP`,
-`hyperdx.<your-domain>` → `HyperDX - HTTP`, `umami.<your-domain>/api/heartbeat`
-→ `Umami - HTTP`, plus the Postgres liveness/backup and FPP DB/readmodel push
-monitors. `<your-domain>` stands for the apex in `DOMAIN`; the monitors
-themselves live in the homelab repo. For a public service the edge probe can stay
-green through an origin outage (Cloudflare edge cache) — `imgproxy` is the
-clearest case: the `ImageCDN Origin` monitor is the one that proves a real B2
-fetch.
-
-## Retired: Argo
-
-Argo moved off the VPS on 2026-10-30 and runs natively on the Mac mini (deployed by `make deploy` in the argo repo). `argo.jkrumm.com` keeps its name, but its DNS-only A record points at the mini's tailnet IP and the mini's Caddy terminates TLS (mac/phone/tablet clients only; the `Argo - Door` Kuma monitor replaces the old `Argo / API - HTTP` ones). Argo's OTLP spans (`service.name` `argo-api`) still reach this ClickStack, from the mini over the authed tier, so the argo-api observability dashboards and alerts stay.
-
-What remains here:
-
-- **Stopped containers**, kept for rollback: the `argo-api` and `argo-dashboard` containers (not removed). Their compose file and `make argo-*` targets are gone.
-- **The `argo` Postgres schema and role**, untouched and still provisioned by `make postgres-setup`, pending the owner's decision to drop them. The final verified dump is at `homelab:~/argo-backups/` (`argo-schema-final-<timestamp>.dump` plus `.sums` and `.sha256`).
-
-Rollback: flip the `argo.jkrumm.com` A record back to the VPS tailnet IP, then `docker start` the two stopped argo containers on the VPS; both Traefik routers return with them.
-
-## Gotchas
+OTel `service.name`, namespace and host per service: `observability/services.yaml` (the registry; contract in `docs/observability.md` → Telemetry contract). Monitors of the shared stacks: `docs/deploy.md`.
 
 - **No `ports:` except FPP MariaDB `33306` and the Tailscale-bound monitoring
   ports** — see `## Security Invariants`. Docker publishes bypass UFW entirely;
   FPP MariaDB relies on TLS, a schema-scoped user and `fail2ban` instead.
-- **Tailscale-only access is DNS-based** (grey-cloud A record to the Tailscale IP); see `## Networks` for when `ipAllowList` applies.
-- **`traefik.yml` does not support `${ENV_VAR}`** — ACME email goes in via the
-  container env var, wildcard domains via `tls.domains` labels (Compose *does*
-  substitute `${DOMAIN}` in labels).
-- **Bind-mounted config needs a recreate.** `traefik/traefik.yml` and `clickstack/*` are read at container start; `up -d` keeps the old container. `make deploy` maps them to `traefik-recreate` / `clickstack-recreate`.
-- **Never run a bare `docker compose -f apps/<app>/compose.yml up -d` for a
-  RollHook app** — it resolves `${IMAGE_TAG:-…:latest}` and rolls the container
-  back to a stale `:latest`. Use `make <app>-up` (pins the running image) or
-  `make deploy APP=<app>`.
-- **Each Postgres app owns its migration journal in its own schema** (drizzle
-  `migrations.schema` + `migrationsSchema`); otherwise a whole-DB restore breaks
-  with `permission denied for schema drizzle`.
-- **Never run a bare `op read`/`op run` on the mini** — it blocks on a biometric
-  prompt and wedges the target. Use the `secrets-run` shim (see `## Secrets`).
-- **All container operations go through the Makefile** — a raw `docker`/`docker
-  compose` call can miss `op run` and a required secret.
+
+## Gotchas
+
+- **Tailscale-only access is DNS-based** (grey-cloud A record to the Tailscale IP); see `docs/networks.md` for when `ipAllowList` applies.
+- **`traefik.yml` does not support `${ENV_VAR}`** — ACME email goes in via the container env var, wildcard domains via `tls.domains` labels (Compose *does* substitute `${DOMAIN}` in labels).
+- **Never run a bare `docker compose -f apps/<app>/compose.yml up -d` for a RollHook app** — it resolves `${IMAGE_TAG:-…:latest}` and rolls the container back to a stale `:latest`. Use `make <app>-up` (pins the running image) or `make deploy APP=<app>`.
+- **Each Postgres app owns its migration journal in its own schema** (drizzle `migrations.schema` + `migrationsSchema`); otherwise a whole-DB restore breaks with `permission denied for schema drizzle`.

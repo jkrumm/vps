@@ -60,7 +60,7 @@ aws s3 cp "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILE}" "${TMPFILE}" \
   --endpoint-url "${AWS_S3_ENDPOINT}"
 
 # Ownership is restored (no --no-owner): each schema-owning role must own its
-# schema, tables and migration journal again (AGENTS.md, Postgres Schema Model).
+# schema, tables and migration journal again (docs/postgres-schema-model.md).
 # Roles are cluster-level and survive dropdb, but on a fresh cluster they must
 # exist BEFORE this runs — `make postgres-setup` first (docs/disaster-recovery.md).
 # --no-privileges: GRANTs are not taken from the dump; `make postgres-setup`
