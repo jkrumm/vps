@@ -626,7 +626,7 @@ The threshold is part of the name; changing one is a new monitor and needs a new
 | Alert | Fires when | Window |
 |-|-|-|
 | `Infra filesystem >= 85% (15m)` | any mount of any host except the mini is at least 85 % full | 3 × 5 m |
-| `Infra mini filesystem >= 93% (15m)` | the mini's `/System/Volumes/Data` is at least 93 % full | 3 × 5 m |
+| `Infra mini filesystem >= 93% (15m)` | any mount of the mini (in practice `/System/Volumes/Data`) is at least 93 % full | 3 × 5 m |
 | `Infra memory >= 90% (15m)` | `system.memory.utilization` state `used` (without cache) at least 90 % | 3 × 5 m |
 | `Infra load5 per core >= 4 (15m)` | `system.cpu.load_average.5m` divided by `system.cpu.logical.count` | 3 × 5 m |
 | `Infra swap-out >= 100 MiB per 5m (15m)` | the swap pages written out (`system.paging.operations`, direction `page_out`, type `major`) in each of three consecutive 5 m windows | 3 × 5 m |
