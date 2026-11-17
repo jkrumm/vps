@@ -14,6 +14,9 @@
   - Source: the Tailscale CGNAT range. Docker publishes 8123 with iptables DNAT,
     which keeps the tailnet source address; the bind address in the compose file
     is the first fence, this is the second.
+  - The image's other bundled users, `api` and `worker` (full rights, weak fixed passwords, source ::/0), are
+    narrowed to loopback below: nothing uses them (only `default` appears in the query log), and publishing 8123
+    would otherwise make them reachable from every tailnet device. `default` is untouched.
   - Password: the sha256 hex of op://vps/clickstack/ARGO_RO_PASSWORD, delivered as
     ARGO_RO_PASSWORD_SHA256 through from_env. No secret and no hash is in the repo.
 -->
@@ -30,6 +33,18 @@
     </argo_ro>
   </profiles>
   <users>
+    <api>
+      <networks replace="replace">
+        <ip>127.0.0.1</ip>
+        <ip>::1</ip>
+      </networks>
+    </api>
+    <worker>
+      <networks replace="replace">
+        <ip>127.0.0.1</ip>
+        <ip>::1</ip>
+      </networks>
+    </worker>
     <argo_ro>
       <password_sha256_hex from_env="ARGO_RO_PASSWORD_SHA256"/>
       <networks>

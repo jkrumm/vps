@@ -818,10 +818,10 @@ Cloudflare tunnel. `lint-compose.py` rejects a port without that bind.
 URL parameters such as `max_execution_time`, `wait_end_of_query`): they fail with "Cannot modify ... in readonly mode".
 The limits above are the user's profile and apply as-is.
 
-**Known exposure.** The image ships two more users, `api` (password `api`) and `worker` (password `worker`), with full
-rights and `::/0` as source. Nothing uses them (the query log shows `default` only), but publishing 8123 on the tailnet makes them
-reachable from any tailnet device. This change does not touch them; tightening them (or removing them) is a
-separate change.
+**Other ClickHouse users.** The image ships `api` (password `api`) and `worker` (password `worker`) with full rights
+and `::/0` as source. Nothing uses them (the query log shows `default` only), so `clickstack/argo-ro-user.xml` narrows both to loopback:
+without that, publishing 8123 would expose them to every tailnet device. `default` (HyperDX's user) is untouched and
+loopback-only already.
 
 ### Rotation / first setup
 
