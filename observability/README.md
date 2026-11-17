@@ -24,6 +24,10 @@ of by env-specific id: `dashboardId`+`tileId` become `dashboard`+`tile` (tile
 title), `savedSearchId` becomes `savedSearch`, `channels[].webhookId` becomes
 `channels[].webhook` (every alert: `Factory door`).
 
+`services.yaml` is the telemetry service registry (which `service.name` emits what, from which
+host); the contract it is held to is in `docs/observability.md` → "Telemetry contract". Dashboards
+and alerts filter on `service.name`, so a service listed there is the only kind they can address.
+
 ## Loop
 
 ```bash

@@ -35,7 +35,7 @@ MongoDB) at `clickstack`, exposed publicly only via Traefik on `hyperdx.${DOMAIN
 | Tier | Port | Auth | Trust boundary | Used by |
 |-|-|-|-|-|
 | Public | `:4318` (http) / `:4317` (grpc) | `bearertokenauth` | Public ingress via Traefik + ingestion key | Browser SDKs (any frontend), the Mac mini's services (argo-api, weatherorb workers, tileserver, watchdog, agent-workflows) via `otel.<domain>` |
-| Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, imgproxy, fpp-server, fpp-analytics, rollhook |
+| Internal | `:4319` (http) | none | docker `monitoring-net` membership | Traefik, imgproxy, fpp-server, fpp-analytics, email-gateway, shutterflow-*, rollhook |
 
 The `:4319` port has no host binding and no Traefik label — it's reachable only
 from other containers on `monitoring-net`. The trust boundary is the docker
@@ -70,6 +70,39 @@ the docker bridge. The trust boundary moves from "the bearer token" to "membersh
 in `monitoring-net`", which is acceptable for a single-host VPS where every container
 is ours.
 
+## Telemetry contract
+
+Every service that sends telemetry to this ClickStack follows these rules. ClickHouse is the
+single source of truth, so a name or value that differs between services cannot be queried
+across them. The registry of who emits what is [`observability/services.yaml`](../observability/services.yaml);
+a service that is not in it does not exist as far as dashboards and alerts are concerned.
+
+| Attribute | Rule |
+|-|-|
+| `service.name` | `<product>-<role>` (`fpp-server`, `shutterflow-share`); a single-process product may use the bare product name. Must be listed in the registry. |
+| `service.namespace` | The product, required (`free-planning-poker`, `shutterflow`; platform services of this repo use `vps`). |
+| `service.version` | The short git SHA of the deployed build. Never `local`, `unknown` or `latest` in prod. A third-party image reports its own release. |
+| `deployment.environment.name` | Exactly `prod` or `dev`. Not `production`, `development`, `staging` or `test`. The old key `deployment.environment` is deprecated (semantic conventions 1.45); the gateway keeps it in step, apps should stop sending it. |
+| `host.name` | The machine: `vps`, `mini`, `homelab`, `home`, `macbook`. Never a container ID; that belongs in `container.id`. Browser and phone code leaves it unset. |
+| Signals | Every service sends traces and OTLP logs, and every log record has a non-empty `Body`. |
+| Custom metrics | Names are prefixed with the namespace (`fpp.room.count`). |
+
+**Where each rule is enforced.** Apps set what they can; the ClickStack gateway corrects what
+it can reach, so a violation does not reach the tables ("Gateway normalisation", below).
+
+| Rule | App side | Gateway (`clickstack/otel-custom.yaml`) |
+|-|-|-|
+| environment | `OTEL_RESOURCE_ATTRIBUTES=...,deployment.environment.name=prod` in the service's compose env | `production`→`prod`, `development`/`test`/`staging`→`dev` on both keys; missing `.name` copied from the old key |
+| host | nothing | `:4319`: `host.name=vps`, a container-ID-looking value moves to `container.id`. Authed tier: the container ID moves to `container.id`, `host.name` is dropped |
+| namespace, version | `OTEL_RESOURCE_ATTRIBUTES=service.namespace=<product>`; version baked at build | not touched (a wrong version is the app's bug) |
+
+Set `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` in the compose env of a VPS service whose
+SDK reads them (Node `NodeSDK`, Python `Resource.create`, Go SDKs, Traefik, email-gateway's own
+parser). An app that builds its resource in code and ignores the variable (fpp-server,
+rollhook, shutterflow-key-broker) is not patched around here: the violation is in the registry
+`notes` and filed as a signal on its repo. Confirm after any change that rows actually carry
+the attributes (see Verification commands); an SDK that ignores the variable fails silently.
+
 ## ClickStack custom config — merge semantics
 
 ClickStack supports merging a custom collector config:
@@ -82,8 +115,10 @@ volumes:
   - ./clickstack/otel-custom.yaml:/etc/otelcol-contrib/custom.config.yaml:ro
 ```
 
-**Critical constraint**: the merge **cannot override or extend** existing base
-components. Concretely, this fails:
+**Critical constraint**: the merge **cannot change the receivers or exporters** of the
+pipelines ClickStack defines. Its OpAMP remote config is applied on top of the local files and
+sets those two lists; the local files only supply the pipelines' `processors:`. Concretely,
+this fails:
 
 ```yaml
 # DOES NOT WORK — base `traces` pipeline keeps its original receivers list,
@@ -120,11 +155,41 @@ service:
       exporters: [clickhouse]
 ```
 
+**What does work on a base pipeline: `processors:`.** The base `config.yaml` declares the
+`processors:` lists of `traces`, `metrics`, `logs/out-default` and `logs/out-rrweb`, and the remote config
+deliberately leaves them alone so a custom file can replace them (upstream
+[ClickStack#2351](https://github.com/ClickHouse/ClickStack/pull/2351)). That is how the
+normalisation below reaches the authed pipelines. `logs/in` has no processors in the base, so a
+list can be added to it. A replaced list must repeat the base processors it still wants, so
+re-read `/etc/otelcol-contrib/config.yaml` on every ClickStack bump.
+
 Verify the merged result inside the container:
 
 ```bash
 docker exec clickstack cat /etc/otel/supervisor-data/effective.yaml | grep -A 6 "traces"
 ```
+
+## Gateway normalisation
+
+`clickstack/otel-custom.yaml` runs three `transform` processors (OTTL on the resource, so one
+statement list serves traces, metrics and logs). `transform` is beta upstream for all three
+signals; the schema processor is alpha and not used. The bundled collector (0.155) ships
+`transform`, `resource`, `attributes` and `filter`; check with
+`docker exec clickstack /otelcontribcol components` after a bump.
+
+| Processor | On | Does |
+|-|-|-|
+| `transform/env` | every pipeline | `production`→`prod`, `development`/`test`/`staging`→`dev` on `deployment.environment` and `deployment.environment.name`; copies the old key into `.name` when `.name` is missing |
+| `transform/internal` | `:4319` pipelines (`*/internal`) | container-ID-looking `host.name` (12–64 hex) → `container.id`; `host.name` = `${TELEMETRY_HOST_NAME:-vps}` (everything on the docker bridge runs on this VPS; the dev stack sets `mini`) |
+| `transform/authed` | the base `traces`, `metrics`, `logs/in` pipelines | container-ID-looking `host.name` → `container.id`, `host.name` dropped; for `otelcol-hyperdx` and `clickhouse` (nothing else sets their resource) `host.name`, `service.namespace=vps`, `deployment.environment.name` are stamped |
+
+`logs/in` runs before the routing connector, so session replay (`hyperdx_sessions`) is
+normalised too. `session.id` handling of the base pipelines (`transform/session_id`) is kept in
+the replaced `traces` list. What the gateway cannot reach: nothing on a pipeline today; what it
+chooses not to touch is `service.namespace` and `service.version` of an app (the app's fix).
+
+Both keys are kept (`deployment.environment` is rewritten, not removed) so queries on the old
+key keep working. The dashboards and alerts in `observability/` filter on neither.
 
 ## How each component is wired
 
@@ -137,7 +202,7 @@ tracing:
     http:
       endpoint: http://clickstack:4319    # unauthed internal port
   serviceName: traefik
-  sampleRate: 1.0
+  sampleRate: 0.1
 
 metrics:
   otlp:
@@ -159,6 +224,7 @@ land in `default.otel_metrics_*` tables for HyperDX.
 environment:
   OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
   OTEL_SERVICE_NAME: email-gateway
+  OTEL_RESOURCE_ATTRIBUTES: service.namespace=email-gateway,deployment.environment.name=prod
 ```
 
 No `OTEL_EXPORTER_OTLP_HEADERS`. The SDK in the app (typically
@@ -180,6 +246,7 @@ environment:
   OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
   OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
   OTEL_SERVICE_NAME: imgproxy
+  OTEL_RESOURCE_ATTRIBUTES: service.namespace=vps,deployment.environment.name=prod
 ```
 
 Setting only the `OTEL_*` vars produces no error and no data — the service
@@ -223,16 +290,18 @@ GitHub repo via dotfiles' `make github-config` (single source of truth, rotation
 
 ### Backend container on monitoring-net
 
-1. Add to `monitoring-net` in its compose service block
-2. Set two env vars:
+1. Add the service to `observability/services.yaml` (name, namespace, host, env, repo, signals).
+2. Add it to `monitoring-net` in its compose service block.
+3. Set the env vars (contract: [Telemetry contract](#telemetry-contract)):
    ```yaml
    OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
-   OTEL_SERVICE_NAME: <your-service-name>
+   OTEL_SERVICE_NAME: <product>-<role>
+   OTEL_RESOURCE_ATTRIBUTES: service.namespace=<product>,deployment.environment.name=prod
    ```
-3. Wire your app's OTel SDK to honor `OTEL_EXPORTER_OTLP_ENDPOINT` (standard
-   for `@opentelemetry/sdk-node`, Python, Go, etc.)
+4. Wire your app's OTel SDK to honor them (standard for `@opentelemetry/sdk-node`, Python, Go, etc.)
+   and bake the short git SHA into `service.version` at build time.
 
-That's it. No auth wiring, no secrets.
+No auth wiring, no secrets.
 
 ### Frontend SPA with browser ingest
 
@@ -266,6 +335,11 @@ echo "SELECT ServiceName, count() AS spans FROM default.otel_traces \
 # Receiver-level counters (acceptance vs refusal)
 docker exec clickstack curl -s localhost:8888/metrics | \
   grep -E "otelcol_receiver_(accepted|refused|failed)_(spans|metric|log)"
+
+# Normalisation check: nothing outside {prod, dev}, nothing but vps behind :4319
+echo "SELECT ResourceAttributes['deployment.environment.name'] e, count() FROM default.otel_traces \
+      WHERE Timestamp > now() - INTERVAL 1 HOUR GROUP BY e FORMAT PrettyCompact" \
+  | docker exec -i clickstack clickhouse-client
 
 # Live merged collector config
 docker exec clickstack cat /etc/otel/supervisor-data/effective.yaml | less
@@ -457,6 +531,37 @@ not desired configuration).
 sharing a fixed time window). `<id>` comes from a dashboard's REST v2 `id`
 field (`GET /api/api/v2/dashboards`).
 
+## Retention
+
+Four tiers; ClickStack's default is 30 days for everything.
+
+| Tables | TTL | Why |
+|-|-|-|
+| `otel_logs`, `otel_traces` (and their `*_rollup_*` tables) | 30 days | debugging window |
+| `hyperdx_sessions` | 14 days | session replay is the largest table (2.6 of 6.1 GiB on 2026-11-17) and is only useful while a bug is fresh |
+| `otel_metrics_gauge/sum/histogram/summary/exponential_histogram` | 400 days | host and line-quality history must outlive 30 days; all metrics tables together stay under 2 GiB per 30 days (measured 2026-11-17; traefik is ~75 % of the rows) |
+
+Two places have to agree. `compose.monitoring.yml` sets `HYPERDX_OTEL_EXPORTER_{LOGS,TRACES,SESSIONS,METRICS}_TTL`
+(`30d`, `30d`, `14d`, `400d`), which ClickStack's schema migration applies **when it creates a
+table**; existing tables keep their TTL. So a change is two steps: edit the compose env, then
+alter the live tables (`HYPERDX_OTEL_EXPORTER_RECONCILE_TABLE_TTL=true` would do the second
+step on every start, but it also lets a later, shorter value delete data without a review, so it
+stays off):
+
+```bash
+docker exec clickstack clickhouse-client --multiquery --query "
+  ALTER TABLE default.hyperdx_sessions MODIFY TTL TimestampTime + toIntervalDay(14);
+  ALTER TABLE default.otel_metrics_gauge MODIFY TTL toDateTime(TimeUnix) + toIntervalDay(400);
+  ALTER TABLE default.otel_metrics_sum MODIFY TTL toDateTime(TimeUnix) + toIntervalDay(400);
+  ALTER TABLE default.otel_metrics_histogram MODIFY TTL toDateTime(TimeUnix) + toIntervalDay(400);
+  ALTER TABLE default.otel_metrics_summary MODIFY TTL toDateTime(TimeUnix) + toIntervalDay(400);
+  ALTER TABLE default.otel_metrics_exponential_histogram MODIFY TTL toDateTime(TimeUnix) + toIntervalDay(400)"
+```
+
+`MODIFY TTL` rewrites the existing parts (TTL materialisation), so run it off-peak. Check:
+`SELECT name, engine_full FROM system.tables WHERE database = 'default'` and read the `TTL` clause. The tables
+use `ttl_only_drop_parts = 1`: a part goes when its newest row expires.
+
 ## System log TTL — ClickHouse's own logs, not OTel data
 
 `clickstack/system-log-ttl.xml` (mounted to
@@ -464,7 +569,7 @@ field (`GET /api/api/v2/dashboards`).
 `metric_log`, `asynchronous_metric_log` and `processors_profile_log` at 7
 days (`<ttl>event_date + INTERVAL 7 DAY DELETE</ttl>`). These are ClickHouse's
 internal diagnostic logs and ship with no TTL at all — unrelated to the OTel
-data (`otel_*`/`hyperdx_*` tables), which already has its own 30-day TTL.
+data (`otel_*`/`hyperdx_*` tables), whose retention is tiered (next section).
 
 **Why it regrows without this**: applying (or changing) a system-log table's
 config renames the existing table aside to a numbered `<table>_N` copy and
