@@ -19,7 +19,7 @@ make firewall         # show UFW status
 ```
 
 Full ENV-aware command reference (dev seeding, per-app up/down, upgrades, cron
-seeding, HyperDX targets): `AGENTS.md` → Quick Reference. Bare `make` prints an
+seeding, HyperDX targets): `docs/make-targets.md`. Bare `make` prints an
 ENV-aware help.
 
 **SSH is Tailscale-only, enforced by UFW — not by sshd's bind address**
@@ -37,7 +37,7 @@ for why). Proof: `make firewall`.
 | ClickStack UI (HyperDX) | `clickstack` | `8080` |
 
 External Docker networks apps join (`proxy`, `postgres-net`, `mariadb-net`,
-`valkey-net`, `monitoring-net`): `AGENTS.md` → Networks.
+`valkey-net`, `monitoring-net`): `docs/networks.md`.
 
 ---
 
@@ -72,7 +72,7 @@ Homelab connectivity: Tailscale
   VPS → Beszel hub, Dozzle hub (Tailscale IPs, no public ports)
   SSH → Tailscale only, UFW-enforced (see Quick Reference above)
 
-Docker API — four socket-proxy instances, never docker.sock: AGENTS.md → Networks.
+Docker API — four socket-proxy instances, never docker.sock: `docs/networks.md`.
 ```
 
 ---
@@ -167,11 +167,11 @@ All Cloudflare env vars use the unified `CLOUDFLARE_*` prefix (matches the `/clo
 | `POSTGRES_PASSWORD` | `<generated>` | Generate: `openssl rand -hex 32` |
 
 Apps create their own users and databases on top of this superuser — schema
-model + adding a new app's schema: `AGENTS.md` → Postgres Schema Model.
+model + adding a new app's schema: `docs/postgres-schema-model.md`.
 
 **MariaDB (FPP)**
 
-Single-tenant DB for Free Planning Poker, quarantined in `apps/fpp/` because it's exposed publicly on TCP 33306 (full rationale: `AGENTS.md` → FPP MariaDB). Vercel connects with `?ssl={"rejectUnauthorized":true}` against `db.free-planning-poker.com`.
+Single-tenant DB for Free Planning Poker, quarantined in `apps/fpp/` because it's exposed publicly on TCP 33306 (full rationale: `apps/fpp/AGENTS.md`). Vercel connects with `?ssl={"rejectUnauthorized":true}` against `db.free-planning-poker.com`.
 
 | Variable | Value | How to get |
 |-|-|-|
@@ -304,7 +304,7 @@ services:
       options: { max-size: "10m", max-file: "3" }
     environment:
       # Shared cluster: append ?schema=<app>. Keep the migration journal in the
-      # app's own schema too (see "Postgres Schema Model" in AGENTS.md).
+      # app's own schema too (see `docs/postgres-schema-model.md`).
       DATABASE_URL: postgresql://<user>:<pass>@postgres:5432/<db>?schema=<app>
       REDIS_URL: redis://redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
@@ -337,7 +337,7 @@ Restoring PROD from S3 has **no make target by design** — gated, human-only DR
 tools only (`scripts/restore-pg.sh`, `apps/fpp/scripts/restore-mariadb.sh`),
 full procedure in `docs/disaster-recovery.md`. Dev seeding/DR-drill targets
 (`restore-local`, `pg-sync-schema`, `fpp-restore-local`,
-`fpp-sync-from-prod`, `db-counts`): `AGENTS.md` → Quick Reference. App repos
+`fpp-sync-from-prod`, `db-counts`): `docs/make-targets.md`. App repos
 delegate to these rather than re-implementing — e.g. `free-planning-poker`
 calls `make -C ../vps fpp-sync-from-prod`.
 
@@ -354,8 +354,8 @@ trust the sync/restore scripts' own summaries — only `db-counts` runs a real
 
 All three (and ClickStack, pinned `2.45.0`) are excluded from Watchtower auto-updates, and a restart alone does not
 help — Docker reuses the image already on disk. They only move when `make
-infra-upgrade` / `make fpp-mariadb-upgrade` runs (`AGENTS.md` → Quick
-Reference), so check them periodically (`/audit` phase 8).
+infra-upgrade` / `make fpp-mariadb-upgrade` runs (`AGENTS.md` → Upgrade
+Procedures), so check them periodically (`/audit` phase 8).
 
 Both targets name their services explicitly rather than recreating the whole
 file — load-bearing for MariaDB, since `apps/fpp/compose.yml` also holds the
@@ -400,4 +400,4 @@ All dashboards are Tailscale-only — no public routes.
 Traefik dashboard is publicly DNS-resolvable but reachable only via a DNS-only
 A record to the Tailscale IP (CGNAT — unreachable from the public internet).
 There is no IP-allowlist middleware; Docker NAT would defeat one. Details:
-`AGENTS.md` → Networks.
+`docs/networks.md`.

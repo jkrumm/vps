@@ -1,7 +1,7 @@
 # Provisioning a Fresh Server
 
-One-time server bring-up. The terse agent checklist is `AGENTS.md` →
-Deployment Order; this is the narrated walkthrough.
+One-time server bring-up. The terse agent checklist is
+`docs/deployment-order.md`; this is the narrated walkthrough.
 
 ### 1. Create server
 
