@@ -37,6 +37,8 @@ RUNNER_LABELS="vps"
 # receiving jobs ~30 days after the next release), so this pins first install only.
 RUNNER_VERSION="2.338.0"
 RUNNER_SHA256="af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32"
+# CPU weight of gh-runner.slice against system.slice's default 100 (ensure_ci_slice).
+CI_CPU_WEIGHT=20
 # Distinct from the deploy user's 100000:65536 block.
 SUBID_RANGE="200000-265535"
 
@@ -132,6 +134,21 @@ remove() {
   echo "  ✓ ${RUNNER_NAME} unregistered, its service and directory removed (user + rootless Docker kept)"
 }
 
+# CI yields to prod. All runners (and every job process they start) live in one slice whose CPU
+# weight is a fifth of system.slice's (prod containers, dockerd, traefik): idle CPU is still all
+# CI's, but under contention prod keeps >= 5/6 of the host. No cap, so nothing is wasted. Measured
+# 2026-11-17: load 19-27 on 12 cores for 4 h (idle 10-18 %), edge p50 still 2-13 ms.
+# A weight change on a loaded slice applies live; moving a runner into it needs its restart.
+ensure_ci_slice() {
+  local unit=/etc/systemd/system/gh-runner.slice body
+  body="$(printf '[Unit]\nDescription=GitHub Actions runners (private repos): yield CPU to prod\n\n[Slice]\nCPUWeight=%s' "${CI_CPU_WEIGHT}")"
+  if [[ "$(cat "${unit}" 2>/dev/null)" != "${body}" ]]; then
+    printf '%s\n' "${body}" >"${unit}"
+    systemctl daemon-reload
+  fi
+  echo "  ✓ gh-runner.slice CPUWeight=${CI_CPU_WEIGHT} (system.slice 100)"
+}
+
 # Auto-recovery from the listener's multi-hour reconnect back-off (scripts/gh-runner-watchdog.sh).
 # Root runs a root-owned copy, never the deploy user's checkout.
 ensure_watchdog() {
@@ -214,6 +231,7 @@ setup() {
   fi
   ensure_user_and_docker
   ensure_watchdog
+  ensure_ci_slice
 
   local uid
   uid="$(id -u "${RUNNER_USER}")"
@@ -273,7 +291,7 @@ setup() {
   # Restart=no: a killed runsvc.sh (OOM, crash) would leave the runner offline for good. A clean
   # exit (stop, the listener's own "no retry needed") stays down.
   local dropin="/etc/systemd/system/${svc}.d/rootless-docker.conf" dropin_body
-  dropin_body="$(printf '[Unit]\nWants=user@%s.service\nAfter=user@%s.service\n\n[Service]\nRestart=on-failure\nRestartSec=30' "${uid}" "${uid}")"
+  dropin_body="$(printf '[Unit]\nWants=user@%s.service\nAfter=user@%s.service\n\n[Service]\nSlice=gh-runner.slice\nRestart=on-failure\nRestartSec=30' "${uid}" "${uid}")"
   if [[ "$(cat "${dropin}" 2>/dev/null)" != "${dropin_body}" ]]; then
     install -d "$(dirname "${dropin}")"
     printf '%s\n' "${dropin_body}" >"${dropin}"

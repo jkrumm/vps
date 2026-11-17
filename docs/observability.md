@@ -628,7 +628,6 @@ The threshold is part of the name; changing one is a new monitor and needs a new
 | `Infra filesystem >= 85% (15m)` | any mount of any host except the mini is at least 85 % full | 3 × 5 m |
 | `Infra mini filesystem >= 93% (15m)` | any mount of the mini (in practice `/System/Volumes/Data`) is at least 93 % full | 3 × 5 m |
 | `Infra memory >= 90% (15m)` | `system.memory.utilization` state `used` (without cache) at least 90 % | 3 × 5 m |
-| `Infra load5 per core >= 4 (15m)` | `system.cpu.load_average.5m` divided by `system.cpu.logical.count` | 3 × 5 m |
 | `Infra swap-out >= 100 MiB per 5m (15m)` | the swap pages written out (`system.paging.operations`, direction `page_out`, type `major`) in each of three consecutive 5 m windows | 3 × 5 m |
 | `Infra container restarts >= 1 (15m)` | `container.restarts` increased | 15 m |
 | `Infra container unhealthy >= 1 (10m)` | a container with a healthcheck reports `unhealthy` | 2 × 5 m |
@@ -638,8 +637,7 @@ Each alert was proved once on 2026-11-17: its threshold lowered until it fired, 
 
 **Mini disk.** The mini's Data volume (926 GiB) sits at 88 to 92 % in normal operation: weatherorb's round builds, factory worktrees and the Colima VM disk (dotfiles `docs/disk.md`). The 85 % line fired on it at 89 % with 101 GiB free (Issue 2155) and would fire permanently: each sweep and worktree reap in `docs/disk.md` has bought 1 to 4 points that came back within hours. The mini therefore has its own tile and alert at 93 %, the line the mini's `devhost-health` monitor already fails on (above the 92 % a round build or a pair of Rust `target/` dirs reaches), and the generic filesystem tile leaves it out with `host.name != 'mini'`. Below 93 % the mini's disk is a trend to read on the `Filesystem utilisation: mini (%)` tile; its sweeps and what to cut when it crosses are `docs/disk.md` in dotfiles. Raising or lowering the line is a new monitor and needs a new door route.
 
-**Measured baseline.** The VPS runs CI and factory builds, and its load5 per core sat at 1.4 to 3.8 for hours on 2026-11-17 with nothing wrong (load 19 to 23 on 12 cores while the weatherorb runners and factory steps ran). The filed 1.5 fired through all of it, so the threshold is 4 per core: above what CI produces, below a host that cannot keep up. Lower it once the builds move off this host; changing it is a new monitor and needs a new door route.
-
+**Load has no alert.** The VPS runs CI next to prod, and CI alone drives its load: on 2026-11-17 the load5 average was 27, 18, 23 and 24 on 12 cores in four consecutive hours (CPU idle 10 to 18 %), peak load5 per core 6, from the weatherorb runners' `pytest -n auto` and factory build steps, while the edge p50 stayed at 2 to 13 ms. The `load5 per core >= 4 (15m)` alert (filed at 1.5, raised to 4) fired through it with nothing wrong, so it is gone: load counts queued CI threads, not harm to prod. Prod is protected where it matters, by priority: every runner lives in `gh-runner.slice` with `CPUWeight=20` against `system.slice`'s 100 (`docs/gh-runner.md`), and the harm alerts stay (edge p95 and 5xx, memory, swap-out, container unhealthy, host silent). `Load5 per core` remains a tile on `Infra — Hosts` for reading.
 Swap is judged by activity, not by how full it is: the VPS keeps cold pages in swap at 94 % use without trouble, and paging that
 keeps going is what hurts.
 
@@ -650,8 +648,8 @@ tile; add `host-agent` for that host to `observability/services.yaml`; `make hyp
 --source hyperdx --monitor "<name>" --repo <repo>`; `make hyperdx-export ENV=prod` and commit. The mini and homelab agents add theirs.
 
 **Against Beszel** (retired once ClickStack covers it): status → host silent, memory → memory, swap → swap-out, swap growth →
-swap-out, disk → filesystem, load → load5 per core. Beszel's CPU 80 % for 10 minutes was a digest, not an alert, and has a tile
-(`CPU utilisation`) but no alert here.
+swap-out, disk → filesystem. Beszel's load rule and its CPU 80 % for 10 minutes were digests, not alerts: they have tiles
+(`Load5 per core`, `CPU utilisation`) but no alert here.
 
 ### Docker metrics for the container alerts
 

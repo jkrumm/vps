@@ -17,6 +17,7 @@ One runner shared by all repos would need the repos in a GitHub organization.
 | Install | `/home/gh-runner/runners/<repo>` (instance n: `<repo>@<n>`) |
 | Service | `actions.runner.jkrumm-<repo>.<runner-name>.service` (systemd, runs as `gh-runner`) |
 | Watchdog | `gh-runner-watchdog.timer` (every 5 min) restarts a runner stuck in reconnect back-off |
+| CPU priority | all runner services run in `gh-runner.slice` (`CPUWeight=20`, no cap; `system.slice` with prod is 100) |
 | Docker | one rootless daemon in `gh-runner`'s user systemd (`systemctl --user` + linger) |
 | Code | `scripts/setup-gh-runner.sh`, `scripts/gh-runner-sync.sh`, `scripts/gh-runner-watchdog.sh`, `make gh-runner-{setup,remove,sync}` |
 | Disk hygiene | `cron/docker-prune` (daily 04:35: unused images and job volumes of the rootless daemon, build cache capped at 6 GB; `scripts/gh-runner-clean.sh` 04:40: runner self-update leftovers). Per-directory bounds: `docs/disk.md` |
@@ -29,6 +30,10 @@ with several jobs per push gets more instances: the count lives in `instances()`
 One core here is ~3.5× slower than a hosted runner's (2.0 GHz Skylake-SP; weatherorb's pytest:
 2m13s hosted, 8m46s here), but there are 12 of them — CPU-bound test suites should run in
 parallel (e.g. `pytest -n auto` with pytest-xdist).
+
+## CI yields to prod
+
+CI saturates this host for hours (load 19 to 27 on 12 cores on 2026-11-17, mostly `pytest -n auto` from several weatherorb runners at once). Capping runner concurrency would idle cores that prod does not need, so there is no cap: the runners (and every job process they start) sit in `gh-runner.slice` with `CPUWeight=20`. An idle host is all CI's; under contention prod gets at least 100/120 of the CPU. `CI_CPU_WEIGHT` in `scripts/setup-gh-runner.sh` sets it, `make gh-runner-reapply` applies it. Load average is therefore no signal of harm and has no alert (`docs/observability.md` → Infra alerts). Not covered: image builds and job `services:` containers run in the rootless daemon under the user's systemd instance (`user.slice`, weight 100) — a few builds a week. If CI itself must go faster or the host stays starved, the next step is moving it off this host, which is the owner's call (the x86_64 build argument below).
 
 ## Why the VPS
 
@@ -99,7 +104,7 @@ ssh vps "cd ~/vps && git pull --ff-only && make gh-runner-reapply ENV=prod"
 ```
 
 Setup is idempotent: on a registered runner it re-asserts the user, rootless Docker, `.env`,
-drop-in and service, ignores the token, and only restarts the service when something it reads
+CPU slice, drop-in and service, ignores the token, and only restarts the service when something it reads
 changed (a restart kills an in-flight job). To re-register (e.g. after the runner was deleted
 in GitHub's UI), run `make gh-runner-remove` first — `config.sh --replace` then takes over the
 name.
