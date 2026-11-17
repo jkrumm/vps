@@ -82,9 +82,9 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | Service | Image | Purpose | Update policy |
 |-|-|-|-|
 | cloudflared | cloudflare/cloudflared | Public ingress via Cloudflare Tunnel | auto |
-| socket-proxy | tecnativa/docker-socket-proxy | Read-only Docker API for Traefik | auto |
+| socket-proxy | tecnativa/docker-socket-proxy | Read-only Docker API for Traefik | **manual only** (`lts` tag@digest, Watchtower off) |
 | traefik | traefik:v3 | Reverse proxy, TLS termination | auto |
-| socket-proxy-rollhook | tecnativa/docker-socket-proxy | Write Docker API for RollHook | auto |
+| socket-proxy-rollhook | tecnativa/docker-socket-proxy | Write Docker API for RollHook | **manual only** (`lts` tag@digest, Watchtower off) |
 | rollhook | ghcr.io/jkrumm/rollhook | Zero-downtime rolling deployments via webhook | auto |
 | postgres | postgres:18 | Primary DB — pinned major version | **manual only** |
 | valkey | valkey/valkey:9 | Cache + queues — `container_name: redis` | **manual only** |
@@ -92,8 +92,8 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 | clickstack | clickhouse/clickstack-all-in-one:2.43.1 | Observability — OTel + ClickHouse + HyperDX UI. See [docs/observability.md](docs/observability.md) | **manual only** (pinned, `mem_limit` 6g) |
 | beszel-agent | henrygd/beszel-agent | Server metrics agent | auto |
 | dozzle | amir20/dozzle | Log streaming agent | auto |
-| socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | auto |
-| socket-proxy-watchtower | tecnativa/docker-socket-proxy | Write Docker API for Watchtower | auto |
+| socket-proxy-monitoring | tecnativa/docker-socket-proxy | Read-only Docker API for Dozzle + Beszel | **manual only** (`lts` tag@digest, Watchtower off) |
+| socket-proxy-watchtower | tecnativa/docker-socket-proxy | Write Docker API for Watchtower | **manual only** (`lts` tag@digest, Watchtower off) |
 | watchtower | nickfedor/watchtower:1.24.0 | Auto-updates containers, ntfy notification on failure | auto |
 | umami | ghcr.io/umami-software/umami:3 | Self-hosted analytics at `umami.<DOMAIN>` — see Integrating Umami below | auto |
 | photo-gallery | nginx:alpine | Static Astro photo gallery — content rsynced from laptop via photo-flow CLI | auto |
@@ -116,7 +116,7 @@ RollHook-managed images pull from `rollhook.jkrumm.com/<name>` unless noted (`..
 - **Cloudflare Tunnel, zero inbound ports.** cloudflared is outbound-only to the edge. DNS-01 ACME still issues the wildcard cert so cloudflared can verify Traefik's TLS handshake internally.
 - **Four socket proxies, no docker.sock mounts.** Traefik and Dozzle/Beszel each get a dedicated read-only proxy; RollHook and Watchtower each get a dedicated `POST=1` proxy on an isolated network — write access never shared.
 - **SSH via Tailscale only, enforced by UFW**, not sshd's bind address — see `AGENTS.md` → Quick Reference for the boot-order reason sshd is never rebound.
-- **Watchtower over WUD.** Auto-updates everything except Postgres/Valkey/MariaDB/ClickStack (major version bumps need a deliberate backup first). ntfy topic `updates`, warn level only.
+- **Watchtower over WUD.** Auto-updates everything except Postgres/Valkey/MariaDB/ClickStack and the socket proxies (major version bumps need a deliberate backup first). ntfy topic `updates`, warn level only.
 - **`container_name: redis` for Valkey** — every app references `redis:6379` unmodified.
 - **1Password for secrets**, zero in the repo (`.env.tpl` is `op://` refs only). Deploy: `op run --env-file=.env.tpl -- docker compose up -d` (or `make up`). Why two runners/templates exist: `docs/secrets-injection.md`.
 - **No Terraform.** Single-server setup doesn't justify state management; UFW is the only firewall layer.

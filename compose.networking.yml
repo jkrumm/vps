@@ -29,7 +29,7 @@ services:
   # Traefik connects here instead of mounting docker.sock directly.
   # ---------------------------------------------------------------------------
   socket-proxy:
-    image: tecnativa/docker-socket-proxy:latest
+    image: tecnativa/docker-socket-proxy:lts@sha256:fd989c12c74edb8424f53f31a2054459f286967c93e113e91ea95432f066493b
     container_name: socket-proxy
     restart: unless-stopped
     security_opt:
@@ -45,6 +45,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - socket-proxy-net
+    # Never auto-updated: Watchtower recreating a socket proxy drops Traefik's docker
+    # provider (every route 404s) and, for the watchtower proxy, strands the whole
+    # sweep (incident 2026-11-17). Bump the tag@digest by hand, then `make deploy`.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }
@@ -129,7 +134,7 @@ services:
   # Isolated on socket-proxy-rollhook-net, never shared with Traefik's proxy.
   # ---------------------------------------------------------------------------
   socket-proxy-rollhook:
-    image: tecnativa/docker-socket-proxy:latest
+    image: tecnativa/docker-socket-proxy:lts@sha256:fd989c12c74edb8424f53f31a2054459f286967c93e113e91ea95432f066493b
     container_name: socket-proxy-rollhook
     restart: unless-stopped
     security_opt:
@@ -149,6 +154,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - socket-proxy-rollhook-net
+    # Never auto-updated: Watchtower recreating a socket proxy drops Traefik's docker
+    # provider (every route 404s) and, for the watchtower proxy, strands the whole
+    # sweep (incident 2026-11-17). Bump the tag@digest by hand, then `make deploy`.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }

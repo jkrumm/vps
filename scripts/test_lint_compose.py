@@ -36,6 +36,11 @@ class LintComposeTest(unittest.TestCase):
         errors = run({"image": "${IMAGE_TAG:-r/x:latest}", "container_name": "x"})
         self.assertEqual(len(errors), 2)
 
+    def test_socket_proxy_needs_label_and_pin(self):
+        self.assertEqual(len(run({"image": "tecnativa/docker-socket-proxy:latest"})), 2)
+        self.assertEqual(len(run({"image": "tecnativa/docker-socket-proxy"})), 2)
+        self.assertEqual(run({"image": "tecnativa/docker-socket-proxy:lts@sha256:abc", "labels": WT}), [])
+
     def test_stateful_needs_label_and_pin(self):
         self.assertEqual(len(run({"image": "postgres"})), 2)
         self.assertEqual(run({"image": "postgres:18", "labels": [f"{lint.WATCHTOWER_LABEL}=false"]}), [])

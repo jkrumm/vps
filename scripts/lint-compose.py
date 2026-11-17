@@ -25,6 +25,8 @@ PUBLIC_PORTS = {("apps/fpp/compose.yml", "mariadb")}
 
 TAILSCALE_BIND = re.compile(r"^(\$\{VPS_TAILSCALE_IP:\?[^}]*\}|\$\{VPS_TAILSCALE_IP:-127\.0\.0\.1\}|127\.0\.0\.1):")
 STATEFUL_IMAGE = re.compile(r"(^|/)(postgres|valkey|redis|mariadb|mysql|clickhouse|clickstack)", re.I)
+# Docker-API plumbing: a recreate drops Traefik's provider / strands Watchtower itself.
+PLUMBING_IMAGE = re.compile(r"(^|/)docker-socket-proxy", re.I)
 WATCHTOWER_LABEL = "com.centurylinklabs.watchtower.enable"
 
 
@@ -68,6 +70,11 @@ def lint_service(path, name, svc):
             errors.append(f"{where}: stateful service needs label {WATCHTOWER_LABEL}=false")
         if image_tag(image) == "latest":
             errors.append(f"{where}: stateful service must pin an image tag, not :latest ({image})")
+    if PLUMBING_IMAGE.search(image):
+        if labels_of(svc).get(WATCHTOWER_LABEL) != "false":
+            errors.append(f"{where}: socket proxy needs label {WATCHTOWER_LABEL}=false (a Watchtower recreate drops Traefik's docker provider)")
+        if image_tag(image) == "latest":
+            errors.append(f"{where}: socket proxy must pin an image tag, not :latest ({image})")
     return errors
 
 

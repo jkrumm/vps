@@ -286,7 +286,7 @@ scripts/lint-compose.py       Compose-invariants linter (part of `make check`)
 
 **Valkey** — `container_name: redis` so apps reference it as `redis:6379`. Persistence enabled (`--save 60 1`). Major version pinned — update manually.
 
-**Watchtower** — `nickfedor/watchtower` (the `containrrr` image is archived), connects via `socket-proxy-watchtower` (`POST=1`, isolated network). Auto-updates everything except Postgres/Valkey/MariaDB/ClickStack (`com.centurylinklabs.watchtower.enable=false`). ntfy topic `updates` via shoutrrr, warn level only, daily at 04:00.
+**Watchtower** — `nickfedor/watchtower` (the `containrrr` image is archived), connects via `socket-proxy-watchtower` (`POST=1`, isolated network). Auto-updates everything except Postgres/Valkey/MariaDB/ClickStack and the four socket proxies (`com.centurylinklabs.watchtower.enable=false`; a proxy recreate drops Traefik's docker provider and strands the sweep, incident 2026-11-17). ntfy topic `updates` via shoutrrr, warn level only, daily at 04:00.
 
 **ClickStack** — all-in-one observability container (ClickHouse + OTel Collector + HyperDX UI + MongoDB). Pinned to `2.43.1`, excluded from Watchtower (an auto-bump orphans system-log tables, see `docs/observability.md`), `mem_limit: 6g`. Upgrade by hand: bump the tag, `make deploy` (→ `clickstack-recreate`). Two OTLP receivers: `:4318` authed (browser SDKs, cross-host ingest, reached via `otel.DOMAIN` / per-app same-origin routes) and `:4319` unauthed, docker-bridge-only (Traefik + every internal `monitoring-net` service; trust boundary is the network, not the token) — two tiers exist because Traefik 3.x has unfixed env-var substitution bugs in OTLP headers, see `docs/observability.md`.
 
@@ -430,7 +430,7 @@ Never violate these:
 - Provider firewall: only TCP 33306 inbound (FPP MariaDB), nothing else
 - No actual IPs, secrets, tokens, or credentials in any tracked file
 - `traefik/acme.json` must remain chmod 600 (Traefik refuses to start otherwise)
-- Postgres, Valkey, MariaDB and ClickStack: no auto-update via Watchtower — manual only
+- Postgres, Valkey, MariaDB, ClickStack and the four socket proxies (pinned `lts@sha256:…`; bump by hand, then `make deploy`): no auto-update via Watchtower — manual only
 
 **FPP MariaDB exception (TCP 33306 inbound):** rationale + mitigations in full — **FPP MariaDB** section above.
 
