@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.jkrumm.vps-gh-actions-telemetry</string>
+  <!-- GitHub Actions runs, jobs and runner load of every jkrumm repo -> ClickStack (OTLP):
+       scripts/gh-actions-telemetry.py, one poll tick per run, state in ~/.local/state/gh-actions-telemetry.
+       Rendered and loaded by `make gh-actions-launchd` (docs/observability.md -> CI telemetry). Run through
+       `jobrun`, which writes the run record `jobs-grade` grades: a failed tick or a stopped schedule reaches Slack
+       #alerts. Secrets come from launchd/gh-actions-telemetry.env.tpl through `secrets-run` (never `op`). -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>__HOME__/.local/bin/jobrun</string>
+    <string>com.jkrumm.vps-gh-actions-telemetry</string>
+    <string>--owner</string><string>vps</string>
+    <string>--every</string><string>60</string>
+    <string>--timeout</string><string>300</string>
+    <string>--</string>
+    <string>__HOME__/.local/bin/secrets-run</string>
+    <string>run</string>
+    <string>--env-file=__VPS_DIR__/launchd/gh-actions-telemetry.env.tpl</string>
+    <string>--</string>
+    <string>python3</string>
+    <string>-I</string>
+    <string>__VPS_DIR__/scripts/gh-actions-telemetry.py</string>
+  </array>
+  <!-- launchd hands agents a minimal PATH: jobrun is a bun script, python3 is Homebrew's. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <!-- StartInterval: a tick is idempotent (state file, deterministic span ids), so a fire missed in sleep needs no
+       catch-up beyond the next one. launchd never starts a second instance while one runs. -->
+  <key>StartInterval</key><integer>60</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/vps-gh-actions-telemetry.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/vps-gh-actions-telemetry.log</string>
+</dict>
+</plist>

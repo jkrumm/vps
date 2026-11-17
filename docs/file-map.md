@@ -43,7 +43,9 @@ scripts/restore-drill-pg-dev.sh  Restore drill of the newest mini backup into sc
 scripts/lib-pg-dev.sh         Shared by the dev-pg scripts: picks the live server per run (container `postgres`, else the bare Homebrew server) and runs the client binaries against it
 scripts/health-pg-dev.sh      Mini Postgres readiness probe for the devhost heartbeat — make dev-pg-health
 scripts/pg-counts.sh          Exact row counts + relation-kind counts of ONE database (drill); pg-counts.sql is the shared SQL the backup runs inside the dump's snapshot
-launchd/                      LaunchAgent template for the mini's nightly Postgres backup (make dev-pg-launchd)
+launchd/                      LaunchAgent templates of the mini: nightly Postgres backup (make dev-pg-launchd), GitHub Actions telemetry poller (make gh-actions-launchd) and its env template
+scripts/gh-actions-telemetry.py  GitHub Actions runs/jobs/runner load → ClickStack OTLP, one poll tick (tests: scripts/test_gh_actions_telemetry.py) — docs/observability.md → CI telemetry
+mini-services.yaml            This repo's entries in the mini's service registry (the telemetry poller)
 scripts/sync-pg-schema-from-vps.sh  Dev — generic per-schema sync (SCHEMA=argo); least-priv, app role only
 scripts/firewall.sh           UFW status — provider-level firewall configured via hosting panel
 scripts/seed-cron-env.sh      Materializes cron/*.env.tpl → /etc/vps/*.env, chmod 600 — run via make cron-env-seed

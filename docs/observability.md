@@ -664,6 +664,63 @@ agw hdx query clickstack_query_tiles '{"dashboardId":"<Infra — Hosts id>","sta
 ssh vps 'docker logs --tail 20 host-agent; docker stats --no-stream host-agent host-probe'
 ```
 
+## CI telemetry
+
+GitHub Actions runs and jobs of every repo of the owner (hosted and self-hosted) land in ClickStack as `ci-poller` (namespace `ci`, host
+`mini`). The dashboard is **CI — GitHub Actions** (`observability/dashboards/ci-github-actions.json`): runs, failures, run and job
+duration, queue time and the VPS runners' busy share, per repo and per runner. A run appears one poll tick (60 s) after GitHub marks it
+completed; the runs waiting and the runner load are sampled every tick.
+
+**Why a poller.** The options were the contrib `githubreceiver` and a webhook into OTLP, or polling the REST API (researched 2026-11-17):
+
+| Option | Verdict |
+|-|-|
+| `githubreceiver` webhook mode (runs and jobs to traces) | Alpha, and GitHub must POST to a public URL: a new public endpoint (HMAC only), plus one webhook per repo, because a personal account has no account-level hooks. Rejected |
+| `githubreceiver` scraper mode | Repository, branch and pull-request metrics; no workflow runs, jobs or runner data. Not a CI source |
+| In-workflow OTLP actions | A public OTLP endpoint and an edit in every workflow of every repo. Rejected |
+| **Polling the REST API** | Outbound only, one token, no per-repo setup: a new repo shows up on its own. Chosen |
+
+**How it runs.** `scripts/gh-actions-telemetry.py` (Python stdlib; tests in `scripts/test_gh_actions_telemetry.py`, part of `make check`) is one
+poll tick. The LaunchAgent `com.jkrumm.vps-gh-actions-telemetry` (`launchd/`, registered in `mini-services.yaml`) runs it every minute through
+`jobrun`, so a failed tick or a stopped schedule is graded and reaches Slack `#alerts`. It runs on the mini, not here, for one reason: the
+GitHub credential (`op://mini/github/token`) is already in the mini's offline secret cache; the VPS holds no GitHub token and a new one is a portal
+step. It sends OTLP/JSON to `https://otel.<domain>` (the authed tier) with the ingestion key. Secrets: `launchd/gh-actions-telemetry.env.tpl` (1Password refs,
+read by `secrets-run`); nothing else is configured.
+
+```bash
+make gh-actions-launchd             # on the mini, from the MAIN checkout: install / reload the LaunchAgent
+make gh-actions-telemetry-run       # one tick by hand, prints its counters
+tail ~/Library/Logs/vps-gh-actions-telemetry.log
+```
+
+**What it reads.** Per tick: the owner's repos (cached 1 h), then each repo's `GET /actions/runs` with an ETag. An unchanged repo answers 304,
+which GitHub does not count against the 5,000 requests per hour; a repo without runs is looked at again after 10 min. A completed run costs one
+`/jobs` call, an in-progress run one per tick. The first tick backfills the last 24 h (50 runs per tick, so about ten ticks); the state file
+(`~/.local/state/gh-actions-telemetry/state.json`) keeps which runs went out, and the span ids are derived from run and job ids. Delete the
+state file to re-send 24 h (it duplicates rows: do not).
+
+| Signal | Name | Attributes |
+|-|-|-|
+| Trace | one `run` span per workflow run (name: the workflow), a `job` span (started to completed) and a `queue` span (created to started) per job, same trace | `ci.kind` (`run`/`job`/`queue`), `vcs.repository.name`, `cicd.pipeline.name`, `cicd.pipeline.result`, `cicd.pipeline.task.name`, `cicd.pipeline.task.run.result`, `cicd.worker.name`, `ci.runner` (the runner's name, or `github-hosted`), `ci.runner.kind` (`self-hosted`/`hosted`), `vcs.ref.head.name`, run and job URLs. A failed run or job is an Error span |
+| Gauge | `ci.worker.busy` | `ci.runner.name`, `vcs.repository.name`: 1 while a job of an in-progress run sits on that self-hosted runner, else 0. The busy share is its average |
+| Gauge | `ci.pipeline.run.active` | `vcs.repository.name`, `cicd.pipeline.run.state` (`pending` = waiting for a runner, `executing`); one trailing 0 when a repo goes quiet |
+| Gauge | `ci.poll.repos` | the number of repos polled: the poller's heartbeat |
+
+Names follow the OpenTelemetry CI/CD and VCS conventions (`cicd.*`, `vcs.*`); the rest is `ci.*`. GitHub timestamps have one-second resolution, so a queue
+time under a second reads 0 and a 1 s job rounds to 0 or 1.
+
+**Limits.** GitHub does not list a self-hosted runner that has never run a job in the 24 h window, so it has no busy series until it does; the Admin
+API for runners is not used because the token has no administration scope. A run that is re-run keeps one run id: the earlier attempt is emitted only
+if a tick saw it complete before the re-run. Steps are not emitted (about 13 per job; the job span covers them). The credential is the mini's push token,
+used for GET only; a fine-grained token with Actions and Metadata read on all repos replaces the ref in `gh-actions-telemetry.env.tpl` without a code change.
+
+**Verify.**
+
+```bash
+ssh vps 'docker exec clickstack clickhouse-client --query "SELECT SpanAttributes['"'"'ci.kind'"'"'] k, count() n, max(Timestamp) newest FROM default.otel_traces WHERE ServiceName='"'"'ci-poller'"'"' GROUP BY k"'
+agw hdx query clickstack_query_tiles '{"dashboardId":"<CI — GitHub Actions id>","startTime":"<iso>","endTime":"<iso>"}'   # every tile returns rows
+```
+
 ## Retention
 
 Four tiers; ClickStack's default is 30 days for everything.

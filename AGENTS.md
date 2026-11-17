@@ -13,6 +13,7 @@ Read the one that matches the work before you change it:
 - Networks, socket proxies, Traefik routing, tunnel ingress: `docs/networks.md`.
 - Cloudflared, Traefik, Valkey, Watchtower, ClickStack, Umami, imgproxy, gh runners, photo-gallery: `docs/service-notes.md`.
 - A new Postgres app, schema, role or migration journal: `docs/postgres-schema-model.md`.
+- GitHub Actions telemetry (mini LaunchAgent → ClickStack, CI dashboard): `docs/observability.md` → CI telemetry.
 - Backups and what is not backed up: `docs/object-storage.md`. Which file owns what: `docs/file-map.md`.
 - A fresh server: `docs/deployment-order.md`. The `make deploy` path map, `make verify` details, shared-stack monitors: `docs/deploy.md`. The stopped argo containers: `docs/retired-argo.md`.
 

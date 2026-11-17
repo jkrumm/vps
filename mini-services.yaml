@@ -1,0 +1,5 @@
+# This repo's entries in the mini's service registry (dotfiles docs/mini-registry.md).
+services:
+  # GitHub Actions telemetry poller: one tick a minute (scripts/gh-actions-telemetry.py) through jobrun. A python3 process
+  # of a few seconds per tick; the budget is 1.5 x the peak footprint measured over a tick (about 35 MiB).
+  - { name: vps-gh-actions-telemetry, repo: vps, kind: launchd, tier: core, label: com.jkrumm.vps-gh-actions-telemetry, memory_mib: 60, note: "Interval job: GitHub Actions runs and jobs of every jkrumm repo into ClickStack (docs/observability.md -> CI telemetry); core because the CI dashboard and its queue-time view go stale without it." }

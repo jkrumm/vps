@@ -72,7 +72,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
         basalt-ui-marketing-up basalt-ui-marketing-down basalt-ui-marketing-bootstrap-image \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
-        postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove dev-pg-container-remove firewall shell-postgres db-counts prune prune-cron-install \
+        postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove dev-pg-container-remove gh-actions-launchd gh-actions-launchd-remove gh-actions-telemetry-run firewall shell-postgres db-counts prune prune-cron-install \
         hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply dev-mariadb-up dev-mariadb-down dev-redis-up dev-redis-down clickstack-up clickstack-down clickstack-restart clickstack-upgrade host-agent-recreate \
         check telemetry-lint deploy verify version logs _deploy-affected sql-postgres \
         traefik-recreate clickstack-recreate cron-install fail2ban-install journald-install
@@ -519,6 +519,29 @@ dev-pg-launchd-remove: require-dev
 	@rm -f "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-pg-backup.plist" "$(HOME)/.local/state/jobs/com.jkrumm.vps-pg-backup.json"
 	@echo "  ✓ com.jkrumm.vps-pg-backup removed (plist and jobrun record)"
 
+## Dev (mini) — install the GitHub Actions telemetry LaunchAgent (one poll tick a minute → ClickStack)
+## from THIS checkout (main checkout, not a worktree: the plist hard-codes the path). Idempotent.
+## docs/observability.md → CI telemetry.
+gh-actions-launchd: require-dev
+	@[ "$$(git rev-parse --path-format=absolute --git-dir)" = "$$(git rev-parse --path-format=absolute --git-common-dir)" ] \
+		|| { echo "refusing: run from the main vps checkout, not a linked worktree ($(CURDIR))"; exit 1; }
+	@mkdir -p "$(HOME)/Library/LaunchAgents" "$(HOME)/Library/Logs"
+	@sed -e 's#__HOME__#$(HOME)#g' -e 's#__VPS_DIR__#$(CURDIR)#g' launchd/com.jkrumm.vps-gh-actions-telemetry.plist.template \
+		> "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-gh-actions-telemetry.plist"
+	@plutil -lint "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-gh-actions-telemetry.plist" >/dev/null
+	@launchctl bootout gui/$$(id -u)/com.jkrumm.vps-gh-actions-telemetry 2>/dev/null || true
+	@launchctl bootstrap gui/$$(id -u) "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-gh-actions-telemetry.plist"
+	@echo "  ✓ com.jkrumm.vps-gh-actions-telemetry loaded — every 60 s, log ~/Library/Logs/vps-gh-actions-telemetry.log"
+
+gh-actions-launchd-remove: require-dev
+	@launchctl bootout gui/$$(id -u)/com.jkrumm.vps-gh-actions-telemetry 2>/dev/null || true
+	@rm -f "$(HOME)/Library/LaunchAgents/com.jkrumm.vps-gh-actions-telemetry.plist" "$(HOME)/.local/state/jobs/com.jkrumm.vps-gh-actions-telemetry.json"
+	@echo "  ✓ com.jkrumm.vps-gh-actions-telemetry removed (plist and jobrun record; the poller state stays in ~/.local/state/gh-actions-telemetry)"
+
+## Dev (mini) — one poll tick by hand with the LaunchAgent's secrets; prints the tick's counters.
+gh-actions-telemetry-run: require-dev
+	@secrets-run run --env-file=launchd/gh-actions-telemetry.env.tpl -- python3 -I scripts/gh-actions-telemetry.py
+
 ## Dev — remove the stale `postgres` container of the retired compose.dev.yml service (the mini's
 ## Postgres is the Homebrew server). Removes the container only: the volume vps_postgres-dev-data
 ## stays as the rollback copy until dotfiles drops it. Idempotent; only acts on a container that
@@ -650,6 +673,8 @@ check:
 	$(PY_YAML) scripts/lint-compose.py || exit 1; \
 	$(PY_YAML) -I -m unittest discover -s scripts -p 'test_lint_compose.py' || exit 1; \
 	$(PY_YAML) -I -m unittest discover -s scripts -p 'test_telemetry_lint.py' || exit 1; \
+	python3 -I -W ignore -m unittest discover -s scripts -p 'test_gh_actions_telemetry.py' || exit 1; \
+	[ ! -f $(HOME)/SourceRoot/dotfiles/scripts/mini-registry.ts ] || ! command -v bun >/dev/null 2>&1 || bun $(HOME)/SourceRoot/dotfiles/scripts/mini-registry.ts lint || exit 1; \
 	bash scripts/test_deploy_affected.sh || exit 1
 	@echo "OK: local validation passed"
 
