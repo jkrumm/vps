@@ -379,7 +379,7 @@ services:
   # Not RollHook-managed: built by `make shutterflow-key-broker-image TAG=<sha>`, pinned here.
   # ---------------------------------------------------------------------------
   shutterflow-key-broker:
-    image: rollhook.jkrumm.com/shutterflow-key-broker:8cd416e0ae41a2c9539e6898377603af140aa3f6
+    image: rollhook.jkrumm.com/shutterflow-key-broker:ea140f8b0aa93981e4fcd52efd3e698de99b484f
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -390,6 +390,9 @@ services:
       STORAGE_ENV: prod
       # The nightly usage report, HMAC-signed, over the internal network.
       USAGE_REPORT_URL: http://shutterflow-share:4100/api/v1/internal/storage/usage
+      # Log events (key minted / deleted / mint rate-limited) over OTLP to ClickStack, unauthed
+      # tier, reached through monitoring-net. stdout stays. OTEL_SERVICE_NAME defaults in the image.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
     volumes:
       - shutterflow-key-broker-state:/var/lib/key-broker
     labels:
@@ -397,6 +400,7 @@ services:
     networks:
       - shutterflow-broker
       - shutterflow-broker-egress
+      - monitoring-net
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
