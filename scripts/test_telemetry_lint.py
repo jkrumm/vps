@@ -2,6 +2,7 @@
 
 import importlib.util
 import os
+import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -119,6 +120,21 @@ class Parse(unittest.TestCase):
                                '{"q":"activity","signal":"logs","service":"s","rows7d":"70","rows24h":"10","last":"1800000000"}\n')
         self.assertEqual(snap["attrs"][0]["rows"], 7)
         self.assertEqual((snap["activity"][0]["rows7d"], snap["activity"][0]["last"]), (70, 1800000000))
+
+    def read_with(self, stdout):
+        """clickhouse() against a stand-in for `ssh vps` that prints stdout (the remote command lands in $0)."""
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl") as f:
+            f.write(stdout)
+            f.flush()
+            return lint.clickhouse(f"sh -c 'cat >/dev/null; cat {f.name}'")
+
+    def test_truncated_or_unparseable_read_is_a_probe_error(self):
+        row = '{"q":"logs","service":"s","total":"1","empty_body":"0","untraced":"0"}\n'
+        self.assertEqual(len(self.read_with(row)["logs"]), 1)
+        with self.assertRaises(lint.ProbeError):
+            self.read_with(row * (lint.LIMITS["logs"] + 1))
+        with self.assertRaises(lint.ProbeError):
+            self.read_with("not json\n")
 
     def test_dev_version_is_bad_on_a_prod_service(self):
         found = run([entry()], [act(), act(signal="logs")], [attr(version="dev")])
