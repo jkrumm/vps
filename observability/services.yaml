@@ -1,7 +1,8 @@
 # Telemetry service registry — the one list of which services emit what to ClickStack.
 # The contract these entries are held to: docs/observability.md → "Telemetry contract".
 # Seeded 2026-11-17 from every service.name ClickHouse received in the previous 7 days
-# (otel_traces, otel_logs, otel_metrics_*, hyperdx_sessions); a new service.name is added here
+# (otel_traces, otel_logs, otel_metrics_*, hyperdx_sessions); services that emit nothing by design
+# (`signals: []`) were added by hand. A new service.name is added here
 # in the same change that makes it emit. `make telemetry-lint` holds this file against prod ClickHouse
 # (docs/observability.md → "Telemetry lint"); the factory runs it as the project's hygiene probe.
 #

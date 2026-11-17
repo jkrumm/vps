@@ -35,9 +35,16 @@ SIGNALS = ("traces", "logs", "metrics")
 # The 1 % bound of the empty-Body rule and the silence window.
 EMPTY_BODY_SHARE = 0.01
 SILENCE_HOURS = 24
-# A dashboard or alert carrying one of these tags is owned and applied by another repo
-# (scripts/hyperdx-sync.sh OWNED_ELSEWHERE_TAGS): not part of the drift comparison.
-OWNED_ELSEWHERE_TAGS = {"weatherorb", "agw"}
+
+
+def owned_elsewhere_tags():
+    """Tags of dashboards and alerts another repo owns: read from hyperdx-sync.sh, the one place that lists them."""
+    with open(os.path.join(ROOT, "scripts", "hyperdx-sync.sh")) as f:
+        match = re.search(r'^OWNED_ELSEWHERE_TAGS="([^"]*)"', f.read(), re.M)
+    if not match:
+        raise SystemExit("telemetry-lint: OWNED_ELSEWHERE_TAGS not found in scripts/hyperdx-sync.sh")
+    return set(match.group(1).split())
+
 
 RULES = (
     "unregistered",  # a service.name that emits but is not in the registry
@@ -131,10 +138,21 @@ def clickhouse(ssh):
         raise ProbeError(f"ClickHouse unreachable ({ssh}): {exc}") from exc
     if proc.returncode != 0:
         raise ProbeError(f"ClickHouse query failed (exit {proc.returncode}): {proc.stderr.strip()[:300]}")
+    return parse_rows(proc.stdout)
+
+
+COUNTS = ("rows7d", "rows24h", "last", "rows", "total", "empty_body", "untraced")
+
+
+def parse_rows(text):
+    """JSONEachRow lines to {query name: [row]}; ClickHouse may quote 64-bit counts, so they are made ints."""
     out = {"activity": [], "attrs": [], "logs": []}
-    for line in proc.stdout.splitlines():
+    for line in text.splitlines():
         if line.strip():
             row = json.loads(line)
+            for key in COUNTS:
+                if key in row:
+                    row[key] = int(row[key])
             out[row.pop("q")].append(row)
     return out
 
@@ -157,6 +175,7 @@ def hyperdx_names():
             base = f"https://hyperdx.{domain}"
     except (OSError, subprocess.SubprocessError) as exc:
         raise ProbeError(f"HyperDX key unavailable (set HYPERDX_PROD_ACCESS_KEY, or run where secrets-run exists): {exc}") from exc
+    owned = owned_elsewhere_tags()
     names = []
     for path in ("dashboards", "alerts"):
         try:
@@ -167,7 +186,7 @@ def hyperdx_names():
             data = json.loads(proc.stdout)["data"]
         except (OSError, subprocess.SubprocessError, ValueError, KeyError) as exc:
             raise ProbeError(f"HyperDX /{path} unreadable: {exc}") from exc
-        names.append({d["name"] for d in data if not OWNED_ELSEWHERE_TAGS & set(d.get("tags") or [])})
+        names.append({d["name"] for d in data if not owned & set(d.get("tags") or [])})
     return names[0], names[1]
 
 

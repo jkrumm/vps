@@ -113,6 +113,17 @@ class Rules(unittest.TestCase):
         self.assertEqual(rules(run(entries, a, attrs)), [("environment", "other")])
 
 
+class Parse(unittest.TestCase):
+    def test_quoted_64bit_counts_become_ints(self):
+        snap = lint.parse_rows('{"q":"attrs","signal":"logs","service":"s","env":"","ns":"","version":"","host":"","rows":"7"}\n'
+                               '{"q":"activity","signal":"logs","service":"s","rows7d":"70","rows24h":"10","last":"1800000000"}\n')
+        self.assertEqual(snap["attrs"][0]["rows"], 7)
+        self.assertEqual((snap["activity"][0]["rows7d"], snap["activity"][0]["last"]), (70, 1800000000))
+
+    def test_owned_elsewhere_tags_come_from_hyperdx_sync(self):
+        self.assertEqual(lint.owned_elsewhere_tags(), {"weatherorb", "agw"})
+
+
 class Registry(unittest.TestCase):
     def test_shipped_registry_is_well_formed(self):
         registry = lint.load_registry(lint.REGISTRY)
