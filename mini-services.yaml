@@ -2,4 +2,7 @@
 services:
   # GitHub Actions telemetry poller: one tick a minute (scripts/gh-actions-telemetry.py) through jobrun. A python3 process
   # of a few seconds per tick; the budget is 1.5 x the peak footprint measured over a tick (about 35 MiB).
+  # Nightly Postgres backup of the mini's dev database (scripts/backup-pg-dev.sh) through jobrun at 03:15, the LaunchAgent in
+  # launchd/com.jkrumm.vps-pg-backup.plist.template. Same entry as dotfiles config/mini/services.yaml.
+  - { name: vps-pg-backup, repo: vps, kind: launchd, tier: core, label: com.jkrumm.vps-pg-backup, memory_mib: 50 }
   - { name: vps-gh-actions-telemetry, repo: vps, kind: launchd, tier: core, label: com.jkrumm.vps-gh-actions-telemetry, memory_mib: 60, note: "Interval job: GitHub Actions runs and jobs of every jkrumm repo into ClickStack (docs/observability.md -> CI telemetry); core because the CI dashboard and its queue-time view go stale without it." }
