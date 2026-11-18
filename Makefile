@@ -174,7 +174,7 @@ infra-upgrade: require-prod
 
 ## Pull the newest ghcr.io/jkrumm/rollhook:latest and recreate the container.
 ## RollHook deploys every other app but cannot deploy itself; Watchtower only
-## picks it up at the 04:00 sweep. Use this to take a fresh release immediately.
+## picks it up at the 04:00 sweep. Use this on the VPS (ENV=prod) to take a fresh release immediately; the mini cannot run it (its secret refs are not cached there).
 ## Prints the running version afterwards — the container publishes no host port,
 ## so the probe goes through `docker exec`.
 rollhook-update: require-prod
