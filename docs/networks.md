@@ -8,7 +8,7 @@ External networks (pre-created by `setup.sh`, referenced as `external: true`):
 | `postgres-net` | Postgres access | Postgres, apps needing DB |
 | `mariadb-net` | FPP MariaDB access | MariaDB, FPP services, backup container |
 | `valkey-net` | Valkey/Redis access | Valkey, apps needing cache |
-| `monitoring-net` | Observability bus | ClickStack, Beszel, Dozzle, host-probe, apps sending OTel |
+| `monitoring-net` | Observability bus | ClickStack, Dozzle, host-probe, apps sending OTel |
 
 Internal networks (created by Docker Compose, not external):
 
@@ -17,7 +17,7 @@ Internal networks (created by Docker Compose, not external):
 | `socket-proxy-net` | Traefik → socket-proxy (read-only, POST=0) |
 | `socket-proxy-rollhook-net` | RollHook → socket-proxy-rollhook (POST=1, write access) |
 | `socket-proxy-watchtower-net` | Watchtower → socket-proxy-watchtower (POST=1, write access) |
-| `socket-proxy-monitoring-net` | Dozzle + Beszel + host-probe → socket-proxy-monitoring (read-only, LOGS+STATS) |
+| `socket-proxy-monitoring-net` | Dozzle + host-probe → socket-proxy-monitoring (read-only, LOGS+STATS) |
 
 **Traffic routing model:**
 

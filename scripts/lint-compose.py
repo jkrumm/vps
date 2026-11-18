@@ -15,7 +15,6 @@ import yaml
 ALLOWED_PORTS = {
     ("compose.networking.yml", "traefik"),
     ("compose.monitoring.yml", "clickstack"),  # 13133 OTel health, 8123 ClickHouse HTTP
-    ("compose.monitoring.yml", "beszel-agent"),
     ("compose.monitoring.yml", "dozzle"),
     ("apps/fpp/compose.yml", "mariadb"),
 }
