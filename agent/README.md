@@ -47,7 +47,7 @@ Drop the patch when upstream retries 5xx (watch the otlphttpexporter changelog o
 
 ## Update the collector
 
-1. Change the version in `manifest.yaml` (every module), `OCB_VERSION` in the `Dockerfile` and `build.sh`, and the image tag in the compose file.
+1. Change the version in `manifest.yaml` (every module), `OCB_VERSION` in the `Dockerfile` and `build.sh`, the image tag in the compose file and `service.version` in both `config/*.yaml` (the registry holds that attribute to a real release).
 2. `agent/build.sh darwin/arm64` (or the platform at hand) and `host-agent validate --config <file>` for each config.
 3. Deploy: `make deploy` builds the image on the VPS.
 
