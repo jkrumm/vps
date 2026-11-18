@@ -382,7 +382,7 @@ services:
   # Not RollHook-managed: built by `make shutterflow-key-broker-image TAG=<sha>`, pinned here.
   # ---------------------------------------------------------------------------
   shutterflow-key-broker:
-    image: rollhook.jkrumm.com/shutterflow-key-broker:ea140f8b0aa93981e4fcd52efd3e698de99b484f
+    image: rollhook.jkrumm.com/shutterflow-key-broker:c0115db9d148fe528d05f8a9979c22d931dc08b2
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
