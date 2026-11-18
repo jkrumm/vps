@@ -584,7 +584,7 @@ field (`GET /api/api/v2/dashboards`).
 `host-agent` and `host-probe` (`compose.monitoring.yml`) put the VPS's host and container metrics into ClickStack. Both run the same
 image, a slim OpenTelemetry Collector built from `agent/manifest.yaml` with ocb (`agent/README.md`: why it is built, how to bump it,
 how another machine runs it). Everything lands in `otel_metrics_*` with `host.name=vps`, `service.namespace=infra` and
-`deployment.environment.name=prod`.
+`deployment.environment.name=prod`. The same two containers run on the homelab (homelab Issue 2092, 2026-11-18: `host.name=homelab`, containers only, no `httpcheck.*` or `ping.*`, no temperature because the 0.165.0 hostmetrics receiver has no hardware scraper) and `host-agent` on the mini; both send OTLP/HTTP to the authed tier `https://otel.<domain>` with the ingestion key, so the registry lists `host-agent` and `host-probe` once, with every host that runs them.
 
 | Container | Network | Collects | Sends to |
 |-|-|-|-|
@@ -620,7 +620,7 @@ Both containers run with `mem_limit: 128m` (3.7 × the larger peak, which includ
 
 All alerts are on `Infra — Hosts` (`observability/dashboards/infra-hosts.json`), go to the `Factory door` webhook, and are routed
 to this repo (`factory door route-set --source hyperdx --monitor "<name>" --repo vps`). Disk, memory, load, swap and container
-alerts group by `host.name` (and mount or container name), so a host that starts reporting is alerted on without an edit.
+alerts group by `host.name` (and mount or container name), so a host that starts reporting is alerted on without an edit: the homelab's `/`, `/mnt/hdd`, `/boot`, `/boot/efi` and `/mnt/transfer` are on the filesystem alert and its memory on the memory alert from the first sample. The container tiles group by host and container name, since `cloudflared`, `dozzle`, `watchtower` and `beszel-agent` run on both machines. The homelab's containers report no `container.state.health.status` series (none has a healthcheck), so `Infra container unhealthy` has nothing to say about it until one does.
 The threshold is part of the name; changing one is a new monitor and needs a new route.
 
 | Alert | Fires when | Window |
@@ -631,7 +631,7 @@ The threshold is part of the name; changing one is a new monitor and needs a new
 | `Infra swap-out >= 100 MiB per 5m (15m)` | the swap pages written out (`system.paging.operations`, direction `page_out`, type `major`) in each of three consecutive 5 m windows | 3 × 5 m |
 | `Infra container restarts >= 1 (15m)` | `container.restarts` increased | 15 m |
 | `Infra container unhealthy >= 1 (10m)` | a container with a healthcheck reports `unhealthy` | 2 × 5 m |
-| `<host> host silent < 1 sample (10m)` | no `system.cpu.utilization` sample of that host | 2 × 5 m |
+| `<host> host silent < 1 sample (10m)` | no `system.cpu.utilization` sample of that host: `vps host silent`, `homelab host silent` (the mini has none yet) | 2 × 5 m |
 
 Each alert was proved once on 2026-11-17: its threshold lowered until it fired, the Issue arrived at the door (`incident` on the route's Issue), the threshold restored and the state back to OK. The first firing at 19:05 UTC went nowhere: HyperDX 2.45 refuses a webhook whose host resolves to a private or CGNAT address, which the door's tailnet name does, so every alert since the 2.45 pin failed with `WEBHOOK_ERROR` in its `executionErrors`. `WEBHOOK_HOSTNAME_ALLOWLIST` on the clickstack service names the door host; if alerts stop arriving, read `executionErrors` first (`agw hdx rest /alerts/<id>`).
 
@@ -644,8 +644,8 @@ keeps going is what hurts.
 A grouped alert cannot notice a host whose series vanished entirely, so **host silent is one alert per host**. To add one: in
 `infra-hosts.json` copy the tile `host-agent samples: vps (10m silence alerts)` and change the host in its `where`; in
 `observability/alerts` copy `vps-host-silent-1-sample-10m.json`, change the name (`<host> host silent < 1 sample (10m)`) and the
-tile; add `host-agent` for that host to `observability/services.yaml`; `make hyperdx-apply ENV=prod`; `factory door route-set
---source hyperdx --monitor "<name>" --repo <repo>`; `make hyperdx-export ENV=prod` and commit. The mini and homelab agents add theirs.
+tile; add the host to `host-agent`'s `host` list in `observability/services.yaml`; `make hyperdx-apply ENV=prod`; `factory door route-set
+--source hyperdx --monitor "<name>" --repo <repo>`; `make hyperdx-export ENV=prod` and commit. The homelab's is in; the mini's is still to add.
 
 **Against Beszel** (retired once ClickStack covers it): status → host silent, memory → memory, swap → swap-out, swap growth →
 swap-out, disk → filesystem. Beszel's load rule and its CPU 80 % for 10 minutes were digests, not alerts: they have tiles
