@@ -629,27 +629,30 @@ The threshold is part of the name; changing one is a new monitor and needs a new
 | `Infra mini filesystem >= 93% (15m)` | any mount of the mini (in practice `/System/Volumes/Data`) is at least 93 % full | 3 × 5 m |
 | `Infra memory >= 90% (15m)` | `system.memory.utilization` state `used` (without cache) at least 90 % | 3 × 5 m |
 | `Infra swap-out >= 100 MiB per 5m (15m)` | the swap pages written out (`system.paging.operations`, direction `page_out`, type `major`) in each of three consecutive 5 m windows | 3 × 5 m |
+| `Infra load5 per core >= 8 (30m)` | `system.cpu.load_average.5m` per core (tile `Load5 per core`) at least 8 on any host, for two consecutive 15 m windows | 2 × 15 m |
+| `Infra swap used >= 99% (30m)` | `system.paging.utilization` state `used` at least 99 % (swap exhausted) on any host that reports swap | 2 × 15 m |
 | `Infra container restarts >= 1 (15m)` | `container.restarts` increased | 15 m |
 | `Infra container unhealthy >= 1 (10m)` | a container with a healthcheck reports `unhealthy` | 2 × 5 m |
-| `<host> host silent < 1 sample (10m)` | no `system.cpu.utilization` sample of that host: `vps host silent`, `homelab host silent` (the mini has none yet) | 2 × 5 m |
+| `<host> host silent < 1 sample (10m)` | no `system.cpu.utilization` sample of that host: `vps host silent`, `homelab host silent`, `mini host silent` | 2 × 5 m |
 
 Each alert was proved once on 2026-11-17: its threshold lowered until it fired, the Issue arrived at the door (`incident` on the route's Issue), the threshold restored and the state back to OK. The first firing at 19:05 UTC went nowhere: HyperDX 2.45 refuses a webhook whose host resolves to a private or CGNAT address, which the door's tailnet name does, so every alert since the 2.45 pin failed with `WEBHOOK_ERROR` in its `executionErrors`. `WEBHOOK_HOSTNAME_ALLOWLIST` on the clickstack service names the door host; if alerts stop arriving, read `executionErrors` first (`agw hdx rest /alerts/<id>`).
 
 **Mini disk.** The mini's Data volume (926 GiB) sits at 88 to 92 % in normal operation: weatherorb's round builds, factory worktrees and the Colima VM disk (dotfiles `docs/disk.md`). The 85 % line fired on it at 89 % with 101 GiB free (Issue 2155) and would fire permanently: each sweep and worktree reap in `docs/disk.md` has bought 1 to 4 points that came back within hours. The mini therefore has its own tile and alert at 93 %, the line the mini's `devhost-health` monitor already fails on (above the 92 % a round build or a pair of Rust `target/` dirs reaches), and the generic filesystem tile leaves it out with `host.name != 'mini'`. Below 93 % the mini's disk is a trend to read on the `Filesystem utilisation: mini (%)` tile; its sweeps and what to cut when it crosses are `docs/disk.md` in dotfiles. Raising or lowering the line is a new monitor and needs a new door route.
 
-**Load has no alert.** The VPS runs CI next to prod, and CI alone drives its load: on 2026-11-17 the load5 average was 27, 18, 23 and 24 on 12 cores in four consecutive hours (CPU idle 10 to 18 %), peak load5 per core 6, from the weatherorb runners' `pytest -n auto` and factory build steps, while the edge p50 stayed at 2 to 13 ms. The `load5 per core >= 4 (15m)` alert (filed at 1.5, raised to 4) fired through it with nothing wrong, so it is gone: load counts queued CI threads, not harm to prod. Prod is protected where it matters, by priority: every runner lives in `ghrunner.slice` with `CPUWeight=20` against `system.slice`'s 100 (`docs/gh-runner.md`), and the harm alerts stay (edge p95 and 5xx, memory, swap-out, container unhealthy, host silent). `Load5 per core` remains a tile on `Infra — Hosts` for reading.
-Swap is judged by activity, not by how full it is: the VPS keeps cold pages in swap at 94 % use without trouble, and paging that
-keeps going is what hurts.
+**Load is judged by saturation, not by the CI queue.** The VPS runs CI next to prod, and CI alone drives its load: on 2026-11-17 the load5 average was 27, 18, 23 and 24 on 12 cores in four consecutive hours (CPU idle 10 to 18 %), from the weatherorb runners' `pytest -n auto` and factory build steps, while the edge p50 stayed at 2 to 13 ms. The first alerts on `Load5 per core` (1.5, then 4, over 15 m) fired 18 times that day with nothing wrong, and the mini runs hot by design too (factory agents and builds). The line is therefore **8 per core for two consecutive 15 m windows**. On the tile's own values from 2026-11-17 19:00 to 2026-11-18 08:50 UTC (15 m buckets) the VPS peaked at 4.9, the homelab at 0.5 and the mini at 11.1, with no two consecutive windows at 8 or more on any host (the mini had 11.1, then 7.4; and 8.9, then 5.9; and 9.2, then 5.3), so it would not have fired. It is close on the mini: if a heavy build holds it above 8 for 30 minutes without harm, raise the line (a new monitor, so a new route), do not remove the alert. Prod is also protected by priority: every runner lives in `ghrunner.slice` with `CPUWeight=20` against `system.slice`'s 100 (`docs/gh-runner.md`).
+Swap is judged by activity (`Infra swap-out`) and by exhaustion (`Infra swap used >= 99% (30m)`), not by how full it is: the VPS keeps cold pages in swap at 94 % use without trouble (65 % median; 98 to 100 % for about an hour during CI on 2026-11-17), and paging that keeps going, or swap with no room left, is what hurts. The homelab sits at 16 %. The old rule (8 GB used for 10 minutes) cannot be expressed here: the VPS swap is a fraction of that, so the level is a ratio.
+
+**The mini has no swap alerts.** Its host-agent (a darwin-arm64 build) sends `system.paging.*` series, but every value is zero: `system.paging.usage` 0 in each state, `system.paging.utilization` empty, `system.paging.operations` page-out 0 over 12 hours, so an alert on them would never fire or never be able to. The darwin build cannot report macOS swap, so the factory's own host loop covers the mini's swap.
 
 A grouped alert cannot notice a host whose series vanished entirely, so **host silent is one alert per host**. To add one: in
 `infra-hosts.json` copy the tile `host-agent samples: vps (10m silence alerts)` and change the host in its `where`; in
 `observability/alerts` copy `vps-host-silent-1-sample-10m.json`, change the name (`<host> host silent < 1 sample (10m)`) and the
 tile; add the host to `host-agent`'s `host` list in `observability/services.yaml`; `make hyperdx-apply ENV=prod`; `factory door route-set
---source hyperdx --monitor "<name>" --repo <repo>`; `make hyperdx-export ENV=prod` and commit. The homelab's is in; the mini's is still to add.
+--source hyperdx --monitor "<name>" --repo <repo>`; `make hyperdx-export ENV=prod` and commit. All three hosts have one.
 
-**Against Beszel** (retired once ClickStack covers it): status → host silent, memory → memory, swap → swap-out, swap growth →
-swap-out, disk → filesystem. Beszel's load rule and its CPU 80 % for 10 minutes were digests, not alerts: they have tiles
-(`Load5 per core`, `CPU utilisation`) but no alert here.
+**Against Beszel** (retired once ClickStack covers it): status → host silent, memory → memory, swap → swap-out and swap used, swap growth →
+swap-out, disk → filesystem, load → load5 per core. Its CPU 80 % for 10 minutes was a digest, not an alert: it has a tile
+(`CPU utilisation`) but no alert here.
 
 ### Docker metrics for the container alerts
 
