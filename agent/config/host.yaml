@@ -78,6 +78,7 @@ processors:
       - { key: host.name, value: "${env:AGENT_HOST_NAME}", action: upsert }
       - { key: service.name, value: host-agent, action: upsert }
       - { key: service.namespace, value: infra, action: upsert }
+      - { key: service.version, value: 0.165.0, action: upsert }   # the collector release; bump with manifest.yaml
       - { key: deployment.environment.name, value: "${env:AGENT_ENVIRONMENT}", action: upsert }
 
 exporters:

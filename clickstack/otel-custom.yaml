@@ -95,6 +95,7 @@ processors:
           - set(resource.attributes["host.name"], "${env:TELEMETRY_HOST_NAME:-vps}") where resource.attributes["service.name"] == "otelcol-hyperdx" or resource.attributes["service.name"] == "clickhouse"
           - set(resource.attributes["service.namespace"], "vps") where resource.attributes["service.namespace"] == nil and (resource.attributes["service.name"] == "otelcol-hyperdx" or resource.attributes["service.name"] == "clickhouse")
           - set(resource.attributes["deployment.environment.name"], "${env:TELEMETRY_ENVIRONMENT:-prod}") where resource.attributes["deployment.environment.name"] == nil and (resource.attributes["service.name"] == "otelcol-hyperdx" or resource.attributes["service.name"] == "clickhouse")
+          - set(resource.attributes["service.version"], "${env:TELEMETRY_VERSION:-unknown}") where resource.attributes["service.version"] == nil and resource.attributes["service.name"] == "clickhouse"
     metric_statements: *authed_statements
     log_statements: *authed_statements
 

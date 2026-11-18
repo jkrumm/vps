@@ -92,6 +92,7 @@ services:
       # What the gateway stamps on :4319 telemetry and on its own (clickstack/otel-custom.yaml).
       TELEMETRY_HOST_NAME: mini
       TELEMETRY_ENVIRONMENT: dev
+      TELEMETRY_VERSION: dev
 
 volumes:
   # No service mounts it any more: the old dev Postgres container's data, kept as the rollback
