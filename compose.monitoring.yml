@@ -107,7 +107,7 @@ services:
       options: { max-size: "5m", max-file: "2" }
 
   # ---------------------------------------------------------------------------
-  # Docker socket proxy — read-only, for Dozzle and Beszel agent.
+  # Docker socket proxy — read-only, for Dozzle and host-probe.
   # Grants only the endpoints each needs: container list, logs, stats.
   # POST=0 ensures no write operations are possible.
   # ---------------------------------------------------------------------------
@@ -229,32 +229,6 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
-
-  # ---------------------------------------------------------------------------
-  # Beszel agent — sends server metrics to Beszel hub on homelab.
-  # Connects to hub via Tailscale IP. Key generated in Beszel hub UI.
-  # ---------------------------------------------------------------------------
-  beszel-agent:
-    image: henrygd/beszel-agent:latest
-    container_name: beszel-agent
-    restart: unless-stopped
-    depends_on:
-      - socket-proxy-monitoring
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: 64m
-    environment:
-      KEY: ${BESZEL_AGENT_KEY}
-      DOCKER_HOST: tcp://socket-proxy-monitoring:2375
-      # Agent listens on :45876 (Beszel default), accessible via Tailscale only
-    ports:
-      - "${VPS_TAILSCALE_IP:?VPS_TAILSCALE_IP must be set}:45876:45876"   # Tailscale only
-    networks:
-      - monitoring-net
-      - socket-proxy-monitoring-net
-    logging:
-      driver: json-file
-      options: { max-size: "5m", max-file: "2" }
 
   # ---------------------------------------------------------------------------
   # host-agent — host metrics (CPU, memory, load, swap, disk, filesystem, network) into ClickStack.

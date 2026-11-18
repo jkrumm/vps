@@ -79,6 +79,6 @@ BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
 # CLOUDFLARE_* .......... no dev container fronts anything; prod tunnel token
 # FPP_*, EMAIL_GATEWAY_* prod app secrets, prod-only compose files
 # ROLLHOOK_SECRET ....... prod registry + admin token
-# IMGPROXY_*, NTFY_*, UPTIME_KUMA_*, BESZEL_*, HYPERDX_API_KEY, DOMAIN,
+# IMGPROXY_*, NTFY_*, UPTIME_KUMA_*, HYPERDX_API_KEY, DOMAIN,
 # ACME_EMAIL, VPS_TAILSCALE_IP ... prod-only
 # MARIADB_FPP_PASSWORD .. only apps/fpp/scripts/setup-mariadb.sh (require-prod)

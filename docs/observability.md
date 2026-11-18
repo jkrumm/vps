@@ -620,7 +620,7 @@ Both containers run with `mem_limit: 128m` (3.7 × the larger peak, which includ
 
 All alerts are on `Infra — Hosts` (`observability/dashboards/infra-hosts.json`), go to the `Factory door` webhook, and are routed
 to this repo (`factory door route-set --source hyperdx --monitor "<name>" --repo vps`). Disk, memory, load, swap and container
-alerts group by `host.name` (and mount or container name), so a host that starts reporting is alerted on without an edit: the homelab's `/`, `/mnt/hdd`, `/boot`, `/boot/efi` and `/mnt/transfer` are on the filesystem alert and its memory on the memory alert from the first sample. The container tiles group by host and container name, since `cloudflared`, `dozzle`, `watchtower` and `beszel-agent` run on both machines. The homelab's containers report no `container.state.health.status` series (none has a healthcheck), so `Infra container unhealthy` has nothing to say about it until one does.
+alerts group by `host.name` (and mount or container name), so a host that starts reporting is alerted on without an edit: the homelab's `/`, `/mnt/hdd`, `/boot`, `/boot/efi` and `/mnt/transfer` are on the filesystem alert and its memory on the memory alert from the first sample. The container tiles group by host and container name, since `cloudflared`, `dozzle` and `watchtower` run on both machines. The homelab's containers report no `container.state.health.status` series (none has a healthcheck), so `Infra container unhealthy` has nothing to say about it until one does.
 The threshold is part of the name; changing one is a new monitor and needs a new route.
 
 | Alert | Fires when | Window |
@@ -652,7 +652,7 @@ A grouped alert cannot notice a host whose series vanished entirely, so **host s
 tile; add the host to `host-agent`'s `host` list in `observability/services.yaml`; `make hyperdx-apply ENV=prod`; `factory door route-set
 --source hyperdx --monitor "<name>" --repo <repo>`; `make hyperdx-export ENV=prod` and commit. All three hosts have one.
 
-**Against Beszel** (retired once ClickStack covers it): status → host silent, memory → memory, swap → swap-out, swap growth →
+**Against Beszel** (retired 2026-11-18; its agent is gone from the VPS and host and container metrics come from `host-agent` and `host-probe`): status → host silent, memory → memory, swap → swap-out, swap growth →
 swap-out, disk → filesystem, load → load5 per core. Its CPU 80 % for 10 minutes was a digest, not an alert: it has a tile
 (`CPU utilisation`) but no alert here.
 

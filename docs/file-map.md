@@ -3,7 +3,7 @@
 ```
 compose.networking.yml        Networking/proxy (cloudflared, Traefik, socket-proxy, RollHook)
 compose.infra.yml             Databases (Postgres, Valkey) — internal-only, no exposed ports
-compose.monitoring.yml        Monitoring (ClickStack, Beszel, Dozzle, host-agent + host-probe built from agent/, Watchtower, Umami + two socket-proxy instances)
+compose.monitoring.yml        Monitoring (ClickStack, Dozzle, host-agent + host-probe built from agent/, Watchtower, Umami + two socket-proxy instances)
 compose.dev.yml               Local dev (Valkey + MariaDB + ClickStack with ports exposed; Postgres is the mini's Homebrew server, not here)
 apps/weatherorb/compose.yml        weatherorb-site — nginx:alpine serving `site/` read-only; apex + www routers (www → apex 301). No RollHook, no registry, no env file (V1's edge/account/egress/probe were removed 2026-11-17)
 apps/weatherorb/site/index.html   the page: the name and "WeatherOrb is being rebuilt."

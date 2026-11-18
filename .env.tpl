@@ -46,7 +46,6 @@ ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD
 BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
 SHUTTERFLOW_DB_PASSWORD=op://vps/shutterflow/DB_PASSWORD
 ROLLHOOK_SECRET=op://vps/rollhook/SECRET
-BESZEL_AGENT_KEY=op://vps/beszel/AGENT_KEY
 EXPRESS_SESSION_SECRET=op://vps/clickstack/EXPRESS_SESSION_SECRET
 # Read-only ClickHouse user for Argo's dashboards: ARGO_RO_PASSWORD is what Argo uses, the SHA256 of the same value
 # is what ClickHouse checks (clickstack/argo-ro-user.xml). Both written together, docs/observability.md → Dashboard read access.
