@@ -18,6 +18,7 @@ check observability/x hyperdx
 check agent/config/host.yaml host-agent-conf
 check agent/Dockerfile monitoring
 check agent/manifest.yaml monitoring
+check agent/patch-exporter.sh monitoring
 check cron/pg-backup cron
 check cron/x.env.tpl ""
 check compose.networking.yml networking

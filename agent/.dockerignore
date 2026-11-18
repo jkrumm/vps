@@ -1,4 +1,4 @@
-# The build context is this directory; the image needs manifest.yaml only.
+# The build context is this directory; the image needs manifest.yaml and patch-exporter.sh only.
 _build
 dist
 config
