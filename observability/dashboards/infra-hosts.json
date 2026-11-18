@@ -365,7 +365,7 @@
         "asRatio": false,
         "displayType": "line",
         "fillNulls": true,
-        "groupBy": "ResourceAttributes['container.name']",
+        "groupBy": "concat(ResourceAttributes['host.name'], ' ', ResourceAttributes['container.name'])",
         "select": [
           {
             "aggFn": "avg",
@@ -398,7 +398,7 @@
         "asRatio": false,
         "displayType": "line",
         "fillNulls": true,
-        "groupBy": "ResourceAttributes['container.name']",
+        "groupBy": "concat(ResourceAttributes['host.name'], ' ', ResourceAttributes['container.name'])",
         "select": [
           {
             "aggFn": "avg",
@@ -434,7 +434,7 @@
             "alias": "Containers",
             "metricName": "container.cpu.utilization",
             "metricType": "gauge",
-            "valueExpression": "ResourceAttributes['container.name']",
+            "valueExpression": "concat(ResourceAttributes['host.name'], ' ', ResourceAttributes['container.name'])",
             "where": "",
             "whereLanguage": "lucene"
           }
@@ -556,6 +556,30 @@
       "w": 12,
       "x": 12,
       "y": 0
+    },
+    {
+      "config": {
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Samples homelab",
+            "metricName": "system.cpu.utilization",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['host.name'] = 'homelab'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 3,
+      "id": "6afd50f7ca2acb2dfa5c230c",
+      "name": "host-agent samples: homelab (10m silence alerts)",
+      "w": 24,
+      "x": 0,
+      "y": 27
     }
   ]
 }

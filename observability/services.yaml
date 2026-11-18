@@ -10,7 +10,9 @@
 #   name       service.name, <product>-<role>; a single-process product may use the bare product name
 #   namespace  service.namespace, the product (a group of services that ship together)
 #   host       where it runs, becomes host.name: vps | mini | homelab | home | macbook,
-#              or `client` for browser and phone code (host.name stays unset there)
+#              or `client` for browser and phone code (host.name stays unset there). A service.name that
+#              runs on several machines (host-agent, host-probe) lists them: `[vps, mini, homelab]`; the
+#              registry is keyed by service.name, so it has one entry, one repo and one budget for all of them.
 #   env        deployment.environment.name it must send: prod (dev only for a dev-only emitter)
 #   repo       the repo that owns the code (and fixes a contract violation)
 #   signals    what it emits today: traces | logs | metrics
@@ -18,7 +20,7 @@
 #   notes      the open gap against the contract, or what is not obvious
 #   expected   which `signals` must not go silent for 24 h: all (default) | [traces, logs, ...] | none
 #              (intermittent emitters, and services that by design emit nothing: `signals: []`)
-#   budget     rows per day per signal (traces | logs | metrics: seeded 2026-11-17 at 3x the 7-day
+#   budget     rows per day per signal, across every host (traces | logs | metrics: seeded 2026-11-17 at 3x the 7-day
 #              average, floor 100) and untraced_logs, the largest share (0-1) of logs without a TraceId.
 #              A key left out is no check.
 #   ignore     {<rule>: <reason>} silences one lint rule for this service; the reason is required.
@@ -35,8 +37,8 @@ services:
   - { name: imgproxy, namespace: vps, host: vps, env: prod, repo: vps, signals: [traces, logs, metrics], budget: { traces: 730, logs: 3900, metrics: 570000, untraced_logs: 1 }, notes: "Third-party image: service.version is the imgproxy release." }
   - { name: rollhook, namespace: rollhook, host: vps, env: prod, repo: rollhook, signals: [logs], expected: none, budget: { logs: 100, untraced_logs: 1 }, notes: "One log record per deploy. The Go notifier hard-codes its resource: no service.namespace, no service.version, sets the deprecated deployment.environment only." }
 
-  - { name: host-agent, namespace: infra, host: vps, env: prod, repo: vps, signals: [metrics], budget: { metrics: 73000 }, notes: "Host metrics (system.*) from the slim collector in agent/, host network namespace, exported to the loopback :4319 tier. Budget seeded from the 24 h rate (deployed 2026-11-14, the 7-day average understated it). One per machine; a host not listed here has no silent-host alert (docs/observability.md → Infra alerts)." }
-  - { name: host-probe, namespace: infra, host: vps, env: prod, repo: vps, signals: [metrics], budget: { metrics: 250000 }, notes: "Container metrics (container.*) through socket-proxy-monitoring, HTTP checks of the public sites (httpcheck.*) and ICMP to public resolvers (ping.*). Same agent image as host-agent. Budget seeded from the 24 h rate (deployed 2026-11-14, the 7-day average understated it)." }
+  - { name: host-agent, namespace: infra, host: [vps, mini, homelab], env: prod, repo: vps, signals: [metrics], budget: { metrics: 1750000 }, notes: "Host metrics (system.*) from the slim collector in agent/, host network namespace. On the VPS it exports to the loopback :4319 tier; on the mini and the homelab (homelab Issue 2092, 2026-11-18) it builds the same agent and sends OTLP/HTTP to the authed tier. One per machine; a host without its own `<host> host silent` alert is not watched for silence (docs/observability.md → Infra alerts): vps and homelab have one, the mini does not yet. service.version is unset on every host (agent/ sets none). Budget is all three hosts at 3x the rate measured 2026-11-18 (vps 205,000, mini 275,000, homelab 105,000 rows a day; the earlier 73,000 predated the mini and homelab and fired on the VPS alone)." }
+  - { name: host-probe, namespace: infra, host: [vps, homelab], env: prod, repo: vps, signals: [metrics], budget: { metrics: 2500000 }, notes: "Container metrics (container.*) through the read-only Docker socket proxy; on the VPS also HTTP checks of the public sites (httpcheck.*) and ICMP to public resolvers (ping.*), on the homelab (Issue 2092) containers only. Same agent image as host-agent; service.version is unset. Budget is both hosts at 3x the rate measured 2026-11-18 (vps 705,000, homelab 120,000 rows a day)." }
 
   # --- Mac mini: telemetry about other systems ---
   - { name: ci-poller, namespace: ci, host: mini, env: prod, repo: vps, signals: [traces, metrics], expected: [metrics], budget: { traces: 15000, metrics: 35000 }, notes: "Traces only when a workflow run completes (a quiet weekend is no outage); the metrics heartbeat ci.poll.repos is every tick. GitHub Actions runs and jobs of every jkrumm repo (scripts/gh-actions-telemetry.py, a LaunchAgent on the mini, authed tier). Traces: one run span with a job and a queue span per job; metrics: ci.worker.busy, ci.pipeline.run.active, ci.poll.repos. Budget from the 24 h backfill of 2026-11-17 (about 4,900 spans) and a day of ticks, at 3x." }
