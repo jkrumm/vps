@@ -111,7 +111,7 @@
         "formulas": [
           {
             "alias": "Load5 per core",
-            "expression": "A / B",
+            "expression": "A / 12 + B / 4",
             "numberFormat": {
               "mantissa": 2,
               "output": "number"
@@ -122,21 +122,21 @@
         "select": [
           {
             "aggFn": "avg",
-            "alias": "Load5",
+            "alias": "Load5 on 12 cores",
             "metricName": "system.cpu.load_average.5m",
             "metricType": "gauge",
             "valueExpression": "",
-            "where": "",
-            "whereLanguage": "lucene"
+            "where": "ResourceAttributes['host.name'] IN ('mini', 'vps')",
+            "whereLanguage": "sql"
           },
           {
-            "aggFn": "count_distinct",
-            "alias": "Cores",
-            "metricName": "system.cpu.utilization",
+            "aggFn": "avg",
+            "alias": "Load5 on 4 cores",
+            "metricName": "system.cpu.load_average.5m",
             "metricType": "gauge",
-            "valueExpression": "Attributes['cpu']",
-            "where": "",
-            "whereLanguage": "lucene"
+            "valueExpression": "",
+            "where": "ResourceAttributes['host.name'] = 'homelab'",
+            "whereLanguage": "sql"
           }
         ],
         "showOperandSeries": false,
