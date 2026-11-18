@@ -12,8 +12,6 @@ hygiene:
     - { name: telemetry-lint, target: telemetry-lint }
 ship:
   - { via: push }
-# One lead: the VPS is one host with one checkout that `make deploy` applies in place, and the shared infra stacks change under every app.
-leads: 1
 signals:
   github:
     author: jkrumm
