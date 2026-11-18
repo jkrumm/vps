@@ -229,12 +229,12 @@ signals; the schema processor is alpha and not used. The bundled collector (0.15
 |-|-|-|
 | `transform/env` | every pipeline | `production`→`prod`, any other value besides `prod`/`dev`→`dev` on `deployment.environment` and `deployment.environment.name`; copies the old key into `.name` when `.name` is missing |
 | `transform/internal` | `:4319` pipelines (`*/internal`) | container-ID-looking `host.name` (12–64 hex) → `container.id`; `host.name` = `${TELEMETRY_HOST_NAME:-vps}` (everything on the docker bridge runs on this VPS; the dev stack sets `mini`) |
-| `transform/authed` | the base `traces`, `metrics`, `logs/in` pipelines | container-ID-looking `host.name` → `container.id`, `host.name` dropped; for `otelcol-hyperdx` and `clickhouse` (nothing else sets their resource) `host.name`, `service.namespace=vps`, `deployment.environment.name` are stamped |
+| `transform/authed` | the base `traces`, `metrics`, `logs/in` pipelines | container-ID-looking `host.name` → `container.id`, `host.name` dropped; for `otelcol-hyperdx` and `clickhouse` (nothing else sets their resource) `host.name`, `service.namespace=vps`, `deployment.environment.name` are stamped, and `clickhouse` also gets `service.version=${TELEMETRY_VERSION}` (the ClickStack tag, set beside the image in `compose.monitoring.yml`) |
 
 `logs/in` runs before the routing connector, so session replay (`hyperdx_sessions`) is
 normalised too. `session.id` handling of the base pipelines (`transform/session_id`) is kept in
 the replaced `traces` list. What the gateway cannot reach: nothing on a pipeline today; what it
-chooses not to touch is `service.namespace` and `service.version` of an app (the app's fix).
+chooses not to touch is `service.namespace` and `service.version` of an app (the app's fix); the two services above are the exception.
 
 Both keys are kept (`deployment.environment` is rewritten, not removed) so queries on the old
 key keep working. The dashboards and alerts in `observability/` filter on neither.
