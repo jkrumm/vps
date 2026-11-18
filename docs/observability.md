@@ -809,6 +809,8 @@ curl -sS --user "argo_ro:$ARGO_RO_PASSWORD" "http://<VPS_TAILSCALE_IP>:8123/" --
   GROUP BY t, MetricName ORDER BY t FORMAT JSONEachRow"
 ```
 
+**Reachability.** The tailnet ACL (`dotfiles-private/tailscale-acl.jsonc`) must grant the mini (`tag:devhost`) `tcp:8123` on `tag:vps`; without the grant the connection times out while ping works, as it does for any port not granted.
+
 **Why the bind address matters.** Docker publishes ports through its own iptables rules, which bypass ufw: a
 bare `8123:8123` would be open on the public address regardless of ufw's default-deny. The compose binding is
 `${VPS_TAILSCALE_IP}:8123:8123`, the same as the 13133 health port, and 8123 is never routed through Traefik or the
