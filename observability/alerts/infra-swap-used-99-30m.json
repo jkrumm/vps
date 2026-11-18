@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Infra \u2014 Hosts",
+  "displayName": "Infra \u2014 Hosts - Swap used (%)",
+  "interval": "15m",
+  "message": null,
+  "name": "Infra swap used >= 99% (30m)",
+  "note": null,
+  "numConsecutiveWindows": 2,
+  "source": "tile",
+  "tags": [
+    "agent"
+  ],
+  "threshold": 0.99,
+  "thresholdType": "above",
+  "tile": "Swap used (%)"
+}

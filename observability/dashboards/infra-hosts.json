@@ -580,6 +580,30 @@
       "w": 24,
       "x": 0,
       "y": 27
+    },
+    {
+      "config": {
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Samples mini",
+            "metricName": "system.cpu.utilization",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['host.name'] = 'mini'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 3,
+      "id": "6afd67fbca2acb2dfa5c265a",
+      "name": "host-agent samples: mini (10m silence alerts)",
+      "w": 24,
+      "x": 0,
+      "y": 30
     }
   ]
 }
