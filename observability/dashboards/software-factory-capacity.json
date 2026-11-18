@@ -1,0 +1,240 @@
+{
+  "containers": [
+    {
+      "collapsed": false,
+      "id": "queue",
+      "title": "Software factory capacity (set the time picker to the last 1 h; gauges sampled every 60 s, max or avg per bucket, never sum)"
+    },
+    {
+      "collapsed": false,
+      "id": "slots",
+      "title": "Slot waits"
+    },
+    {
+      "collapsed": false,
+      "id": "placement",
+      "title": "Placements and seats"
+    },
+    {
+      "collapsed": false,
+      "id": "host",
+      "title": "Host load"
+    }
+  ],
+  "filters": [],
+  "name": "Software factory capacity",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "agent"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "Attributes['reason']",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "Queued",
+            "metricName": "factory.queue.issues",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['service.name'] = 'software-factory'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "queue",
+      "h": 8,
+      "id": "6afd5cc5ca2acb2dfa5c24cc",
+      "name": "Queued Issues by reason (max per bucket)",
+      "w": 24,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "Attributes['reason']",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "Waits",
+            "metricName": "factory.slot.waits",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['service.name'] = 'software-factory'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "slots",
+      "h": 8,
+      "id": "6afd5cc5ca2acb2dfa5c24cd",
+      "name": "Slot waits by reason (ended in the last 5 min, max per bucket)",
+      "w": 12,
+      "x": 0,
+      "y": 8
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "Attributes['reason']",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "p90 ms",
+            "metricName": "factory.slot.wait.p90.ms",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['service.name'] = 'software-factory'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "slots",
+      "h": 8,
+      "id": "6afd5cc5ca2acb2dfa5c24ce",
+      "name": "Slot wait p90 by reason (ms)",
+      "w": 12,
+      "x": 12,
+      "y": 8
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "concat(Attributes['repo'], ' / ', Attributes['reason'])",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "Wait ms",
+            "metricName": "factory.slot.wait.ms",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['service.name'] = 'software-factory'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "slots",
+      "h": 8,
+      "id": "6afd5cc5ca2acb2dfa5c24cf",
+      "name": "Slot wait ms by repo / reason (summed over the last 5 min, max per bucket)",
+      "w": 24,
+      "x": 0,
+      "y": 16
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "concat(Attributes['host'], ' / ', Attributes['reason'])",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "Placements",
+            "metricName": "factory.step.placements",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['service.name'] = 'software-factory'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "placement",
+      "h": 8,
+      "id": "6afd5cc5ca2acb2dfa5c24d0",
+      "name": "Step placements by host / reason (count over the last 5 min, max per bucket)",
+      "w": 12,
+      "x": 0,
+      "y": 24
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "Attributes['account']",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "used",
+            "metricName": "factory.seats.used",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['service.name'] = 'software-factory'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "max",
+            "alias": "base cap",
+            "metricName": "factory.seats.cap",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['service.name'] = 'software-factory'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "placement",
+      "h": 8,
+      "id": "6afd5cc5ca2acb2dfa5c24d1",
+      "name": "Seats used vs base cap per account",
+      "w": 12,
+      "x": 12,
+      "y": 24
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "avg",
+            "alias": "Load",
+            "metricName": "factory.host.load",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['service.name'] = 'software-factory'",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "avg",
+            "alias": "Ceiling",
+            "metricName": "factory.host.load.ceiling",
+            "metricType": "gauge",
+            "valueExpression": "",
+            "where": "ResourceAttributes['service.name'] = 'software-factory'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "host",
+      "h": 8,
+      "id": "6afd5cc5ca2acb2dfa5c24d2",
+      "name": "Host load the admission gate read vs ceiling in force",
+      "w": 24,
+      "x": 0,
+      "y": 32
+    }
+  ]
+}
