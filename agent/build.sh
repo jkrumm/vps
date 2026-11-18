@@ -2,6 +2,7 @@
 # Build the host-agent binaries from manifest.yaml for every platform the agent runs on.
 #   agent/build.sh                  -> dist/host-agent-linux-amd64, -linux-arm64, -darwin-arm64
 #   agent/build.sh darwin/arm64     -> only the named platforms
+# The otlphttpexporter is a patched copy (patch-exporter.sh) that also retries Cloudflare 530 and every 5xx but 501.
 # Needs Go and the same ocb release the Dockerfile uses (installed into dist/.bin when absent).
 set -euo pipefail
 
@@ -18,6 +19,9 @@ if [[ ! -x "${DIST}/.bin/builder-${OCB_VERSION}" ]]; then
   rmdir "${DIST}/.bin/tmp"
 fi
 
+PATCHED="${DIST}/.patched"
+"${HERE}/patch-exporter.sh" "${PATCHED}"
+
 for platform in "${PLATFORMS[@]}"; do
   os="${platform%/*}"
   arch="${platform#*/}"
@@ -25,7 +29,7 @@ for platform in "${PLATFORMS[@]}"; do
   echo "→ ${os}/${arch}"
   rm -rf "${out}"
   (cd "${HERE}" && CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" \
-    "${DIST}/.bin/builder-${OCB_VERSION}" --config manifest.yaml --output-path "${out}")
+    "${DIST}/.bin/builder-${OCB_VERSION}" --config "${PATCHED}/manifest.yaml" --output-path "${out}")
   mv "${out}/host-agent" "${DIST}/host-agent-${os}-${arch}"
   rm -rf "${out}"
 done

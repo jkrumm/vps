@@ -9,9 +9,11 @@ ENV CGO_ENABLED=0
 WORKDIR /src
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     GOBIN=/usr/local/bin go install go.opentelemetry.io/collector/cmd/builder@v${OCB_VERSION}
-COPY manifest.yaml .
+# The otlphttpexporter is a patched copy that also retries Cloudflare 530 and every 5xx but 501 (patch-exporter.sh).
+COPY manifest.yaml patch-exporter.sh ./
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    GOOS=${TARGETOS} GOARCH=${TARGETARCH} builder --config manifest.yaml
+    ./patch-exporter.sh /src/patched && \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} builder --config /src/patched/manifest.yaml
 # The persistent exporter queue lives here; a named volume mounted on it inherits this ownership.
 RUN mkdir -p /state
 

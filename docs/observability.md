@@ -603,7 +603,7 @@ read-only; it needs the mount for filesystem and disk statistics.
 per-container network and block I/O (the host half has both), per-interface series of `veth*`, `br-*` and `docker*`.
 
 **Queue.** The exporter queue is on a volume (`host-agent-queue`, `host-probe-queue`) and retries never give up, so samples
-collected while ClickStack is down arrive after it returns with the timestamps they were collected with.
+collected while ClickStack is down arrive after it returns with the timestamps they were collected with. The exporter is a patched copy that also retries 5xx other than 501 (Cloudflare's 530 above all): `agent/README.md` → Patched exporter.
 
 **Queue test (2026-11-17):** `docker stop clickstack` 19:41:03 → `docker start` 19:46:05 UTC. Afterwards `default.otel_metrics_gauge` held 40 `host-agent` rows in every minute of the gap (the same as before and after it) and 147–151 `host-probe` rows per minute (four fewer while the stopped `clickstack` container had no stats of its own): nothing was lost, and the rows carry the collection timestamps.
 
