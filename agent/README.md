@@ -55,4 +55,4 @@ Drop the patch when upstream retries 5xx (watch the otlphttpexporter changelog o
 
 Copy `config/host.yaml`, set `AGENT_HOST_NAME`, `AGENT_ENVIRONMENT` and `AGENT_OTLP_ENDPOINT` (the authed tier needs an
 `Authorization` header on the exporter), mount the host filesystem read-only at `AGENT_ROOT_PATH`, then register
-`host-agent` for that host in the telemetry registry and add its silent-host alert (`docs/observability.md`).
+`host-agent` for that host in the telemetry registry and add its silent-host alert (`docs/observability.md`). Add its core count to the `Load5 per core` tile in `observability/dashboards/infra-hosts.json` (the two series' `where` and the formula), or the host is missing from the load alert.
