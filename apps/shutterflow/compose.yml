@@ -397,6 +397,7 @@ services:
       # tier, reached through monitoring-net. stdout stays.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
       OTEL_SERVICE_NAME: shutterflow-key-broker
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=shutterflow,deployment.environment.name=prod
     volumes:
       - shutterflow-key-broker-state:/var/lib/key-broker
     labels:

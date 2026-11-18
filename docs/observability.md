@@ -99,7 +99,7 @@ it can reach, so a violation does not reach the tables ("Gateway normalisation",
 Set `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` in the compose env of a VPS service whose
 SDK reads them (Node `NodeSDK`, Python `Resource.create`, Go SDKs, Traefik, email-gateway's own
 parser). An app that builds its resource in code and ignores the variable (fpp-server,
-rollhook, shutterflow-key-broker) is not patched around here: the violation is in the registry
+rollhook) is not patched around here: the violation is in the registry
 `notes` and filed as a signal on its repo. Confirm after any change that rows actually carry
 the attributes (see Verification commands); an SDK that ignores the variable fails silently.
 

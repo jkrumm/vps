@@ -26,7 +26,7 @@ echo "[1/3] docker login ${REGISTRY}"
 echo "${ROLLHOOK_SECRET}" | docker login "${REGISTRY}" -u rollhook --password-stdin
 
 echo "[2/3] Build ${IMAGE}"
-docker build -t "${IMAGE}" -f "${SRC_DIR}/apps/key-broker/Dockerfile" "${SRC_DIR}"
+docker build --build-arg SERVICE_VERSION="${TAG}" -t "${IMAGE}" -f "${SRC_DIR}/apps/key-broker/Dockerfile" "${SRC_DIR}"
 
 echo "[3/3] Push ${IMAGE}"
 docker push "${IMAGE}"
