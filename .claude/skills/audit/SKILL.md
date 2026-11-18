@@ -51,7 +51,7 @@ ssh vps "docker system df"
 - Networking: `cloudflared`, `traefik`, `socket-proxy`, `socket-proxy-rollhook`, `rollhook`
 - Infra: `postgres`, `redis`
 - FPP (`apps/fpp/compose.yml`): `mariadb`, `fpp-server`, `fpp-analytics`, `fpp-analytics-updater`
-- Monitoring: `clickstack`, `beszel-agent`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`, `umami`
+- Monitoring: `clickstack`, `host-agent`, `host-probe`, `dozzle`, `watchtower`, `socket-proxy-watchtower`, `socket-proxy-monitoring`, `umami`
 - Apps (RollHook-managed, auto-suffixed dynamic names — match by label, not name): `basalt-ui-marketing`, `jkrumm-com`, `email-gateway`, `imgproxy`, `shutterflow-share`, `shutterflow-imgproxy`, `weatherorb-site`, `photo-gallery`, `rollhook-marketing`
 
 ```bash
