@@ -57,9 +57,11 @@ https://img.<domain>/_/rs:fit:800/plain/img://fuji/foo.jpg
                     └─ signature slot
 ```
 
-**The signature slot accepts any string in unsigned mode** — `_`, `unsafe`,
-`insecure` all work; it is not a keyword. Once `IMGPROXY_KEY`/`IMGPROXY_SALT`
-are set it must hold a valid HMAC, and every placeholder stops working.
+**On img.<domain>, the signature slot must be `_` or `insecure`.** Traefik passes
+only `/_/` and `/insecure/` paths to imgproxy raw and rewrites any other first
+segment (`/unsafe/…` included) into a broken source. imgproxy itself ignores the
+slot in unsigned mode. Once `IMGPROXY_KEY`/`IMGPROXY_SALT` are set it must hold a
+valid HMAC, and every placeholder stops working.
 
 **`img://` is an alias**, not a real scheme — `IMGPROXY_URL_REPLACEMENTS` expands
 it to `s3://<bucket>/img/` before anything else runs. Public URLs therefore leak
