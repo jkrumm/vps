@@ -30,5 +30,6 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # repos' builds; images and volumes go every day, so the day's peak is churn + 6 GB.
 35 4 * * * gh-runner /bin/bash -c 'export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock; echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af | tail -n 1; docker builder prune -af --max-used-space 6GB | tail -n 1; docker volume prune -af | tail -n 1; docker system df' >> /home/gh-runner/docker-prune.log 2>&1
 # Runners' self-update leftovers: old bin/externals and _work/_update (~8 GB measured), as root
-# because the repo is not readable by gh-runner. scripts/gh-runner-clean.sh explains the guards.
+# because the repo is not readable by gh-runner. It also trims host scratch (stale ~/exp<issue>
+# dirs, /tmp pytest leftovers, the apt cache). scripts/gh-runner-clean.sh explains the guards.
 40 4 * * * root /home/jkrumm/vps/scripts/gh-runner-clean.sh >> /var/log/gh-runner-clean.log 2>&1

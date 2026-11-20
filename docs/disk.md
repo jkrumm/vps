@@ -28,6 +28,14 @@ The alert (`/` at 86 %) fired at 147 GB used, 24 GB free. Share of it: runners' 
 `~/exp*` 13 GB, containerd 28 GB, runners' Docker 14 GB, Docker volumes 12 GB. The rest rests near 84 to 86 %
 and the daily 04:30 prune takes 3 to 5 GB off the day's peak, so `/` has no headroom for one more large directory.
 
+## Measured 2026-11-20, second alert (issue_2637)
+
+The same day, `/` was back at 145 GB, 86 %, after issue_2627's toolchain cleanup had already run (weatherorb's
+cache was down to the three live 1.100.0 dirs, 23 GB). What stays unbounded and keeps the rest at 84 to 86 %:
+`~/orb-capture` 17 GB (grows daily, WeatherOrb's retention), `~/factory-steps` 13 GB (software-factory's),
+`~/exp*` 24 GB (now reaped after 7 idle days, see below). A disk this size runs at its alert threshold as long as the
+two owned directories grow; the durable lever is those owners' retention or a bigger disk, not this repo's pruning.
+
 ## Per directory
 
 | Directory | Bounded by |
@@ -42,7 +50,8 @@ and the daily 04:30 prune takes 3 to 5 GB off the day's peak, so `/` has no head
 | `/var/log` | `journald` capped at 1 GB (`config/journald-vps.conf`, `make journald-install`); the rest is under 50 MB. |
 | `~/factory-steps` | software-factory's remote step host: one worktree per project and slot (reused, not growing) plus a shared bun cache. No retention of its own; filed as a signal to software-factory. |
 | `~/orb-*` | WeatherOrb's, its own Issue. Not touched here. `~/orb-capture` was 17 GB on 2026-11-20 (mosmix 8.9, wis2 4.5, truth 2.2) and grows daily; its retention is WeatherOrb's, filed as a signal. |
-| `~/exp<issue>` | Factory leads' experiment scratch (13 GB on 2026-11-20, `exp2251` alone 8 GB of data). No retention; filed as a signal to software-factory. |
+| `~/exp<issue>` | Factory leads' experiment scratch (24 GB across 8 dirs on 2026-11-20, `exp2251` alone 8 GB). `scripts/gh-runner-clean.sh` 04:40 removes a dir once no file in it changed for 7 days (`EXP_DAYS`); a dir an Issue still writes to stays. |
+| `/tmp/pytest-of-gh-runner`, `/var/cache/apt` | CI test leftovers (1.1 GB) and the apt package cache (1.4 GB, measured 2026-11-20, issue_2637): `scripts/gh-runner-clean.sh` 04:40 removes the first once untouched for a day and runs `apt-get clean`. |
 
 ## Why a size cap, not an age filter
 

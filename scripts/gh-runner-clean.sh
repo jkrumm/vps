@@ -16,6 +16,10 @@
 #     every toolchain dir but the newest one per runner, once untouched for a day. weatherorb's
 #     cargo target is 7.5 to 8 GB per runner and toolchain, so a bump left 3 x 1.3 GB behind
 #     (measured 2026-11-20, issue_2627); the bumped toolchain never reads the old target again.
+#   - host scratch that nothing bounds (measured 2026-11-20, issue_2637, 2.5 GB + 24 GB):
+#     /tmp/pytest-of-gh-runner (CI test leftovers, 1.1 GB) once untouched for a day, the apt
+#     package cache (1.4 GB, only ever refetched), and factory leads' `~/exp<issue>` experiment
+#     scratch once no file in it changed for $EXP_DAYS days (8 dirs, 24 GB, none ever removed).
 # Job work directories and the live toolchain's cache are left alone: they are bounded
 # by one checkout per runner and repo (actions/checkout replaces it) and warm caches pay off.
 #
@@ -25,6 +29,9 @@ set -euo pipefail
 
 RUNNERS_DIR="${RUNNERS_DIR:-/home/gh-runner/runners}"
 CACHE_DIR="${CACHE_DIR:-/home/gh-runner/cache}"
+TMP_DIR="${TMP_DIR:-/tmp}"
+EXP_ROOT="${EXP_ROOT:-/home/jkrumm}"
+EXP_DAYS="${EXP_DAYS:-7}"
 freed=0
 
 remove() {
@@ -72,5 +79,27 @@ for runner_cache in "$CACHE_DIR"/*/*/; do
     remove "$dir"
   done
 done
+
+# Host scratch. A pytest tree untouched for a day belongs to no running job.
+pytest_dir="$TMP_DIR/pytest-of-gh-runner"
+if [[ -d "$pytest_dir" && -z "$(find "$pytest_dir" -maxdepth 0 -mtime -1)" ]]; then
+  remove "$pytest_dir"
+fi
+
+# Factory leads' experiment scratch: removed only when nothing inside changed for EXP_DAYS days,
+# so an Issue still working in it keeps it. The newest file decides, not the directory's mtime.
+for dir in "$EXP_ROOT"/exp[0-9]*/; do
+  dir="${dir%/}"
+  [[ -z "$(find "$dir" -mtime "-$EXP_DAYS" -print -quit)" ]] || continue
+  remove "$dir"
+done
+
+# apt's package cache is only ever refetched (root only: it owns /var/cache/apt).
+if [[ $EUID -eq 0 && -z "${SKIP_APT_CLEAN:-}" ]] && command -v apt-get >/dev/null; then
+  kb=$(du -sk /var/cache/apt | cut -f1)
+  apt-get clean
+  freed=$((freed + kb - $(du -sk /var/cache/apt | cut -f1)))
+  echo "apt cache cleaned"
+fi
 
 echo "freed $((freed / 1024)) MB"
