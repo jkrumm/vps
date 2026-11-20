@@ -19,7 +19,7 @@
 #   - host scratch that nothing bounds (measured 2026-11-20, issue_2637, 2.5 GB + 24 GB):
 #     /tmp/pytest-of-gh-runner (CI test leftovers, 1.1 GB) once untouched for a day, the apt
 #     package cache (1.4 GB, only ever refetched), and factory leads' `~/exp<issue>` experiment
-#     scratch once no file in it changed for $EXP_DAYS days (8 dirs, 24 GB, none ever removed).
+#     scratch once no file in it changed for $EXP_DAYS days (8 dirs, 24 GB, none ever removed; 2 days idle, issue_2676: closed Issues left 21 GB behind a 7-day window).
 # Job work directories and the live toolchain's cache are left alone: they are bounded
 # by one checkout per runner and repo (actions/checkout replaces it) and warm caches pay off.
 #
@@ -31,7 +31,7 @@ RUNNERS_DIR="${RUNNERS_DIR:-/home/gh-runner/runners}"
 CACHE_DIR="${CACHE_DIR:-/home/gh-runner/cache}"
 TMP_DIR="${TMP_DIR:-/tmp}"
 EXP_ROOT="${EXP_ROOT:-/home/jkrumm}"
-EXP_DAYS="${EXP_DAYS:-7}"
+EXP_DAYS="${EXP_DAYS:-2}"
 freed=0
 
 remove() {
