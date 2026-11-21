@@ -14,9 +14,9 @@ it**. The backup, restore drill, health probe, `make db-counts`, `restore-local`
 
 Until 2026-11-14 the mini ran a second instance, the `postgres` container of `compose.dev.yml`
 (`postgres:18`). The cutover (dotfiles) moved its databases to the bare server and stopped it; the
-service is gone from `compose.dev.yml`. Its volume `vps_postgres-dev-data` is kept as the rollback
-copy until dotfiles removes it (7 days after the cutover, after a proven HomeLab restore). The
-stopped container itself is removed by `make dev-pg-container-remove` (idempotent, container only).
+service is gone from `compose.dev.yml`. Its volume `vps_postgres-dev-data` was removed on
+2026-11-21, a week after the cutover (dotfiles issue 1163). The stopped container itself is removed by
+`make dev-pg-container-remove` (idempotent, container only).
 Never `docker compose down -v` the dev stack, and never `docker volume rm` it from here.
 
 Dev only: none of this runs on the VPS, which has its own cron backups (`scripts/backup-pg.sh`) and
@@ -199,6 +199,6 @@ The gate path means a machine without the backup LaunchAgent skips the probe.
   `sync-from-prod` was retired: it dropped the entire local database.
 - `make restore-local` (the S3 DR drill) stays MacBook-only. It drops and restores the schemas the
   dump carries inside `${POSTGRES_DB}`; the database itself and every other database stay.
-- The `postgres-dev-data` volume is never removed or recreated by any target here
+- The `postgres-dev-data` volume is gone (removed 2026-11-21); no target here recreates it
   (`dev-pg-container-remove` removes the stale container only).
 - Do not `brew services stop postgresql@18`: weatherorb, Athena and everything above depend on it.

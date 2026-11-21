@@ -544,12 +544,12 @@ gh-actions-telemetry-run: require-dev
 
 ## Dev — remove the stale `postgres` container of the retired compose.dev.yml service (the mini's
 ## Postgres is the Homebrew server). Removes the container only: the volume vps_postgres-dev-data
-## stays as the rollback copy until dotfiles drops it. Idempotent; only acts on a container that
+## was removed 2026-11-21 (dotfiles issue 1163). Idempotent; only acts on a container that
 ## carries the vps compose-project label, never on one that merely shares the name.
 dev-pg-container-remove: require-dev
 	@id=$$(docker ps -aq --filter name='^/postgres$$' --filter label=com.docker.compose.project=vps --filter label=com.docker.compose.service=postgres); \
 	if [ -z "$$id" ]; then echo "  ✓ no stale postgres container (nothing to remove)"; exit 0; fi; \
-	docker rm -f "$$id" >/dev/null && echo "  ✓ stale postgres container removed (volume vps_postgres-dev-data kept)"
+	docker rm -f "$$id" >/dev/null && echo "  ✓ stale postgres container removed (container only; volume vps_postgres-dev-data was removed 2026-11-21)"
 
 ## Dev — DESTROY and re-initialize the local FPP MariaDB volume. Destructive.
 ## The only in-place way to change a root password whose volume predates the
