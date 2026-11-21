@@ -16,7 +16,7 @@ Each Postgres app MUST keep its journal in its own schema: drizzle-kit →
 `migrations: { schema: '<app>' }` in `drizzle.config.ts` **and** `migrationsSchema`
 in the runtime `migrate()` call (Postgres-only option). Then the schema-owning
 role owns its journal — no extra grants needed here. Applied: argo
-(`argo.__drizzle_migrations`), basalt-ui-playground. N/A for FPP (own MariaDB).
+(`argo.__drizzle_migrations`), basalt-ui-playground, fpp (v9 API; the v1 containers keep their own MariaDB until the cutover).
 
 **Local dev seeding** (do not re-implement in the app repo — delegate to vps):
 `make pg-sync-schema SCHEMA=<app>` pulls just that schema from prod over SSH, using the
@@ -37,6 +37,9 @@ Current schemas:
 | basalt_ui_playground | basalt-ui-playground | basalt_ui_playground |
 | argo | retired (kept pending drop, see `docs/retired-argo.md`) | argo |
 | shutterflow | shutterflow-share | shutterflow |
+| fpp | Free Planning Poker v9 API (v1 stays on MariaDB until the cutover) | fpp |
+
+**UNLOGGED tables (`fpp.room_snapshot`).** `pg_dump` writes an unlogged table's definition (`CREATE UNLOGGED TABLE`) and its rows by default; `scripts/backup-pg.sh` passes no `--no-unlogged-table-data`, so the nightly dump carries them and `scripts/restore-pg.sh` / the restore drill bring them back still unlogged. What an unlogged table lacks is WAL: after a crash or an unclean shutdown Postgres truncates it, and a physical (base-backup) copy would not hold its rows. Nothing here takes one, so the dump is the only backup path. The rows are a cache of live room state, so the app must treat an empty `room_snapshot` as normal, never as an error.
 
 **Mac mini only — own databases, not schemas:** `agent_workflows`, `shared` and the rest are declared in dotfiles
 `config/postgres/cluster.yaml` and applied by `make -C ~/SourceRoot/dotfiles pg-apply`; nothing in this repo

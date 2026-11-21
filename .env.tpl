@@ -45,6 +45,7 @@ UMAMI_APP_SECRET=op://vps/umami/APP_SECRET
 ARGO_DB_PASSWORD=op://vps/argo/DB_PASSWORD
 BASALT_UI_PLAYGROUND_DB_PASSWORD=op://vps/basalt-ui-playground/DB_PASSWORD
 SHUTTERFLOW_DB_PASSWORD=op://vps/shutterflow/DB_PASSWORD
+FPP_DB_PASSWORD=op://vps/fpp/DB_PASSWORD
 ROLLHOOK_SECRET=op://vps/rollhook/SECRET
 EXPRESS_SESSION_SECRET=op://vps/clickstack/EXPRESS_SESSION_SECRET
 # Read-only ClickHouse user for Argo's dashboards: ARGO_RO_PASSWORD is what Argo uses, the SHA256 of the same value

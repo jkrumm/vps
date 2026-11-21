@@ -146,6 +146,38 @@ echo "--> shutterflow (skipped: SHUTTERFLOW_DB_PASSWORD not set — prod-only sc
 fi
 
 # ---------------------------------------------------------------------------
+# fpp — schema: fpp, user: fpp
+# Free Planning Poker v9 API (replaces the MariaDB container at cutover; MariaDB stays untouched).
+# The API keeps its migration journal in this schema and creates one UNLOGGED table
+# (fpp.room_snapshot): docs/postgres-schema-model.md → UNLOGGED tables.
+# ---------------------------------------------------------------------------
+echo "--> fpp"
+
+psql_main <<SQL
+CREATE SCHEMA IF NOT EXISTS fpp;
+
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'fpp') THEN
+    CREATE ROLE fpp WITH LOGIN PASSWORD '${FPP_DB_PASSWORD}';
+  ELSE
+    ALTER ROLE fpp WITH PASSWORD '${FPP_DB_PASSWORD}';
+  END IF;
+END
+\$\$;
+
+GRANT CONNECT ON DATABASE "${POSTGRES_DB}" TO fpp;
+-- Required for drizzle migrate: its migration runs CREATE SCHEMA IF NOT EXISTS, and PG checks
+-- CREATE ON DATABASE before the IF NOT EXISTS short-circuit.
+GRANT CREATE ON DATABASE "${POSTGRES_DB}" TO fpp;
+GRANT USAGE, CREATE ON SCHEMA fpp TO fpp;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA fpp TO fpp;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA fpp TO fpp;
+ALTER DEFAULT PRIVILEGES IN SCHEMA fpp GRANT ALL ON TABLES TO fpp;
+ALTER DEFAULT PRIVILEGES IN SCHEMA fpp GRANT ALL ON SEQUENCES TO fpp;
+SQL
+
+# ---------------------------------------------------------------------------
 # Future apps: add blocks here following the same pattern.
 #
 # Migration journals: each drizzle-kit app must keep its journal in its OWN
