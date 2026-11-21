@@ -139,6 +139,8 @@ services:
       - "com.centurylinklabs.watchtower.enable=false"
       # OIDC deploy authorization — only this GitHub repo can trigger deploys.
       - "rollhook.allowed_repos=jkrumm/free-planning-poker"
+      # v1 is frozen on the branch v1; master must never deploy into these containers.
+      - "rollhook.allowed_refs=refs/heads/v1"
     networks:
       - proxy
       - valkey-net
@@ -190,6 +192,8 @@ services:
       - "traefik.http.services.fpp-analytics.loadbalancer.healthcheck.interval=10s"
       - "com.centurylinklabs.watchtower.enable=false"
       - "rollhook.allowed_repos=jkrumm/free-planning-poker"
+      # v1 is frozen on the branch v1; master must never deploy into these containers.
+      - "rollhook.allowed_refs=refs/heads/v1"
     networks:
       - proxy
       - monitoring-net
@@ -261,6 +265,8 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
       - "rollhook.allowed_repos=jkrumm/free-planning-poker"
+      # v1 is frozen on the branch v1; master must never deploy into these containers.
+      - "rollhook.allowed_refs=refs/heads/v1"
     logging:
       driver: json-file
       options: { max-size: "20m", max-file: "3" }
