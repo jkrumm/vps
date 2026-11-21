@@ -23,9 +23,9 @@ mysql://fpp:<password>@db.free-planning-poker.com:33306/free-planning-poker?ssl=
 
 | Service | Image | Network | Deploy |
 |-|-|-|-|
-| `fpp-server` | `rollhook.jkrumm.com/fpp-server:latest` | `proxy` | RollHook on push to master |
-| `fpp-analytics` | `rollhook.jkrumm.com/fpp-analytics:latest` | `proxy` | RollHook on push to master |
-| `fpp-analytics-updater` | `rollhook.jkrumm.com/fpp-analytics-updater:latest` (same content as fpp-analytics) | `mariadb-net` | RollHook on push to master |
+| `fpp-server` | `rollhook.jkrumm.com/fpp-server:latest` | `proxy` | RollHook on push to v1 |
+| `fpp-analytics` | `rollhook.jkrumm.com/fpp-analytics:latest` | `proxy` | RollHook on push to v1 |
+| `fpp-analytics-updater` | `rollhook.jkrumm.com/fpp-analytics-updater:latest` (same content as fpp-analytics) | `mariadb-net` | RollHook on push to v1 |
 
 `fpp-server`, `fpp-analytics` and the updater follow the RollHook contract (no `container_name`, no `ports`, healthcheck, `IMAGE_TAG` env var, `rollhook.allowed_repos=jkrumm/free-planning-poker`, `rollhook.allowed_refs=refs/heads/v1`: v1 is frozen on the branch `v1`, deploys come from it only, master is deliberately not allowed). The updater is a sleep-loop sidecar that connects to MariaDB internally with TLS+no-verify (cert CN `*.free-planning-poker.com` doesn't match the `mariadb` hostname).
 

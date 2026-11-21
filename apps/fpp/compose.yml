@@ -7,7 +7,7 @@
 # See ../../AGENTS.md → Security Invariants for the documented exception.
 #
 # fpp-server and fpp-analytics are deployed via RollHook from the
-# jkrumm/free-planning-poker repo (push to master). fpp-analytics-updater runs
+# jkrumm/free-planning-poker repo (push to the v1 branch; master is not allowed). fpp-analytics-updater runs
 # the same image as fpp-analytics but in a sleep-loop sidecar and is bounced
 # manually when its image needs refreshing (no zero-downtime requirement —
 # 10-min polling cron, brief restart is fine).
@@ -85,7 +85,7 @@ services:
 
   # ---------------------------------------------------------------------------
   # fpp-server — Bun + Elysia WebSocket server. Public via Cloudflare Tunnel +
-  # Traefik. Deployed via RollHook on push to jkrumm/free-planning-poker:master.
+  # Traefik. Deployed via RollHook on push to jkrumm/free-planning-poker:v1.
   # ---------------------------------------------------------------------------
   fpp-server:
     image: ${IMAGE_TAG:-rollhook.jkrumm.com/fpp-server:latest}
