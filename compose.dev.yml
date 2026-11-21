@@ -95,10 +95,6 @@ services:
       TELEMETRY_VERSION: dev
 
 volumes:
-  # No service mounts it any more: the old dev Postgres container's data, kept as the rollback
-  # copy until dotfiles removes it (7 days after the 2026-11-14 cutover, after a proven HomeLab
-  # restore). Never `down -v` this stack and never `docker volume rm` it from here.
-  postgres-dev-data:
   valkey-dev-data:
   mariadb-dev-data:
   clickstack-db:
