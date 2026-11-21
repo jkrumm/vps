@@ -218,7 +218,7 @@ services:
     # fpp-analytics — Discover would otherwise return the first match by
     # bare-name and could pick the updater (which has no allowed_repos label).
     #
-    # Deployed via RollHook on every push — see .github/workflows/deploy.yml
+    # Deployed via RollHook on every push to v1 — see .github/workflows/deploy.yml
     # in jkrumm/free-planning-poker. Two replicas overlap briefly during a
     # 1→2→1 rollout; safe because update_readmodel.py uses PID-scoped temp
     # parquet paths and the DB sync query is idempotent.
