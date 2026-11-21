@@ -325,7 +325,7 @@ Three daily backups, all stream to the same `jkrumm` B2 bucket under `backups/vp
 | `/etc/cron.d/fpp-mariadb-backup` | 03:30 | `apps/fpp/scripts/backup-mariadb.sh` | `backups/vps/mariadb/` | `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` |
 | `/etc/cron.d/email-gateway-backup` | 03:45 | `scripts/backup-email-gateway.sh` (SQLite `.backup` of `email-gateway.sqlite` + `mail.sqlite`) | `backups/vps/email-gateway/` | `EMAIL_GATEWAY_BACKUP_KUMA_PUSH_URL` (optional, not yet in a template) |
 | `/etc/cron.d/pg-health` | every minute | `scripts/health-pg.sh` | n/a (liveness) | `UPTIME_KUMA_POSTGRES_PUSH_URL` |
-| `/etc/cron.d/docker-prune` | daily 04:30 / 04:35 / 04:40 | inline `docker image prune -af --filter until=48h` + `builder prune -af --max-used-space 3GB` (prod, never volumes); the runners' daemon pruned with a 6 GB cache cap; `scripts/gh-runner-clean.sh` — bounds in `docs/disk.md` | n/a (hygiene) | — |
+| `/etc/cron.d/docker-prune` | daily 04:30 / 04:35 / 04:40 / 04:45 / 05:00 | inline `docker image prune -af --filter until=48h` + `builder prune -af --max-used-space 3GB` (prod, never volumes); the runners' daemon pruned with a 3 GB cache cap; `scripts/gh-runner-clean.sh`; `scripts/exp-sweep.sh`; `scripts/disk_budget.py` — budget table in `docs/disk.md` | n/a (hygiene) | — |
 | `/etc/cron.d/disk-watch` | every 15 min | `scripts/disk-watch.sh` — ntfy `alerts` at >= 80 % of `/` (env `/etc/vps/disk-watch.env`, `make cron-env-seed`) | n/a (alert) | — |
 
 Manual triggers: `make backup` (Postgres), `make fpp-backup` (MariaDB). Pg and MariaDB dumps are verified before the Kuma ping.

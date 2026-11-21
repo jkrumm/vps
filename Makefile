@@ -619,7 +619,7 @@ prune:
 ## what the next run would reclaim.
 prune-cron-install: require-prod
 	sudo install -o root -g root -m 644 cron/docker-prune /etc/cron.d/docker-prune
-	@echo "  ✓ /etc/cron.d/docker-prune installed (daily 04:30/04:35/04:40 — images, size-capped build cache, runner leftovers; never prod volumes)"
+	@echo "  ✓ /etc/cron.d/docker-prune installed (daily 04:30-05:00 — images, size-capped build cache, runner leftovers, exp scratch, disk budget; never prod volumes)"
 	@docker system df | awk 'NR==1 || /^Images|^Build Cache/'
 
 # Repo contract — the four targets every repo with a runtime ships.
@@ -675,7 +675,10 @@ check:
 	$(PY_YAML) -I -m unittest discover -s scripts -p 'test_telemetry_lint.py' || exit 1; \
 	python3 -I -W ignore -m unittest discover -s scripts -p 'test_gh_actions_telemetry.py' || exit 1; \
 	[ ! -f $(HOME)/SourceRoot/dotfiles/scripts/mini-registry.ts ] || ! command -v bun >/dev/null 2>&1 || bun $(HOME)/SourceRoot/dotfiles/scripts/mini-registry.ts lint || exit 1; \
-	bash scripts/test_deploy_affected.sh || exit 1
+	bash scripts/test_deploy_affected.sh || exit 1; \
+	bash scripts/test_exp_sweep.sh || exit 1; \
+	python3 -I -W ignore -m unittest discover -s scripts -p 'test_disk_budget.py' || exit 1; \
+	python3 -I scripts/disk_budget.py --table || exit 1
 	@echo "OK: local validation passed"
 
 ## Telemetry lint (factory hygiene probe): observability/services.yaml against what prod ClickHouse

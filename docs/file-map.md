@@ -34,7 +34,10 @@ scripts/health-pg.sh          SELECT 1 → Uptime Kuma push ping (per-minute liv
 scripts/db-counts.sh          Exact per-table COUNT(*) (Postgres + MariaDB) — read-only, diff-friendly verification (make db-counts)
 scripts/setup-gh-runner.sh    Idempotent per-repo Actions runner for private repos — gh-runner user, rootless Docker, systemd unit (make gh-runner-setup / gh-runner-remove REPO=…, docs/gh-runner.md)
 scripts/gh-runner-sync.sh     Registers the runner(s) of every private repo with workflows, per-repo count in instances() (make gh-runner-sync, runs where gh is authenticated)
-scripts/gh-runner-clean.sh    Trims a runner's old bin/externals and _work/_update left by self-updates (cron/docker-prune, root, daily)
+scripts/gh-runner-clean.sh    Trims a runner's old bin/externals and _work/_update left by self-updates, old toolchain caches, pytest leftovers, the apt cache (cron/docker-prune, root, daily)
+scripts/exp-sweep.sh         Removes ~/exp<issue> and ~/agw<issue> scratch of closed Issues, else idle 2 days (cron/docker-prune 04:45, root; test: scripts/test_exp_sweep.sh)
+scripts/disk_budget.py       Daily disk budget check: sum of caps under 75 %, measure every row, one signal per over-cap owner (cron/docker-prune 05:00; test: scripts/test_disk_budget.py)
+config/disk-budget.json      The budget table as data: row, paths, owner, cap_gib, class, enforced_by (docs/disk.md has the same table)
 scripts/gh-runner-watchdog.sh Restarts runners stuck in reconnect back-off — installed by setup as a 5-min systemd timer
 scripts/restore-pg.sh         PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)
 scripts/restore-pg-local.sh   Dev — non-interactive S3 → local whole-DB restore (DR validation + seeding)
@@ -62,7 +65,7 @@ cron/pg-health.env.tpl        op template for the seeded pg-health cron env (mat
 cron/fpp-mariadb-backup       MariaDB backup, daily 03:30
 cron/email-gateway-backup     email-gateway SQLite backup, daily 03:45
 cron/fpp-cert-sync            MariaDB TLS cert sync, every 6h
-cron/docker-prune             Daily prune: 04:30 prod daemon (images >48h unused, build cache capped 3 GB, never volumes), 04:35 gh-runner rootless daemon (images, volumes, cache capped 6 GB — `--filter until=` matches nothing on this engine), 04:40 scripts/gh-runner-clean.sh (make prune-cron-install; bounds per directory: docs/disk.md)
+cron/docker-prune             Daily prune: 04:30 prod daemon (images >48h unused, build cache capped 3 GB, never volumes), 04:35 gh-runner rootless daemon (images, volumes, cache capped 3 GB — `--filter until=` matches nothing on this engine), 04:40 scripts/gh-runner-clean.sh, 04:45 scripts/exp-sweep.sh, 05:00 scripts/disk_budget.py (make prune-cron-install; budget table: docs/disk.md)
 cron/disk-watch               Root-disk alert every 15 min: ntfy `alerts` at >= 80 % (scripts/disk-watch.sh, env seeded from cron/disk-watch.env.tpl)
 config/journald-vps.conf      journald SystemMaxUse=1G (setup.sh, make journald-install)
 README.md → Secrets           All secret variable names with setup instructions (no values in repo)

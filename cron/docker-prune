@@ -1,6 +1,7 @@
 # Daily Docker hygiene — 04:30 prod daemon (after Watchtower's 04:00 sweep has pulled the new
 # images, so the superseded ones are unused by then), 04:35 the Actions runners' rootless
-# daemon, 04:40 the runners' self-update leftovers. Per-directory bounds: docs/disk.md.
+# daemon, 04:40 the runners' self-update leftovers, 04:45 closed Issues' ~/exp<issue> scratch, 05:00 the
+# disk budget check. Per-directory bounds and the budget table: docs/disk.md.
 #
 # Prod daemon (images live in /var/lib/containerd — the containerd image store):
 # - Images no container uses and older than 48h. Weekly was too slow: 7.6 GB of superseded
@@ -23,13 +24,20 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # Same for the Actions runners' rootless daemon (docs/gh-runner.md) — every CI and deploy build
 # lands there. Volumes too, unlike above: on this daemon they are only what jobs' service
 # containers left behind, never data. A no-op until `make gh-runner-setup` has created the user.
-# DAILY, and the cache capped by SIZE (6 GB): CI churn is ~40 GB/week (images, job volumes, build
+# DAILY, and the cache capped by SIZE (3 GB): CI churn is ~40 GB/week (images, job volumes, build
 # cache), a weekly sweep let the 178 GB disk cross 90% on 2026-11-17 (incident issue_1842), and
 # the daily sweep that followed still left 18 GB of cache because its `--filter until=48h` matches
-# nothing here (see above). 6 GB holds weatherorb's 3 GB core-ci image layers plus the other
-# repos' builds; images and volumes go every day, so the day's peak is churn + 6 GB.
-35 4 * * * gh-runner /bin/bash -c 'export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock; echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af | tail -n 1; docker builder prune -af --max-used-space 6GB | tail -n 1; docker volume prune -af | tail -n 1; docker system df' >> /home/gh-runner/docker-prune.log 2>&1
+# nothing here (see above). The cap was 6 GB until 2026-11-22 (issue_2849: the per-directory bounds summed to the
+# alert line); 3 GB holds weatherorb's core-ci image layers, and images and volumes go every day, so the
+# day's peak is churn + 3 GB (docs/disk.md budget row `runner-docker`).
+35 4 * * * gh-runner /bin/bash -c 'export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock; echo "=== $(date -u +\%FT\%TZ)"; docker image prune -af | tail -n 1; docker builder prune -af --max-used-space 3GB | tail -n 1; docker volume prune -af | tail -n 1; docker system df' >> /home/gh-runner/docker-prune.log 2>&1
 # Runners' self-update leftovers: old bin/externals and _work/_update (~8 GB measured), as root
-# because the repo is not readable by gh-runner. It also trims host scratch (stale ~/exp<issue>
-# dirs, /tmp pytest leftovers, the apt cache). scripts/gh-runner-clean.sh explains the guards.
+# because the repo is not readable by gh-runner. It also trims host scratch (/tmp pytest leftovers, the apt
+# cache). scripts/gh-runner-clean.sh explains the guards.
 40 4 * * * root /home/jkrumm/vps/scripts/gh-runner-clean.sh >> /var/log/gh-runner-clean.log 2>&1
+# Factory leads' ~/exp<issue> and ~/agw<issue> scratch: removed once the Issue is closed, else after 2 idle days; root
+# because containers leave root-owned files in them. scripts/exp-sweep.sh logs one line per directory.
+45 4 * * * root /home/jkrumm/vps/scripts/exp-sweep.sh >> /var/log/exp-sweep.log 2>&1
+# The daily disk budget (config/disk-budget.json): measures every row, writes /var/tmp/disk-budget.json and files one
+# signal per owner over a cap (an ntfy push while this host has no factory CLI). Env as disk-watch's, when seeded.
+0 5 * * * root /bin/bash -c '[ ! -r /etc/vps/disk-watch.env ] || { set -a; . /etc/vps/disk-watch.env; set +a; }; /usr/bin/python3 -I /home/jkrumm/vps/scripts/disk_budget.py' >> /var/log/disk-budget.log 2>&1

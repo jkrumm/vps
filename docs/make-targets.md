@@ -68,7 +68,7 @@ make dev-pg-restore-drill    # newest backup → scratch DBs → exact counts vs
 make dev-pg-health           # readiness probe (one line, exit 0/1) for the devhost heartbeat
 make dev-pg-launchd          # install the 03:15 backup LaunchAgent (from the main checkout, not a worktree)
 make gh-actions-launchd      # install the GitHub Actions telemetry LaunchAgent (every 60 s → ClickStack; main checkout, not a worktree); gh-actions-launchd-remove, gh-actions-telemetry-run (one tick)
-make prune-cron-install  # prod — install the daily image + size-capped build-cache prune and the runner-leftover trim (cron/docker-prune); never prod volumes
+make prune-cron-install  # prod — install the daily image + size-capped build-cache prune, the runner-leftover trim, the exp-scratch sweep and the daily disk budget (cron/docker-prune); never prod volumes
 make journald-install    # prod — journal size cap (config/journald-vps.conf) + vacuum
 make gh-runner-setup REPO=jkrumm/<repo> [N=2]  # prod — self-hosted Actions runner (instance) for one private repo (token on stdin, docs/gh-runner.md); gh-runner-remove undoes it, gh-runner-reapply re-runs setup for all
 make gh-runner-sync      # mini/MacBook (needs gh) — register a VPS runner for every private repo with workflows; DRY_RUN=1 previews

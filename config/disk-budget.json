@@ -1,0 +1,133 @@
+{
+  "_comment": "Disk budget of the VPS root disk (docs/disk.md). One row per owner-bounded path set: caps in GiB, class data|cache|build|history, enforced_by names what holds the cap. scripts/disk_budget.py measures every row daily, fails when the caps sum past max_pct of the disk, and files one signal per owner over a cap. Same row fields as the mini's budget (dotfiles docs/disk.md).",
+  "disk_gib": 178,
+  "max_pct": 75,
+  "unknown_gib": 5,
+  "scan_roots": [
+    "/home/jkrumm",
+    "/home/gh-runner",
+    "/var/lib"
+  ],
+  "rows": [
+    {
+      "id": "containerd",
+      "paths": [
+        "/var/lib/containerd"
+      ],
+      "owner": "vps",
+      "cap_gib": 30,
+      "class": "data",
+      "enforced_by": "RollHook keeps 5 tags per app; cron/docker-prune 04:30 (images unused 48 h, build cache 3 GB)"
+    },
+    {
+      "id": "docker",
+      "paths": [
+        "/var/lib/docker"
+      ],
+      "owner": "vps",
+      "cap_gib": 13,
+      "class": "data",
+      "enforced_by": "volumes are data (ClickHouse TTL 30 d, RollHook 5 tags, the databases); never pruned"
+    },
+    {
+      "id": "runner-docker",
+      "paths": [
+        "/home/gh-runner/.local"
+      ],
+      "owner": "vps",
+      "cap_gib": 12,
+      "class": "build",
+      "enforced_by": "cron/docker-prune 04:35: images and volumes daily, build cache capped at 3 GB"
+    },
+    {
+      "id": "runners",
+      "paths": [
+        "/home/gh-runner/runners"
+      ],
+      "owner": "vps",
+      "cap_gib": 7,
+      "class": "build",
+      "enforced_by": "one checkout per runner and repo; scripts/gh-runner-clean.sh 04:40 drops self-update leftovers"
+    },
+    {
+      "id": "runner-cache",
+      "paths": [
+        "/home/gh-runner/cache"
+      ],
+      "owner": "weatherorb",
+      "cap_gib": 15,
+      "class": "build",
+      "enforced_by": "weatherorb's core job wipes a runner's target above CORE_CACHE_LIMIT_GIB; gh-runner-clean.sh drops superseded toolchains"
+    },
+    {
+      "id": "runner-tools",
+      "paths": [
+        "/home/gh-runner/.bun",
+        "/home/gh-runner/.cache",
+        "/home/gh-runner/.npm",
+        "/home/gh-runner/.docker"
+      ],
+      "owner": "vps",
+      "cap_gib": 5,
+      "class": "cache",
+      "enforced_by": "keyed by lockfile contents; slow growth, signal when over"
+    },
+    {
+      "id": "factory-steps",
+      "paths": [
+        "/home/jkrumm/factory-steps"
+      ],
+      "owner": "software-factory",
+      "cap_gib": 12,
+      "class": "cache",
+      "enforced_by": "the factory's own step-host trim: slot copies idle 7 days, bun cache capped at 3 GiB"
+    },
+    {
+      "id": "orb-capture",
+      "paths": [
+        "/home/jkrumm/orb-capture"
+      ],
+      "owner": "weatherorb",
+      "cap_gib": 12,
+      "class": "history",
+      "enforced_by": "weatherorb's 7-day retention"
+    },
+    {
+      "id": "exp",
+      "paths": [
+        "/home/jkrumm/exp[0-9]*",
+        "/home/jkrumm/agw[0-9]*"
+      ],
+      "owner": "vps",
+      "cap_gib": 6,
+      "class": "build",
+      "enforced_by": "scripts/exp-sweep.sh 04:45: closed Issue's dir removed, else idle 2 days"
+    },
+    {
+      "id": "home-other",
+      "paths": [
+        "/home/jkrumm/cache",
+        "/home/jkrumm/orb-sites",
+        "/home/jkrumm/orb-corpus",
+        "/home/jkrumm/sizing-probe",
+        "/home/jkrumm/shutterflow-releases",
+        "/home/jkrumm/photo-gallery-dist",
+        "/home/jkrumm/vps",
+        "/home/jkrumm/backups"
+      ],
+      "owner": "vps",
+      "cap_gib": 3,
+      "class": "data",
+      "enforced_by": "small, named; a path that grows past this joins its own row"
+    },
+    {
+      "id": "rest",
+      "paths": [],
+      "rest": true,
+      "owner": "vps",
+      "cap_gib": 10,
+      "class": "data",
+      "enforced_by": "everything else on the disk (/usr, swap, /var/log, apt, /tmp): used minus the rows above; journald capped at 1 GB"
+    }
+  ]
+}
