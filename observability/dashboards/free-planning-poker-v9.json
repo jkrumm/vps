@@ -1,0 +1,726 @@
+{
+  "containers": [
+    {
+      "collapsed": false,
+      "id": "health",
+      "title": "Health (fpp-api)"
+    },
+    {
+      "collapsed": false,
+      "id": "latency",
+      "title": "Latency"
+    },
+    {
+      "collapsed": false,
+      "id": "sockets",
+      "title": "Sockets and commands"
+    },
+    {
+      "collapsed": false,
+      "id": "handoff",
+      "title": "Deploy handoff"
+    },
+    {
+      "collapsed": false,
+      "id": "logs",
+      "title": "Logs"
+    },
+    {
+      "collapsed": false,
+      "id": "browser",
+      "title": "Browser (fpp-room)"
+    }
+  ],
+  "filters": [],
+  "name": "Free Planning Poker v9",
+  "savedFilterValues": [],
+  "savedQuery": null,
+  "savedQueryLanguage": null,
+  "tags": [
+    "fpp"
+  ],
+  "tiles": [
+    {
+      "config": {
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "Connections",
+            "metricName": "fpp.ws.connections.active",
+            "metricType": "sum",
+            "numberFormat": {
+              "output": "number",
+              "thousandSeparated": true
+            },
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6b034e5aad8bb4d9c7295734",
+      "name": "Connections active",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "max",
+            "alias": "Rooms",
+            "metricName": "fpp.room.active",
+            "metricType": "sum",
+            "numberFormat": {
+              "output": "number",
+              "thousandSeparated": true
+            },
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6b034e5aad8bb4d9c7295735",
+      "name": "Rooms active",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "> 100 ms (scale target)",
+            "operator": "gte",
+            "value": 100
+          },
+          {
+            "color": "chart-error",
+            "label": "> 250 ms",
+            "operator": "gte",
+            "value": 250
+          }
+        ],
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p99",
+            "level": 0.99,
+            "metricName": "fpp.command.duration",
+            "metricType": "histogram",
+            "numberFormat": {
+              "mantissa": 0,
+              "output": "number"
+            },
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6b034e5aad8bb4d9c7295736",
+      "name": "Command p99 (ms)",
+      "w": 6,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "errors",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-api' AND SeverityNumber >= 17",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6b034e5aad8bb4d9c7295737",
+      "name": "fpp-api error logs (count)",
+      "w": 6,
+      "x": 18,
+      "y": 0
+    },
+    {
+      "config": {
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Samples fpp-api",
+            "metricName": "fpp.ws.connections.active",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "health",
+      "h": 3,
+      "id": "6b034e5aad8bb4d9c7295738",
+      "name": "fpp-api samples (10m silence alerts)",
+      "w": 24,
+      "x": 0,
+      "y": 3
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p50",
+            "level": 0.5,
+            "metricName": "fpp.command.duration",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "metricName": "fpp.command.duration",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "quantile",
+            "alias": "p99",
+            "level": 0.99,
+            "metricName": "fpp.command.duration",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "latency",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c7295739",
+      "name": "Command duration p50 / p95 / p99 (ms)",
+      "w": 12,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p50",
+            "level": 0.5,
+            "metricName": "fpp.fanout.duration",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "metricName": "fpp.fanout.duration",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "quantile",
+            "alias": "p99",
+            "level": 0.99,
+            "metricName": "fpp.fanout.duration",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "latency",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c729573a",
+      "name": "Fan-out duration p50 / p95 / p99 (ms)",
+      "w": 12,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "groupBy": "Attributes['fpp.command.type']",
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "metricName": "fpp.command.duration",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 8,
+        "source": "Metrics"
+      },
+      "containerId": "latency",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c729573b",
+      "name": "Command p95 by type (ms)",
+      "w": 12,
+      "x": 0,
+      "y": 6
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p50",
+            "level": 0.5,
+            "metricName": "fpp.room.seats",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          },
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "metricName": "fpp.room.seats",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "latency",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c729573c",
+      "name": "Room seats p50 / p95",
+      "w": 12,
+      "x": 12,
+      "y": 6
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "Attributes['fpp.ws.close_code']",
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Closed",
+            "metricName": "fpp.ws.closed",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 10,
+        "source": "Metrics"
+      },
+      "containerId": "sockets",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c729573d",
+      "name": "Sockets closed by code",
+      "w": 12,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Abnormal closes",
+            "metricName": "fpp.ws.closed",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "Attributes['fpp.ws.close_code'] IN ('1008', '1009', '1011', '1013')",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "sockets",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c729573e",
+      "name": "Abnormal closes (1008, 1009, 1011, 1013)",
+      "w": 12,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Resumed",
+            "metricName": "fpp.ws.resumed",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "sockets",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c729573f",
+      "name": "Sockets resumed with their seat token",
+      "w": 12,
+      "x": 0,
+      "y": 6
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "Attributes['fpp.nack.reason']",
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Rejected",
+            "metricName": "fpp.command.rejected",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 10,
+        "source": "Metrics"
+      },
+      "containerId": "sockets",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c7295740",
+      "name": "Commands rejected by reason",
+      "w": 12,
+      "x": 12,
+      "y": 6
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-error",
+            "label": "any",
+            "operator": "gte",
+            "value": 1
+          }
+        ],
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Refused",
+            "metricName": "fpp.room.numbers_exhausted",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "sockets",
+      "h": 3,
+      "id": "6b034e5aad8bb4d9c7295741",
+      "name": "Rooms refused: no number free",
+      "w": 12,
+      "x": 0,
+      "y": 12
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "quantile",
+            "alias": "p95",
+            "level": 0.95,
+            "metricName": "fpp.deploy.handoff.duration",
+            "metricType": "histogram",
+            "valueExpression": "",
+            "where": "",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "handoff",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c7295742",
+      "name": "Handoff duration p95 (ms)",
+      "w": 12,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "line",
+        "fillNulls": true,
+        "select": [
+          {
+            "aggFn": "increase",
+            "alias": "Draining closes",
+            "metricName": "fpp.ws.closed",
+            "metricType": "sum",
+            "valueExpression": "",
+            "where": "Attributes['fpp.ws.close_code'] = '4002'",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Metrics"
+      },
+      "containerId": "handoff",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c7295743",
+      "name": "Closes with 4002 (draining)",
+      "w": 12,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "SeverityText",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Logs",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-api' AND SeverityNumber >= 13",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 4,
+        "source": "Logs"
+      },
+      "containerId": "logs",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c7295744",
+      "name": "Warnings and errors by severity",
+      "w": 12,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "LogAttributes['event.name']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Events",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-api' AND LogAttributes['event.name'] != ''",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 5,
+        "source": "Logs"
+      },
+      "containerId": "logs",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c7295745",
+      "name": "Room lifecycle events",
+      "w": 12,
+      "x": 12,
+      "y": 0
+    },
+    {
+      "config": {
+        "displayType": "search",
+        "select": "Timestamp, SeverityText, Body, LogAttributes",
+        "source": "Logs",
+        "where": "ServiceName:\"fpp-api\" AND SeverityNumber:>=13",
+        "whereLanguage": "lucene"
+      },
+      "containerId": "logs",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c7295746",
+      "name": "Recent fpp-api warnings and errors",
+      "w": 24,
+      "x": 0,
+      "y": 6
+    },
+    {
+      "config": {
+        "color": "chart-success",
+        "colorRules": [
+          {
+            "color": "chart-warning",
+            "label": "some",
+            "operator": "gte",
+            "value": 1
+          },
+          {
+            "color": "chart-error",
+            "label": "many",
+            "operator": "gte",
+            "value": 25
+          }
+        ],
+        "displayType": "number",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Browser errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-room' AND SeverityNumber >= 17",
+            "whereLanguage": "sql"
+          }
+        ],
+        "source": "Logs"
+      },
+      "containerId": "browser",
+      "h": 3,
+      "id": "6b034e5aad8bb4d9c7295747",
+      "name": "Browser errors (count)",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "LogAttributes['fpp.component']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Errors",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-room' AND SeverityNumber >= 17",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 8,
+        "source": "Logs"
+      },
+      "containerId": "browser",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c7295748",
+      "name": "Browser errors by component",
+      "w": 12,
+      "x": 0,
+      "y": 3
+    },
+    {
+      "config": {
+        "asRatio": false,
+        "displayType": "stacked_bar",
+        "fillNulls": true,
+        "groupBy": "LogAttributes['event.name']",
+        "select": [
+          {
+            "aggFn": "count",
+            "alias": "Changes",
+            "valueExpression": "",
+            "where": "ServiceName = 'fpp-room' AND SeverityNumber < 17 AND LogAttributes['event.name'] != ''",
+            "whereLanguage": "sql"
+          }
+        ],
+        "seriesLimit": 8,
+        "source": "Logs"
+      },
+      "containerId": "browser",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c7295749",
+      "name": "Connection state changes",
+      "w": 12,
+      "x": 12,
+      "y": 3
+    },
+    {
+      "config": {
+        "displayType": "search",
+        "select": "Timestamp, SeverityText, Body, LogAttributes",
+        "source": "Logs",
+        "where": "ServiceName:\"fpp-room\" AND SeverityNumber:>=17",
+        "whereLanguage": "lucene"
+      },
+      "containerId": "browser",
+      "h": 6,
+      "id": "6b034e5aad8bb4d9c729574a",
+      "name": "Recent browser errors",
+      "w": 24,
+      "x": 0,
+      "y": 9
+    }
+  ]
+}

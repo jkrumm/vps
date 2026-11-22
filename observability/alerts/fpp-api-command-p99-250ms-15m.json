@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Free Planning Poker v9",
+  "displayName": "Free Planning Poker v9 - Command p99 (ms)",
+  "interval": "15m",
+  "message": null,
+  "name": "fpp-api command p99 > 250ms (15m)",
+  "note": null,
+  "numConsecutiveWindows": 2,
+  "source": "tile",
+  "tags": [
+    "fpp"
+  ],
+  "threshold": 250,
+  "thresholdType": "above",
+  "tile": "Command p99 (ms)"
+}

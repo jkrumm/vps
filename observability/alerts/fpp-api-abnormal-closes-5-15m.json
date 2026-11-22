@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Free Planning Poker v9",
+  "displayName": "Free Planning Poker v9 - Abnormal closes (1008, 1009, 1011, 1013)",
+  "interval": "15m",
+  "message": null,
+  "name": "fpp-api abnormal closes >= 5 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "fpp"
+  ],
+  "threshold": 5,
+  "thresholdType": "above",
+  "tile": "Abnormal closes (1008, 1009, 1011, 1013)"
+}

@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Free Planning Poker v9",
+  "displayName": "Free Planning Poker v9 - fpp-api error logs (count)",
+  "interval": "15m",
+  "message": null,
+  "name": "fpp-api errors >= 3 (15m)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "fpp"
+  ],
+  "threshold": 3,
+  "thresholdType": "above",
+  "tile": "fpp-api error logs (count)"
+}

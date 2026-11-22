@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Free Planning Poker v9",
+  "displayName": "Free Planning Poker v9 - Handoff duration p95 (ms)",
+  "interval": "1h",
+  "message": null,
+  "name": "fpp-api handoff p95 > 10s (1h)",
+  "note": null,
+  "numConsecutiveWindows": null,
+  "source": "tile",
+  "tags": [
+    "fpp"
+  ],
+  "threshold": 10000,
+  "thresholdType": "above",
+  "tile": "Handoff duration p95 (ms)"
+}

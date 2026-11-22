@@ -572,6 +572,79 @@ write, so a silence set via MCP doesn't round-trip through
 `hyperdx-export`/`hyperdx-apply` (by design: silences are operational state,
 not desired configuration).
 
+### Free Planning Poker v9 — fpp-api, fpp-room, fpp-site
+
+Dashboard `Free Planning Poker v9` (`observability/dashboards/free-planning-poker-v9.json`), separate from v1's `Free Planning Poker`. Six containers over the metrics of free-planning-poker `docs/v9/ARCHITECTURE.md` → Measurement (names in its `packages/telemetry/src/names.ts`):
+
+| Container | Tiles |
+|-|-|
+| Health | `fpp.ws.connections.active`, `fpp.room.active`, command p99, error logs, metric samples |
+| Latency | `fpp.command.duration` and `fpp.fanout.duration` at p50/p95/p99 (histograms), command p95 by `fpp.command.type`, `fpp.room.seats` p50/p95 |
+| Sockets and commands | `fpp.ws.closed` by code, abnormal closes, `fpp.ws.resumed`, `fpp.command.rejected` by reason, `fpp.room.numbers_exhausted` |
+| Deploy handoff | `fpp.deploy.handoff.duration` p95, closes with 4002 |
+| Logs | warnings and errors by severity (`SeverityText`: INFO/WARN/ERROR/FATAL = low/medium/high/critical), room lifecycle events, a search of recent ones |
+| Browser (fpp-room) | error count, errors by `fpp.component`, connection state changes by `event.name`, a search of recent errors |
+
+Metric labels are `build` plus fixed enums only, so every `groupBy` is a bounded attribute (`fpp.command.type`, `fpp.ws.close_code`, `fpp.nack.reason`).
+
+**Alerts** (all on `Factory door`, tag `fpp`; each needs its door route to `free-planning-poker`, which only the owner can set: `factory door route-set --source hyperdx --monitor "<name>" --repo free-planning-poker`):
+
+| Alert (= door monitor) | Fires when | Why this threshold |
+|-|-|-|
+| `fpp-api errors >= 3 (15m)` | 3 or more `ERROR`/`FATAL` logs in 15 min | The app records an error only for a server fault at a boundary (a user mistake or a business conflict is no error), so a handful is a real fault. Same size as `fpp server errors` |
+| `fpp-api silent < 1 sample (10m)` (added with the first image) | no `fpp.ws.connections.active` sample for 10 min (two 5 min windows) | The metric reader exports every 60 s, so ten silent minutes is a dead or wedged process. Sits beside the container healthcheck and the Kuma monitor on `/api/health`; same shape as the host-silent alerts |
+| `fpp-api command p99 > 250ms (15m)` | command p99 above 250 ms in two 15 min windows | ARCHITECTURE.md scale target: p99 command-to-fan-out under 100 ms at 500 rooms and 5,000 sockets. 250 ms is 2.5 times that and the next histogram bucket bound (buckets: 100, 250, 500 ms), so the estimate crosses it only when commands land in the 250-500 ms bucket |
+| `fpp-api abnormal closes >= 5 (15m)` | 5 or more closes with 1008, 1009, 1011 or 1013 | Expected codes are excluded: 1000 leave, 1001 idle, 4001-4005 (version, draining, kicked, expired, access). 1011 is a bug handling a frame and 1013 is a full table or an unanswering store; 1008 and 1009 can be one misbehaving client, hence five, not one |
+| `fpp-api handoff p95 > 10s (1h)` | a drain took over 10 s | The old process exits after 20 s with a 30 s grace period; a healthy drain (flush snapshots, close sockets with 4002) is a few seconds (buckets up to 20 s). Above 10 s it is close to the deadline and a room may be left unwritten. One sample per deploy, so a 1 h window |
+
+`docs/v9/evidence/load.md` of free-planning-poker does not exist yet, so none of these thresholds is measured: they come from the scale target and the histogram buckets. Revisit them when that file lands.
+
+**`fpp-api silent` is not in the repository yet.** fpp-api has emitted nothing (no image on the beta host), so an alert on its silence fires at once, and `make telemetry-lint` demands that every alert file is applied (drift rule). The tile `fpp-api samples (10m silence alerts)` is on the dashboard. With the first image, set `expected: all` in the registry and add this as `observability/alerts/fpp-api-silent-1-sample-10m.json`, then `make hyperdx-apply ENV=prod`, and route it like the others:
+
+```json
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Free Planning Poker v9",
+  "displayName": "Free Planning Poker v9 - fpp-api samples (10m silence alerts)",
+  "interval": "5m",
+  "message": null,
+  "name": "fpp-api silent < 1 sample (10m)",
+  "note": null,
+  "numConsecutiveWindows": 2,
+  "source": "tile",
+  "tags": [
+    "fpp"
+  ],
+  "threshold": 1,
+  "thresholdType": "below",
+  "tile": "fpp-api samples (10m silence alerts)"
+}
+```
+
+**fpp-room** sends uncaught errors, rejected promises and connection state changes as OTLP logs through `/api/otel` on fpp-api. The browser facade ships with free-planning-poker's `v9-room-errors`; the tiles use the attribute names registered in `names.ts` (`fpp.component`, `event.name`) and are to be re-checked against real records. No alert on the browser yet: errors there are a view, not a page.
+
+**fpp-site** is the static Astro site: it has no server process and its only measurement is Umami (a separate tool), so it emits no OTLP at runtime and is deliberately not in the registry. Register it, with a view, in the change that first makes it emit.
+
+#### v1 items to remove at the cutover
+
+Marked here, not removed. Remove them in the cutover change, after v1's containers are stopped; the exports of `make hyperdx-export` then drop the files.
+
+| What | Where | Note |
+|-|-|-|
+| Dashboard `Free Planning Poker` | `observability/dashboards/free-planning-poker.json` | tiles on `fpp-server`, `fpp-analytics` and the v1 browser service `free-planning-poker` |
+| Alert `fpp server errors >= 3 (15m)` | `observability/alerts/fpp-server-errors-3-15m.json`, its tile on `Apps — Errors` | remove the tile `fpp server errors (5xx or error spans; count)` too; remove its door route |
+| Alert `fpp browser errors >= 20 (1h)` | `observability/alerts/fpp-browser-errors-20-1h.json` | uses the `Browser errors` tile of the v1 dashboard, so it goes first; remove its door route |
+| Registry entries `fpp-server`, `fpp-analytics` | `observability/services.yaml` | set `status: retired` first, delete when their rows age out; the `fpp-analytics-updater` sidecar has no entry (it emits nothing) |
+| Uptime Kuma monitors `FPP - Server - HTTP`, `FPP - Analytics - HTTP` | Kuma, table in `AGENTS.md` → Verify & Monitor | the `fpp` row there then points at the v9 hostname |
+| Kuma push monitors for the analytics updater and the MariaDB backup | `UPTIME_KUMA_FPP_ANALYTICS_UPDATER_PUSH_URL`, `UPTIME_KUMA_FPP_BACKUP_PUSH_URL` (`README.md` → Secrets) | |
+| MariaDB container and its backup cron | `apps/fpp/compose.yml`, `cron/fpp-mariadb-backup` | covered by the generic container alerts (`infra-container-*`) while it runs; no dedicated alert exists |
+| Door routes of the two alerts above | factory database (owner) | |
+
 ### Deep-linking to a dashboard
 
 `https://hyperdx.${DOMAIN}/dashboards/<id>?from=<epoch-ms>&to=<epoch-ms>&kiosk=true`
