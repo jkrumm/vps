@@ -358,6 +358,11 @@ services:
       # Geo from the bundled GeoLite2 DB on the resolved IP, not Cloudflare's cf-ipcountry
       # (which would name the proxy's country for proxied sites).
       SKIP_LOCATION_HEADERS: "1"
+      # Hops in front of Umami (cloudflared, Traefik: Docker bridge addresses). An address in
+      # X-Forwarded-For / Forwarded that one of them wrote is skipped when Umami walks the chain
+      # right to left, so a client's own entry never becomes the visitor. Hosts that arrive with
+      # cf-connecting-ip or the Netlify header are unaffected: those are single values.
+      TRUSTED_PROXIES: private,loopback
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/heartbeat || exit 1"]
       interval: 5s
@@ -373,6 +378,24 @@ services:
       - "traefik.http.routers.umami.middlewares=rate-limit@file,security-headers@file"
       - "traefik.http.services.umami.loadbalancer.healthcheck.path=/api/heartbeat"
       - "traefik.http.services.umami.loadbalancer.healthcheck.interval=5s"
+      # Same-origin tracker for the Free Planning Poker beta host (docs/umami-integration.md): the
+      # script and its collect endpoint under /api/u, stripped to Umami's own p.js and /api/p so
+      # the global names above keep serving every other site. The script posts to its own
+      # directory + /api/p, hence /api/u/api/p. Exactly these two paths, never a /api/u prefix:
+      # that would put Umami's whole API (login included) on the beta origin. Priority above the
+      # fpp-api router of the host (Host rule only, priority = its length).
+      - "traefik.http.routers.umami-fpp.rule=Host(`next.free-planning-poker.com`) && (Path(`/api/u/p.js`) || Path(`/api/u/api/p`))"
+      - "traefik.http.routers.umami-fpp.priority=1000"
+      - "traefik.http.routers.umami-fpp.entrypoints=websecure"
+      - "traefik.http.routers.umami-fpp.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.umami-fpp.service=umami"
+      - "traefik.http.routers.umami-fpp.middlewares=umami-fpp-clientip,umami-fpp-strip,rate-limit@file,security-headers@file"
+      - "traefik.http.middlewares.umami-fpp-strip.stripprefix.prefixes=/api/u"
+      # Umami reads CLIENT_IP_HEADER (the Netlify header, for sy-serendipity) first, then true-client-ip,
+      # then cf-connecting-ip. A browser can write the first two; Cloudflare overwrites the third at
+      # its edge. Dropping the two here leaves cf-connecting-ip as the visitor (empty value = remove).
+      - "traefik.http.middlewares.umami-fpp-clientip.headers.customrequestheaders.X-Nf-Client-Connection-Ip="
+      - "traefik.http.middlewares.umami-fpp-clientip.headers.customrequestheaders.True-Client-Ip="
     networks:
       - proxy
       - postgres-net

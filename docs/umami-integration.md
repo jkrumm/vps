@@ -42,3 +42,21 @@ GeoLite2 DB instead of `cf-ipcountry`. Another proxy host (Vercel, nginx) must f
 visitor IP in that same header — or the variable needs to change.
 
 Reference implementation: sy-serendipity (`public/_redirects`, `src/util/analytics.ts`).
+
+### Free Planning Poker beta host (`next.free-planning-poker.com`)
+
+Traefik serves the tracker on the beta origin itself, so the browser contacts no second host:
+
+```html
+<script defer src="/api/u/p.js" data-website-id="<FPP website id>"></script>
+```
+
+| Public path | Reaches Umami as |
+|-|-|
+| `/api/u/p.js` | `/p.js` |
+| `/api/u/api/p` | `/api/p` (the script posts to its own directory + `/api/p`) |
+
+- **Rewrite, not rename.** `TRACKER_SCRIPT_NAME` / `COLLECT_API_ENDPOINT` rename for the whole instance and v1, Netlify and the other sites depend on `p.js` / `/api/p`. The router `umami-fpp` (labels on the `umami` service, `compose.monitoring.yml`) strips `/api/u` instead. It matches exactly the two paths, never the prefix: a prefix would put Umami's whole API (login included) on the beta origin. Priority 1000 beats the `fpp-api` router of the host. Replays (`recorder.js`, `/api/record`) are not routed; add them as two more `Path` terms when that is wanted.
+- **Visitor address.** Umami reads `CLIENT_IP_HEADER` (the Netlify header, shared with sy-serendipity), then `true-client-ip`, then `cf-connecting-ip`. A browser can write the first two; Cloudflare overwrites the third at its edge. The router's `umami-fpp-clientip` middleware removes the first two, so `cf-connecting-ip` is the visitor. `TRUSTED_PROXIES=private,loopback` makes a forwarded chain (`X-Forwarded-For`) skip the Docker-side hops; an entry a client wrote is never the winner.
+- **Website.** Same website id as v1 (`Free Planning Poker`, domain `free-planning-poker.com`). Umami does not check the sending hostname against the website's domain, so the beta host needs no change in its settings; the hostname is recorded per event, filter by it to split beta from production.
+- No cookie is set; the script's cache headers (`max-age=86400`) are Umami's own.

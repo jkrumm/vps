@@ -14,7 +14,7 @@ HyperDX UI at `hyperdx.DOMAIN` (Tailscale-only). Auth via first-visit account cr
 
 **Adding a service to the pipeline**: full runbook in `docs/observability.md`.
 
-**Umami** — analytics at `umami.DOMAIN`. Own schema + dedicated user in the main Postgres database (schema-only access; superuser can still JOIN across schemas). Default credentials `admin`/`umami` — change on first login. Embedding a new site: `docs/umami-integration.md`.
+**Umami** — analytics at `umami.DOMAIN`. Own schema + dedicated user in the main Postgres database (schema-only access; superuser can still JOIN across schemas). Default credentials `admin`/`umami` — change on first login. Embedding a new site, the same-origin proxy and the beta host's `/api/u` route: `docs/umami-integration.md`.
 
 **imgproxy** — image CDN at `img.DOMAIN` (public via Cloudflare), unsigned URLs, renders from the `img/` prefix of the **same bucket as the Postgres/MariaDB backups**. Stateless, no volumes/DB. Monitored with two Kuma checks (public edge + a Tailscale-only `img-origin.DOMAIN` bypass that forces a real B2 fetch); `/health` is liveness-only and stays green while every image 404s. Upload/URL tooling: the global `/img` skill (`imgcli`).
 
