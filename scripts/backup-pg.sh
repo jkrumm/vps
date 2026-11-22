@@ -64,18 +64,30 @@ docker run --rm -i postgres:18 pg_restore --list < "${TMP}" > /dev/null
 LOCAL_SIZE=$(wc -c < "${TMP}" | tr -d ' ')
 log "Dump verified: ${LOCAL_SIZE} bytes"
 
-aws s3 cp "${TMP}" "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
-  --endpoint-url "${AWS_S3_ENDPOINT}" \
-  --storage-class STANDARD
+# Upload and size check as one unit, retried: on 2026-11-21 and -22 the 03:00 run died on a bare
+# "HeadObject 404" from the object store mid-upload, and the identical command succeeded hours
+# later. Same key on each attempt, so a retry never leaves a second object behind.
+upload_and_verify() {
+  aws s3 cp "${TMP}" "s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
+    --endpoint-url "${AWS_S3_ENDPOINT}" \
+    --storage-class STANDARD || return 1
+  local remote_size
+  remote_size=$(aws s3api head-object \
+    --bucket "${AWS_S3_BUCKET}" --key "${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
+    --endpoint-url "${AWS_S3_ENDPOINT}" \
+    --query ContentLength --output text) || return 1
+  if [[ "${remote_size}" != "${LOCAL_SIZE}" ]]; then
+    log "Upload size mismatch: local ${LOCAL_SIZE}, remote ${remote_size}"
+    return 1
+  fi
+}
 
-REMOTE_SIZE=$(aws s3api head-object \
-  --bucket "${AWS_S3_BUCKET}" --key "${BACKUP_PREFIX}/${BACKUP_FILENAME}" \
-  --endpoint-url "${AWS_S3_ENDPOINT}" \
-  --query ContentLength --output text)
-if [[ "${REMOTE_SIZE}" != "${LOCAL_SIZE}" ]]; then
-  log "Upload size mismatch: local ${LOCAL_SIZE}, remote ${REMOTE_SIZE}"
-  exit 1
-fi
+for attempt in 1 2 3; do
+  upload_and_verify && break
+  [[ ${attempt} -lt 3 ]] || exit 1
+  log "Upload attempt ${attempt} failed; retrying in 60s"
+  sleep 60
+done
 
 log "Backup uploaded: s3://${AWS_S3_BUCKET}/${BACKUP_PREFIX}/${BACKUP_FILENAME}"
 
