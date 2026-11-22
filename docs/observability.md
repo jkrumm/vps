@@ -599,32 +599,9 @@ Metric labels are `build` plus fixed enums only, so every `groupBy` is a bounded
 
 `docs/v9/evidence/load.md` of free-planning-poker does not exist yet, so none of these thresholds is measured: they come from the scale target and the histogram buckets. Revisit them when that file lands.
 
-**`fpp-api silent` is not in the repository yet.** fpp-api has emitted nothing (no image on the beta host), so an alert on its silence fires at once, and `make telemetry-lint` demands that every alert file is applied (drift rule). The tile `fpp-api samples (10m silence alerts)` is on the dashboard. With the first image, set `expected: all` in the registry and add this as `observability/alerts/fpp-api-silent-1-sample-10m.json`, then `make hyperdx-apply ENV=prod`, and route it like the others:
+**`fpp-api silent`** (`observability/alerts/fpp-api-silent-1-sample-10m.json`, added 2026-11-22 with the first image on the beta host) watches the tile `fpp-api samples (10m silence alerts)`. The registry now has `fpp-api` with the default `expected: all`, so `make telemetry-lint` holds it to traces, logs and metrics (an idle beta host with no traffic for 24 h is a `silent` finding for traces and logs; it emits metrics every 60 s regardless). All five alerts have their door route to `free-planning-poker`.
 
-```json
-{
-  "channels": [
-    {
-      "type": "webhook",
-      "webhook": "Factory door"
-    }
-  ],
-  "dashboard": "Free Planning Poker v9",
-  "displayName": "Free Planning Poker v9 - fpp-api samples (10m silence alerts)",
-  "interval": "5m",
-  "message": null,
-  "name": "fpp-api silent < 1 sample (10m)",
-  "note": null,
-  "numConsecutiveWindows": 2,
-  "source": "tile",
-  "tags": [
-    "fpp"
-  ],
-  "threshold": 1,
-  "thresholdType": "below",
-  "tile": "fpp-api samples (10m silence alerts)"
-}
-```
+Drill, 2026-11-22: with the threshold of the silence alert raised to 1000 and the window count to 1, the alert went `ALERT` at the next 5 min boundary (20:45) and, with the file restored and applied, back to `OK` at the following one (20:50). The applied file is the committed one; a drill raises the threshold, never adds an alert (hyperdx-apply has no delete).
 
 **fpp-room** sends uncaught errors, rejected promises and connection state changes as OTLP logs through `/api/otel` on fpp-api. The browser facade ships with free-planning-poker's `v9-room-errors`; the tiles use the attribute names registered in `names.ts` (`fpp.component`, `event.name`) and are to be re-checked against real records. No alert on the browser yet: errors there are a view, not a page.
 

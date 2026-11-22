@@ -1,0 +1,22 @@
+{
+  "channels": [
+    {
+      "type": "webhook",
+      "webhook": "Factory door"
+    }
+  ],
+  "dashboard": "Free Planning Poker v9",
+  "displayName": "Free Planning Poker v9 - fpp-api samples (10m silence alerts)",
+  "interval": "5m",
+  "message": null,
+  "name": "fpp-api silent < 1 sample (10m)",
+  "note": null,
+  "numConsecutiveWindows": 2,
+  "source": "tile",
+  "tags": [
+    "fpp"
+  ],
+  "threshold": 1,
+  "thresholdType": "below",
+  "tile": "fpp-api samples (10m silence alerts)"
+}
