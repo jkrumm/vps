@@ -202,7 +202,7 @@ fpp-up: require-prod
 ## able to authorize that repo's deploys).
 fpp-api-up: require-prod
 	@$(PIN_SH); PINS=$$(pin_all fpp-api:IMAGE_TAG) || exit 1; \
-	if [ -z "$$PINS" ] && ! docker image inspect rollhook.jkrumm.com/fpp-api:latest >/dev/null 2>&1 \
+	if [ -z "$$(echo $$PINS)" ] && ! docker image inspect rollhook.jkrumm.com/fpp-api:latest >/dev/null 2>&1 \
 	   && ! docker pull -q rollhook.jkrumm.com/fpp-api:latest >/dev/null 2>&1; then \
 	  echo "  · fpp-api: no container and no image yet — skipped (first image: free-planning-poker v9-next-deploy; then make fpp-api-up)"; exit 0; \
 	fi; \
