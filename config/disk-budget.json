@@ -88,7 +88,7 @@
         "/home/jkrumm/orb-capture"
       ],
       "owner": "weatherorb",
-      "cap_gib": 12,
+      "cap_gib": 16,
       "class": "history",
       "enforced_by": "weatherorb's 7-day retention"
     },
