@@ -69,7 +69,7 @@ services:
     # On demand only (~4 GB resident): `make clickstack-up` / `clickstack-down`.
     # The profile keeps it out of a plain `make up`.
     profiles: [observability]
-    image: clickhouse/clickstack-all-in-one:latest
+    image: clickhouse/clickstack-all-in-one:2.45.0
     container_name: clickstack
     ports:
       - "127.0.0.1:7707:8080"   # HyperDX UI
