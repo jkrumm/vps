@@ -63,7 +63,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
 .PHONY: help require-prod require-dev weatherorb-up weatherorb-down gh-runner-setup gh-runner-remove gh-runner-reapply gh-runner-sync \
         up down networking-up networking-down infra-up infra-down infra-upgrade monitoring-up monitoring-down \
         rollhook-update \
-        fpp-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
+        fpp-up fpp-api-up fpp-down fpp-mariadb-setup fpp-cert-sync fpp-bootstrap-images fpp-env \
         fpp-backup fpp-mariadb-upgrade fpp-shell fpp-restore-local fpp-sync-from-prod \
         email-gateway-up email-gateway-down email-gateway-env email-gateway-bootstrap-image \
         photo-gallery-up photo-gallery-down \
@@ -194,6 +194,19 @@ fpp-up: require-prod
 	  PINS=$$(pin_all $$SVC:IMAGE_TAG) || exit 1; \
 	  $(OP_RUN) env $$PINS docker compose -f apps/fpp/compose.yml up -d --no-deps $$SVC || exit 1; \
 	done
+	@$(MAKE) --no-print-directory fpp-api-up
+## fpp-api (the v9 beta host) — pins the running image like the three above. Its first image comes
+## from the free-planning-poker repo, not from fpp-bootstrap-images: with no container and no image
+## in the registry the target says so and exits 0, so `make fpp-up` and `make deploy APP=fpp` do not
+## fail before that image exists. Re-run it once the image is there (a container then keeps RollHook
+## able to authorize that repo's deploys).
+fpp-api-up: require-prod
+	@$(PIN_SH); PINS=$$(pin_all fpp-api:IMAGE_TAG) || exit 1; \
+	if [ -z "$$PINS" ] && ! docker image inspect rollhook.jkrumm.com/fpp-api:latest >/dev/null 2>&1 \
+	   && ! docker pull -q rollhook.jkrumm.com/fpp-api:latest >/dev/null 2>&1; then \
+	  echo "  · fpp-api: no container and no image yet — skipped (first image: free-planning-poker v9-next-deploy; then make fpp-api-up)"; exit 0; \
+	fi; \
+	$(OP_RUN) env $$PINS docker compose -f apps/fpp/compose.yml up -d --no-deps fpp-api
 fpp-down: require-prod ; $(OP_RUN) docker compose -f apps/fpp/compose.yml down
 fpp-mariadb-setup: require-prod
 	$(OP_RUN) ./apps/fpp/scripts/setup-mariadb.sh
@@ -660,6 +673,9 @@ DEPLOY_AFFECTED = $(shell old=$$(cat .deploy-sha 2>/dev/null) || exit 0; [ -n "$
 APP_SERVICE_basalt-ui-marketing := basalt-ui-marketing
 APP_SERVICE_email-gateway       := email-gateway
 APP_SERVICE_fpp                 := fpp-server fpp-analytics
+# Checked only while a container exists (the beta host has no image until v9-next-deploy);
+# once it runs, move it into APP_SERVICE_fpp.
+APP_SERVICE_OPTIONAL_fpp        := fpp-api
 APP_SERVICE_imgproxy            := imgproxy
 APP_SERVICE_jkrumm-com          := jkrumm-com
 APP_SERVICE_photo-gallery       := photo-gallery
@@ -829,6 +845,13 @@ else
 		for s in $(APP_SERVICE_$(APP)); do \
 			id=$$(docker ps -q --filter label=com.docker.compose.service=$$s | head -1); \
 			[ -n "$$id" ] || { echo "✗ $(APP): no running container for service $$s"; exit 1; }; \
+			st=$$(docker inspect -f '{{.State.Health.Status}}' $$id); \
+			[ "$$st" = "healthy" ] || { echo "✗ $(APP): $$s is $$st"; exit 1; }; \
+			echo "✓ $$s: healthy"; \
+		done; \
+		for s in $(APP_SERVICE_OPTIONAL_$(APP)); do \
+			id=$$(docker ps -q --filter label=com.docker.compose.service=$$s | head -1); \
+			[ -n "$$id" ] || { echo "  · $$s: no container (optional, skipped)"; continue; }; \
 			st=$$(docker inspect -f '{{.State.Health.Status}}' $$id); \
 			[ "$$st" = "healthy" ] || { echo "✗ $(APP): $$s is $$st"; exit 1; }; \
 			echo "✓ $$s: healthy"; \

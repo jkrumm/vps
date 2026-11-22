@@ -12,6 +12,11 @@
 # manually when its image needs refreshing (no zero-downtime requirement —
 # 10-min polling cron, brief restart is fine).
 #
+# fpp-api is the Free Planning Poker rewrite (v9) on the beta host next.free-planning-poker.com:
+# one image serving the API, the WebSocket and the room app on one port. RollHook rolls it on
+# every push to master of jkrumm/free-planning-poker; it shares nothing with the v1 services
+# above (Postgres schema `fpp`, not MariaDB). Until the cutover v1 stays untouched.
+#
 # Bootstrap order on a fresh server:
 #   1. make networking-up           (Traefik gets *.free-planning-poker.com cert via DNS-01)
 #   2. make fpp-cert-sync           (extracts that wildcard cert into apps/fpp/certs/)
@@ -19,6 +24,8 @@
 #   4. make fpp-mariadb-setup       (provisions fpp user + grants)
 #   5. Manual one-shot: docker login rollhook.jkrumm.com, build+push initial
 #      fpp-server / fpp-analytics images so the registry has something to pull.
+#   6. fpp-api: make postgres-setup (role + schema fpp), make fpp-env, then `make fpp-api-up` once
+#      its first image is in the registry (`make fpp-up` runs it and skips while there is none).
 
 networks:
   mariadb-net:
@@ -28,6 +35,9 @@ networks:
   # Shared with compose.infra.yml — fpp-server uses Valkey for room state
   # snapshots so an in-memory room survives a RollHook rolling restart.
   valkey-net:
+    external: true
+  # Shared Postgres (schema `fpp`) — fpp-api only; the v1 services use MariaDB.
+  postgres-net:
     external: true
   # Shared with compose.monitoring.yml — fpp-server and fpp-analytics emit
   # OTLP traces + logs to clickstack:4319 (unauthed receiver, docker-only).
@@ -270,3 +280,85 @@ services:
     logging:
       driver: json-file
       options: { max-size: "20m", max-file: "3" }
+
+  # ---------------------------------------------------------------------------
+  # fpp-api — Free Planning Poker v9: Bun API + WebSocket + the room app, one image, one port.
+  # Public beta host only (next.free-planning-poker.com), noindex, until the cutover.
+  # RollHook-managed: deploys come from jkrumm/free-planning-poker on master.
+  # ---------------------------------------------------------------------------
+  fpp-api:
+    image: ${IMAGE_TAG:-rollhook.jkrumm.com/fpp-api:latest}
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    # The app drains in 20 s on SIGTERM (503 on /api/health, sockets closed with 4002, snapshots
+    # flushed); the rest is slack for the runtime. Two containers overlap on every rollout.
+    stop_grace_period: 30s
+    environment:
+      NODE_ENV: production
+      # The image listens on 7740 (PORT default) and applies its migrations on start.
+      # Shared VPS Postgres — own schema `fpp`, schema-scoped role. No `?schema=`: every table is
+      # schema-qualified and the drizzle journal lives in `fpp` too.
+      DATABASE_URL: postgresql://fpp:${FPP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Key of the visitor hash (32+ characters); the app refuses to start without it.
+      VISITOR_KEY: ${FPP_VISITOR_KEY}
+      # The origin the browser sees: checked on the WebSocket upgrade and on POST /api/contact|feedback.
+      ALLOWED_ORIGINS: https://next.free-planning-poker.com
+      # Client address for the app's own limits: Cloudflare's header. Believable because Traefik
+      # publishes no public port (websecure is bound to the Tailscale IP), so a request reaches it
+      # only through the tunnel, which sits behind Cloudflare's edge.
+      CLIENT_IP_HEADER: cf-connecting-ip
+      # OTLP HTTP receiver on the ClickStack monitoring-net bridge (unauthed, docker-only).
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://clickstack:4319
+      OTEL_SERVICE_NAME: fpp-api
+      # In-app feedback → software-factory door, exactly as fpp-server has it (see there for the
+      # extra_hosts pin and why `:-` and not `:?`). Both unset = POST /api/feedback answers 503.
+      FACTORY_FEEDBACK_URL: https://${MINI_TAILNET_NAME:-}:8796/feedback/free-planning-poker
+      FACTORY_FEEDBACK_TOKEN: ${FACTORY_FEEDBACK_TOKEN:-}
+    extra_hosts:
+      - "${MINI_TAILNET_NAME:-mini.invalid}:${MINI_TAILSCALE_IP:-192.0.2.1}"
+    healthcheck:
+      # Same probe as the image's own HEALTHCHECK (alpine: wget, no curl). 503 while draining.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:7740/api/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fpp-api.rule=Host(`next.free-planning-poker.com`)"
+      - "traefik.http.routers.fpp-api.entrypoints=websecure"
+      - "traefik.http.routers.fpp-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.fpp-api.loadbalancer.server.port=7740"
+      - "traefik.http.routers.fpp-api.middlewares=fpp-api-ratelimit,fpp-api-noindex,security-headers@file"
+      # Active health check — Traefik stops routing to the draining instance the moment SIGTERM
+      # flips /api/health to 503. Open WebSockets stay; the app closes them with 4002.
+      - "traefik.http.services.fpp-api.loadbalancer.healthcheck.path=/api/health"
+      - "traefik.http.services.fpp-api.loadbalancer.healthcheck.interval=5s"
+      # Beta host: search engines are told not to index it until the cutover.
+      - "traefik.http.middlewares.fpp-api-noindex.headers.customresponseheaders.X-Robots-Tag=noindex"
+      # Not rate-limit@file (100/s, burst 200 per Cf-Connecting-Ip): a room of 30 behind one office
+      # address opens the room app at once, a cold load is on the order of 30 requests (entry
+      # script, a chunk per feature and language, fonts), so 30 people send ~900 in a few seconds
+      # and the shared bucket answers 429 for the last third of them. Same per-client key and same
+      # sustained rate; the burst holds 50 cold loads and refills in 15 s. A WebSocket upgrade is
+      # one request and frames are not counted; the app limits per client itself (4008, 429).
+      - "traefik.http.middlewares.fpp-api-ratelimit.ratelimit.average=100"
+      - "traefik.http.middlewares.fpp-api-ratelimit.ratelimit.burst=1500"
+      - "traefik.http.middlewares.fpp-api-ratelimit.ratelimit.period=1s"
+      - "traefik.http.middlewares.fpp-api-ratelimit.ratelimit.sourcecriterion.requestheadername=Cf-Connecting-Ip"
+      # Managed by RollHook — Watchtower must not interfere.
+      - "com.centurylinklabs.watchtower.enable=false"
+      # OIDC deploy authorization — only this GitHub repo, only its master (v1 deploys go to the
+      # three services above from the branch v1; the labels keep the two lines apart).
+      - "rollhook.allowed_repos=jkrumm/free-planning-poker"
+      - "rollhook.allowed_refs=refs/heads/master"
+    networks:
+      - proxy
+      - postgres-net
+      - monitoring-net
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

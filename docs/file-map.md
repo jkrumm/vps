@@ -14,7 +14,7 @@ apps/email-gateway/compose.yml  email-gateway (Bun + Resend) — sends FPP conta
 apps/imgproxy/compose.yml     imgproxy — image CDN (resize/convert) over a private B2 bucket, served at img.DOMAIN
 apps/shutterflow/compose.yml  shutterflow-share (shutterflow.app) + signed shutterflow-imgproxy (cdn.shutterflow.app) — RollHook-managed; source repo is private, bootstrap via apps/shutterflow/scripts/bootstrap-image.sh. Plus the `/releases` update-feed mount (`RELEASES_DIR`) on shutterflow-share, and shutterflow-key-broker (internal only, own env file key-broker.env, built by `make shutterflow-key-broker-image TAG=<sha>`, tag pinned in the compose)
 apps/photo-gallery/compose.yml  photo-gallery — static Astro gallery served by nginx from /home/jkrumm/photo-gallery-dist (rsynced from laptop via photo-flow CLI)
-apps/fpp/compose.yml          FPP — MariaDB (port 33306 exposed for Vercel) + fpp-server + fpp-analytics + updater sidecar, all RollHook-managed
+apps/fpp/compose.yml          FPP — MariaDB (port 33306 exposed for Vercel) + fpp-server + fpp-analytics + updater sidecar + fpp-api (v9 beta host), all RollHook-managed
 apps/fpp/scripts/setup-mariadb.sh    Idempotent fpp user/grants — run via make fpp-mariadb-setup
 apps/fpp/scripts/backup-mariadb.sh   mariadb-dump → S3 (verified before the Kuma push ping)
 apps/fpp/scripts/restore-mariadb.sh  PROD restore from S3 — gated DR tool, NO make target (docs/disaster-recovery.md)

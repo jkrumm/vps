@@ -112,7 +112,7 @@ Rollback: `git revert` the offending change, push, pull on the server, re-run `m
 |-|-|-|
 | basalt-ui-marketing | `https://basalt-ui.com/` | — |
 | email-gateway | `https://email-gateway.<your-domain>/health` | `EmailGateway - HTTP` |
-| fpp | `https://server.free-planning-poker.com/health` · `https://analytics.free-planning-poker.com/health` | `FPP - Server - HTTP` · `FPP - Analytics - HTTP` |
+| fpp | `https://server.free-planning-poker.com/health` · `https://analytics.free-planning-poker.com/health` · beta `https://next.free-planning-poker.com/api/health` | `FPP - Server - HTTP` · `FPP - Analytics - HTTP` |
 | imgproxy | `https://img.<your-domain>/rs:fit:100/misc/monitor-probe.jpg` | `ImageCDN - HTTP` · `ImageCDN Origin - HTTP` |
 | jkrumm-com | `https://jkrumm.com/` | — |
 | photo-gallery | `https://photos.<your-domain>/` | `Photos - HTTP` |

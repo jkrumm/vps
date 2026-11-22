@@ -15,7 +15,8 @@ make down                # dev: compose.dev.yml | prod: reverse order
 make networking-up / make networking-down
 make infra-up    / make infra-down
 make monitoring-up / make monitoring-down
-make fpp-up      / make fpp-down
+make fpp-up      / make fpp-down   # fpp-up also runs fpp-api-up (skips while fpp-api has no image)
+make fpp-api-up                  # the v9 beta service alone, pinned to its running image
 make weatherorb-up    / make weatherorb-down   # the one static page at weatherorb.com (apps/weatherorb/site, nginx, no RollHook)
 make imgproxy-up / make imgproxy-down
 make telemetry-lint           # registry vs prod ClickHouse (the factory's hygiene probe, docs/observability.md → Telemetry lint); keyless, read-only; non-zero on findings
