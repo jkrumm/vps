@@ -438,7 +438,7 @@ dev-redis-up: require-dev
 dev-redis-down: require-dev
 	$(OP_RUN_DEV) docker compose -f compose.dev.yml stop valkey
 
-## Dev — ClickStack is on demand (profile `observability`, ~4 GB): `make up` skips it.
+## Dev — ClickStack is on demand (profile `observability`, `mem_limit: 2g`): `make up` skips it.
 clickstack-up: require-dev
 	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability up -d clickstack
 	@$(MAKE) --no-print-directory clickstack-mounts-check
