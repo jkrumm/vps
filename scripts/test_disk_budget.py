@@ -78,6 +78,15 @@ class Measure(unittest.TestCase):
         db.signal_owners(rows, state, 1_000_000 + 8 * 86400, send=send)
         self.assertEqual(len(sent), 2, "refiled after the window while still over")
 
+    def test_a_row_joining_the_set_refiles_inside_the_window(self):
+        row = lambda i, over: {"id": i, "paths": ["/p/" + i], "owner": "alpha", "cap_gib": 2, "measured_gib": 3, "over": over, "enforced_by": "x"}
+        sent = []
+        send = lambda owner, title, text: sent.append(title) or "filed"
+        state = db.signal_owners([row("a", True), row("b", False)], {}, 1000, send=send)
+        db.signal_owners([row("a", True), row("b", True)], state, 1000 + 86400, send=send)
+        self.assertEqual(len(sent), 2)
+        self.assertIn("a, b", sent[1])
+
     def test_a_failed_delivery_is_not_remembered(self):
         rows = [{"id": "a", "paths": ["/p/a"], "owner": "alpha", "cap_gib": 1, "measured_gib": 3, "over": True, "enforced_by": "x"}]
 

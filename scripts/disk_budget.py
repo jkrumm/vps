@@ -136,13 +136,16 @@ def file_signal(owner, title, text):
 
 
 def signal_owners(rows, state, now, dry=False, send=file_signal):
-    """One signal per owner over a cap; returns the new state (owner -> last filed epoch)."""
+    """One signal per owner over a cap; returns the new state (owner -> {at: last filed epoch, rows: ids it named}).
+    A row that joins an owner's over-cap set refiles at once; the same set waits out REFILE_DAYS."""
     by_owner = {}
     for r in rows:
         if r["over"]:
             by_owner.setdefault(r["owner"], []).append(r)
     for owner, over in sorted(by_owner.items()):
-        if now - state.get(owner, 0) < REFILE_DAYS * 86400:
+        last = state.get(owner)
+        last = last if isinstance(last, dict) else {"at": last or 0, "rows": []}
+        if now - last["at"] < REFILE_DAYS * 86400 and all(r["id"] in last["rows"] for r in over):
             log("signal", f"{owner}: over cap, filed within {REFILE_DAYS} days, skipped")
             continue
         lines = [f"{r['id']} ({', '.join(r['paths']) or 'rest of the disk'}): {r['measured_gib']} GiB, cap {r['cap_gib']} GiB, held by: {r['enforced_by']}" for r in over]
@@ -158,7 +161,7 @@ def signal_owners(rows, state, now, dry=False, send=file_signal):
             continue
         log("signal", f"{owner}: {how}: {title}")
         if how != "no sink":
-            state[owner] = now
+            state[owner] = {"at": now, "rows": [r["id"] for r in over]}
     return state
 
 
