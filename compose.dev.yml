@@ -71,9 +71,12 @@ services:
   # every connection (curl 52). `make clickstack-up` asserts both are files and fails loudly otherwise.
   # ---------------------------------------------------------------------------
   clickstack:
-    # On demand only (~4 GB resident): `make clickstack-up` / `clickstack-down`.
-    # The profile keeps it out of a plain `make up`.
+    # On demand only: `make clickstack-up` / `clickstack-down`. The profile keeps it out of a plain `make up`.
+    # Registry budget is 1500 MiB resident. The 2g cap sits under the mini's 2.5 GiB Colima VM, so a runaway
+    # query is OOM-killed inside this cgroup instead of taking the guest (and the VPN) down. Not measured
+    # above the budget: if it OOMs on real use, raise the VM (dotfiles COLIMA_MEMORY) before this cap.
     profiles: [observability]
+    mem_limit: 2g
     image: clickhouse/clickstack-all-in-one:latest
     container_name: clickstack
     ports:

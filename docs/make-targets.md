@@ -41,7 +41,7 @@ make hyperdx-webhook-setup     # prod — idempotent ntfy webhook ("ntfy alerts"
 make hyperdx-export ENV=dev    # export dashboards + alerts → observability/{dashboards,alerts}/*.json
 make hyperdx-apply ENV=dev     # validate + upsert (by name) dashboards, then alerts, from those directories
 make dev-mariadb-up / dev-mariadb-down  # dev — mariadb only (up waits healthy; down = stop, no removal); dev-redis-up / dev-redis-down: the same for valkey. `make up`/`down` act on the whole dev project
-make clickstack-up             # dev — start ClickStack on demand (profile `observability`; `make up` skips it, ~4 GB)
+make clickstack-up             # dev — start ClickStack on demand (profile `observability`; `make up` skips it; `mem_limit: 2g`, registry budget 1.5 GiB)
 make clickstack-down           # dev — stop it again
 make clickstack-mounts-check   # dev — assert the config bind mounts are files in the container (run by clickstack-up; the mini VM must mount `clickstack/`, dotfiles `colima/mounts.mini.txt`)
 make clickstack-restart        # dev — restart clickstack (fixes a dead local ClickHouse process)
