@@ -73,7 +73,7 @@ PIN_SH = pin_resolve() { svc=$$1; var=$$2; \
         jkrumm-com-up jkrumm-com-down jkrumm-com-bootstrap-image \
         shutterflow-up shutterflow-down shutterflow-env shutterflow-bootstrap-image shutterflow-key-broker-image \
         postgres-setup db-shared dev-db-passwords dev-mariadb-reset cron-env-seed ps backup restore-local pg-sync-schema dev-pg-backup dev-pg-restore-drill dev-pg-health dev-pg-launchd dev-pg-launchd-remove dev-pg-container-remove gh-actions-launchd gh-actions-launchd-remove gh-actions-telemetry-run firewall shell-postgres db-counts prune prune-cron-install \
-        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply dev-mariadb-up dev-mariadb-down dev-redis-up dev-redis-down clickstack-up clickstack-down clickstack-restart clickstack-upgrade host-agent-recreate \
+        hyperdx-agent-setup hyperdx-dev-bootstrap hyperdx-webhook-setup hyperdx-export hyperdx-apply dev-mariadb-up dev-mariadb-down dev-redis-up dev-redis-down clickstack-up clickstack-mounts-check clickstack-down clickstack-restart clickstack-upgrade host-agent-recreate \
         check telemetry-lint deploy verify version logs _deploy-affected sql-postgres \
         traefik-recreate clickstack-recreate cron-install fail2ban-install journald-install
 
@@ -441,6 +441,15 @@ dev-redis-down: require-dev
 ## Dev — ClickStack is on demand (profile `observability`, ~4 GB): `make up` skips it.
 clickstack-up: require-dev
 	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability up -d clickstack
+	@$(MAKE) --no-print-directory clickstack-mounts-check
+
+## Dev — assert the two config files reached the container as FILES. The mini's Colima VM mounts only the
+## paths in dotfiles colima/mounts.mini.txt; a bind source outside them shows up as an EMPTY DIRECTORY, and
+## the collector then runs without the :4319 receiver (curl exit 52 / ECONNRESET) while the UI answers 200.
+clickstack-mounts-check: require-dev
+	@docker exec clickstack test -f /etc/otelcol-contrib/custom.config.yaml -a -f /etc/clickhouse-server/users.d/dev-default.xml \
+	  || { echo "ERROR: clickstack config mounts are not files in the container (Colima VM does not mount $(CURDIR)/clickstack)."; \
+	       echo "Fix: add '~/SourceRoot/vps/clickstack ro' to dotfiles colima/mounts.mini.txt, then 'make colima-restart' there."; exit 1; }
 
 clickstack-down: require-dev
 	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability stop clickstack
@@ -456,6 +465,7 @@ clickstack-restart: require-dev
 clickstack-upgrade: require-dev
 	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability pull clickstack
 	$(OP_RUN_DEV) docker compose -f compose.dev.yml --profile observability up -d clickstack
+	@$(MAKE) --no-print-directory clickstack-mounts-check
 
 ## Status — docker ps with name/status/ports
 ps:

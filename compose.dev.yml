@@ -64,6 +64,11 @@ services:
   #   :4319       — custom unauthed receiver added via otel-custom.yaml,
   #                 same file as prod monitoring stack uses.
   # Local apps + the Vite proxy point at :4319 so dev needs no ingestion key.
+  #
+  # The two file binds below (otel-custom.yaml, users-dev.xml) reach the container only if the mini's
+  # Colima VM mounts ./clickstack (dotfiles colima/mounts.mini.txt: `~/SourceRoot/vps/clickstack ro`).
+  # Without it the container sees EMPTY DIRECTORIES: the UI answers 200, :4318 answers 401, :4319 resets
+  # every connection (curl 52). `make clickstack-up` asserts both are files and fails loudly otherwise.
   # ---------------------------------------------------------------------------
   clickstack:
     # On demand only (~4 GB resident): `make clickstack-up` / `clickstack-down`.

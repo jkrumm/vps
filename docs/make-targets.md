@@ -43,6 +43,7 @@ make hyperdx-apply ENV=dev     # validate + upsert (by name) dashboards, then al
 make dev-mariadb-up / dev-mariadb-down  # dev — mariadb only (up waits healthy; down = stop, no removal); dev-redis-up / dev-redis-down: the same for valkey. `make up`/`down` act on the whole dev project
 make clickstack-up             # dev — start ClickStack on demand (profile `observability`; `make up` skips it, ~4 GB)
 make clickstack-down           # dev — stop it again
+make clickstack-mounts-check   # dev — assert the config bind mounts are files in the container (run by clickstack-up; the mini VM must mount `clickstack/`, dotfiles `colima/mounts.mini.txt`)
 make clickstack-restart        # dev — restart clickstack (fixes a dead local ClickHouse process)
 make traefik-recreate / clickstack-recreate   # prod — force-recreate one service after a bind-mounted config change (what `make deploy` runs)
 make cron-install / fail2ban-install          # prod — reinstall cron/* into /etc/cron.d, the MariaDB fail2ban filter + jail (what `make deploy` runs)
