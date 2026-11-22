@@ -51,7 +51,7 @@ as signals to software-factory (a read path from this host) and dotfiles (pass t
 - 2026-11-17 (issue 2033): 145 GB used, 86 % → 111 GB after manual runs; rootless Docker 28 → 5 GB (18 GB of cache), runners 16 → 5.6 GB.
 - 2026-11-20 (issues 2627, 2637, 2676): 147 GB, 86 to 87 %; weatherorb's cargo cache 27 GB (3 runners × 8 GB + stale toolchains), `~/orb-capture` 17 GB, `~/factory-steps` 16 GB, `~/exp*` 13 to 24 GB, containerd 28 GB, runners' Docker 14 GB, volumes 12 GB.
 - 2026-11-21 (issue 2849): 140 GB used, 82 %, 31 GB free. `/home/gh-runner` 47 GB (Docker 19, cache 19, runners 5.6), `/var/lib` 43 (containerd 30, docker 12), `~/orb-capture` 21, `~/factory-steps` 17, `~/exp*` 7. Over their caps that day: `runner-docker`, `runner-cache`, `factory-steps`, `orb-capture`.
-- 2026-11-22 (issue 2895): `~/orb-capture` about 20 GiB (mosmix 10.2, wis2 5.5, truth 2.6). The prune started that day; its 7-day steady state is about 15 GiB, so the row is 16 (was 12).
+- 2026-11-22 (issue 2895): `~/orb-capture` about 20 GiB (mosmix 10.2, wis2 5.5, truth 2.6: 18.3 named, the rest unlisted). The prune started that day; its 7-day steady state is about 15 GiB, so the row is 16 (was 12).
 
 ## Why a size cap, not an age filter
 
