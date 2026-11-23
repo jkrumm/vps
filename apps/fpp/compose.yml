@@ -317,6 +317,10 @@ services:
       # extra_hosts pin and why `:-` and not `:?`). Both unset = POST /api/feedback answers 503.
       FACTORY_FEEDBACK_URL: https://${MINI_TAILNET_NAME:-}:8796/feedback/free-planning-poker
       FACTORY_FEEDBACK_TOKEN: ${FACTORY_FEEDBACK_TOKEN:-}
+      # POST /api/contact → mail gateway, as fpp-server gets it: base URL with no path (the app
+      # appends /fpp) and the same 1Password item. An empty secret = the route answers 503.
+      EMAIL_GATEWAY_URL: https://email-gateway.${DOMAIN:-}
+      EMAIL_GATEWAY_SECRET_KEY: ${FPP_EMAIL_GATEWAY_SECRET_KEY:-}
     extra_hosts:
       - "${MINI_TAILNET_NAME:-mini.invalid}:${MINI_TAILSCALE_IP:-192.0.2.1}"
     healthcheck:
