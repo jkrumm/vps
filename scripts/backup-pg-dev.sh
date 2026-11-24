@@ -133,10 +133,22 @@ done
 
 ( cd "${STAGE}" && shasum -a 256 globals.sql counts.tsv ./*.dump | sed 's# \./# #' > SHA256SUMS )
 
+# Upload is retried: the dump is staged locally, so a retry costs a transfer, not a dump. The HomeLab
+# drops off the tailnet for stretches (2026-11-24: one 15 s connect timeout failed the whole run). Each
+# attempt starts from a clean .incomplete dir; every step returns explicitly, because set -e does not
+# reach into a function called as "upload && break".
+upload_to_homelab() {
+  "${SSH[@]}" "${DEST_HOST}" "umask 077 && rm -rf '${DEST_PATH}/${NAME}.incomplete' && mkdir -p '${DEST_PATH}/${NAME}.incomplete'" || return 1
+  COPYFILE_DISABLE=1 tar --no-xattrs -C "${STAGE}" -cf - . | "${SSH[@]}" "${DEST_HOST}" "tar -C '${DEST_PATH}/${NAME}.incomplete' -xf -" || return 1
+  "${SSH[@]}" "${DEST_HOST}" "[ ! -e '${DEST_PATH}/${NAME}' ] && cd '${DEST_PATH}/${NAME}.incomplete' && sha256sum -c --quiet SHA256SUMS && mv '${DEST_PATH}/${NAME}.incomplete' '${DEST_PATH}/${NAME}'" || return 1
+}
 log "upload"
-"${SSH[@]}" "${DEST_HOST}" "umask 077 && mkdir -p '${DEST_PATH}/${NAME}.incomplete'"
-COPYFILE_DISABLE=1 tar --no-xattrs -C "${STAGE}" -cf - . | "${SSH[@]}" "${DEST_HOST}" "tar -C '${DEST_PATH}/${NAME}.incomplete' -xf -"
-"${SSH[@]}" "${DEST_HOST}" "cd '${DEST_PATH}/${NAME}.incomplete' && sha256sum -c --quiet SHA256SUMS && mv '${DEST_PATH}/${NAME}.incomplete' '${DEST_PATH}/${NAME}'"
+for attempt in 1 2 3 4 5; do
+  upload_to_homelab && break
+  [[ ${attempt} -lt 5 ]] || { echo "ERROR: upload to ${DEST_HOST} failed after 5 attempts"; exit 1; }
+  log "upload attempt ${attempt} failed; retrying in 120s"
+  sleep 120
+done
 log "uploaded and verified: $(du -sh "${STAGE}" | cut -f1) in $(echo "${DBS}" | wc -w | tr -d ' ') database(s)"
 
 # Verify the backup we just wrote by restoring it (from the staged copy: the upload
