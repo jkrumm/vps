@@ -140,7 +140,7 @@ done
 upload_to_homelab() {
   "${SSH[@]}" "${DEST_HOST}" "umask 077 && rm -rf '${DEST_PATH}/${NAME}.incomplete' && mkdir -p '${DEST_PATH}/${NAME}.incomplete'" || return 1
   COPYFILE_DISABLE=1 tar --no-xattrs -C "${STAGE}" -cf - . | "${SSH[@]}" "${DEST_HOST}" "tar -C '${DEST_PATH}/${NAME}.incomplete' -xf -" || return 1
-  "${SSH[@]}" "${DEST_HOST}" "[ ! -e '${DEST_PATH}/${NAME}' ] && cd '${DEST_PATH}/${NAME}.incomplete' && sha256sum -c --quiet SHA256SUMS && mv '${DEST_PATH}/${NAME}.incomplete' '${DEST_PATH}/${NAME}'" || return 1
+  "${SSH[@]}" "${DEST_HOST}" "[ -f '${DEST_PATH}/${NAME}/SHA256SUMS' ] && { rm -rf '${DEST_PATH}/${NAME}.incomplete'; exit 0; }; cd '${DEST_PATH}/${NAME}.incomplete' && sha256sum -c --quiet SHA256SUMS && mv '${DEST_PATH}/${NAME}.incomplete' '${DEST_PATH}/${NAME}'" || return 1
 }
 log "upload"
 for attempt in 1 2 3 4 5; do

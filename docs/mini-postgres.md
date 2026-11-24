@@ -76,7 +76,7 @@ database mid-migration produced an archive with a valid checksum and a broken `C
 definition); only the restore showed it. A failed verify fails the job, which `jobs-grade` reports.
 
 No credential is involved: Homebrew's `pg_dump` runs over the server's unix socket as the OS user and
-the upload is keyless Tailscale SSH, retried up to five times (2 min apart) from the staged copy, so a HomeLab that drops off the tailnet for a few minutes costs a transfer, not the night's dump.
+the upload is keyless Tailscale SSH, tried up to five times (2 min apart) from the staged copy, so a HomeLab that drops off the tailnet for a few minutes costs a transfer, not the night's dump.
 Scratch databases of a drill running at the same moment (`restore_drill_<ts>_<n>`) are never dumped.
 
 On a fully green run (upload, drill and retention) the script ends with an Uptime Kuma push (`up`, backup
