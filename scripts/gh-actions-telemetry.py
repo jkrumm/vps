@@ -320,11 +320,12 @@ def tick(cfg, state, gh, post, now):
             continue
         status, body, etag = got
         if status == 304:
+            if repo_state.get("empty"):
+                repo_state["next_check"] = now + EMPTY_RECHECK  # an unchanged empty list waits as long as a new one
             continue  # nothing changed: the cached counts below still stand
         runs = body["workflow_runs"]
-        repo_state.update(next_check=now + EMPTY_RECHECK if not runs else 0, etag=None)
-        if runs:
-            new_etags[repo] = etag
+        repo_state.update(empty=not runs, next_check=now + EMPTY_RECHECK if not runs else 0, etag=None)
+        new_etags[repo] = etag  # an empty list too: its recheck is then a free 304, not a counted read
         repo_state["queued"] = sum(1 for r in runs if r["status"] in QUEUED_STATES)
         repo_state["in_progress"] = [r for r in runs if r["status"] == "in_progress"]
         repo_state["in_progress"] = [{"id": r["id"], "run_attempt": r.get("run_attempt") or 1} for r in repo_state["in_progress"]]

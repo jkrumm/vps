@@ -185,6 +185,13 @@ class Tick(unittest.TestCase):
         self.tick(NOW + ghat.EMPTY_RECHECK + 1)
         self.assertTrue([c for c in self.gh.calls if "empty" in c])
 
+    def test_an_empty_repo_keeps_its_etag_so_its_recheck_is_a_304_and_waits_ten_minutes_again(self):
+        self.tick()
+        self.assertIsNotNone(self.state["repos"]["jkrumm/empty"]["etag"])
+        later = NOW + ghat.EMPTY_RECHECK + 1
+        self.tick(later)
+        self.assertEqual(self.state["repos"]["jkrumm/empty"]["next_check"], later + ghat.EMPTY_RECHECK)
+
     def test_busy_runner_reads_zero_once_idle_and_a_quiet_repo_gets_one_trailing_zero(self):
         self.tick()
         self.gh.repos["jkrumm/rb"] = [run(1), run(2)]

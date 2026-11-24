@@ -747,7 +747,7 @@ tail ~/Library/Logs/vps-gh-actions-telemetry.log
 ```
 
 **What it reads.** Per tick: the owner's repos (cached 1 h), then each repo's `GET /actions/runs` with an ETag. An unchanged repo answers 304,
-which GitHub does not count against the 5,000 requests per hour; a repo without runs is looked at again after 10 min. A completed run costs one
+which GitHub does not count against the 5,000 requests per hour; a repo without runs is looked at again after 10 min, and its unchanged empty list is a 304 too. A completed run costs one
 `/jobs` call, an in-progress run one per tick. The first tick backfills the last 24 h (50 runs per tick, so about ten ticks); the state file
 (`~/.local/state/gh-actions-telemetry/state.json`) keeps which runs went out, and the span ids are derived from run and job ids. Delete the
 state file to re-send 24 h (it duplicates rows: do not).
