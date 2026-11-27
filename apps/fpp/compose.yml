@@ -50,6 +50,10 @@ volumes:
 
 services:
   mariadb:
+    # Held on 11.4 LTS (supported to 2029) on purpose; the deps probe's "mariadb 13.0 (major)" is not a todo.
+    # 13.0 is a rolling, non-LTS line, 12.3 is the LTS, and mariadb-upgrade makes a downgrade unsupported.
+    # v1 (this database) is frozen and retires at the Postgres cutover. A real bump goes 11.4 -> 11.8 -> 12.3
+    # (read each upgrade note), after `make fpp-backup` and a restore drill. compose.dev.yml mirrors this tag.
     image: mariadb:11.4
     container_name: mariadb
     restart: unless-stopped
